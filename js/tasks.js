@@ -3646,6 +3646,18 @@
   }
 
   /* ---------- 今日复盘（随时可写，结束今天时也能写） ---------- */
+  // 🪶 v168：昨天的复盘预览（只读用 peekDay，绝不实体化日期）
+  function prevReviewHTML(dayKey) {
+    try {
+      const pk = S().dateKey(new Date(S().keyToDate(dayKey).getTime() - 86400000));
+      const pd = S().peekDay ? S().peekDay(pk) : null;
+      const pt = pd && pd.review && pd.review.text ? String(pd.review.text) : '';
+      if (!pt) return '';
+      return '<details class="prev-review" style="margin-top:10px;border:1px dashed #c9ced6;border-radius:8px;padding:6px 10px">' +
+        '<summary style="cursor:pointer;font-size:12.5px;color:#8a919c">🪶 昨天的复盘（' + S().fmtDateCN(pk) + '）· 点开看</summary>' +
+        '<div style="margin-top:6px;font-size:13px;color:var(--ink,#374151);white-space:pre-wrap">' + S().esc(pt) + '</div></details>';
+    } catch (e) { return ''; }
+  }
   function renderReview(dayKey) {
     const day = S().getDay(dayKey);
     const card = document.getElementById('review-card');
@@ -3658,7 +3670,8 @@
       '<button class="btn btn-small btn-primary" data-act="review-save">保存复盘</button>' +
       '<span id="review-autosave" style="font-size:11.5px;color:#8a919c">（边打边自动保存，关页面也不丢）</span>' +
       (text ? '<span class="review-meta">已保存' + (day.review.at ? ' · ' + new Date(day.review.at).toLocaleString('zh-CN') : '') + '</span>' : '') +
-      '</div>';
+      '</div>' + prevReviewHTML(dayKey) +
+      '<p class="hint" style="margin:6px 0 0;font-size:11.5px;color:#8a919c">（更早的复盘在「统计」页最下面的按日记录里）</p>';
     const ta = card.querySelector('#review-text');
     if (ta && !text) ta.placeholder = '自由写下今天的感想与反思';
     autoSave(ta, function (v) {

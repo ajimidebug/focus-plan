@@ -41,7 +41,7 @@ input, select, textarea { font-family: inherit; }
   box-shadow: 0 2px 10px rgba(0,0,0,.15);
 }
 .header-top {
-  max-width: 960px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 12px 16px 10px;
   display: flex;
@@ -65,7 +65,7 @@ input, select, textarea { font-family: inherit; }
 
 /* 统计条 */
 #stat-bar {
-  max-width: 960px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 8px 16px 10px;
   display: flex;
@@ -125,7 +125,7 @@ input, select, textarea { font-family: inherit; }
 #tf-cd .tf-line b { color: var(--req); }
 
 /* ============ 主体 ============ */
-main { max-width: 960px; margin: 20px auto 0; padding: 0 16px; }
+main { max-width: 1400px; margin: 20px auto 0; padding: 0 16px; }
 .view { display: none; }
 .view.active { display: block; animation: fadeIn .18s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -142,7 +142,7 @@ main { max-width: 960px; margin: 20px auto 0; padding: 0 16px; }
 .card h3 { font-size: 15px; margin-bottom: 12px; }
 
 footer {
-  max-width: 960px;
+  max-width: 1400px;
   margin: 8px auto 0;
   text-align: center;
   color: #9aa1ab;
