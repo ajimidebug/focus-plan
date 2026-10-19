@@ -81,7 +81,13 @@
     try {
       const n = read(key);
       selected = key; $('memo-date').value = key;
-      $('memo-editor').value = n ? n.text : '';
+      const editor = $('memo-editor');
+      editor.value = n ? n.text : '';
+      const end = editor.value.length;
+      editor.setSelectionRange(end, end);
+      editor.scrollTop = editor.scrollHeight;
+      // 隐藏视图和手机布局完成后再定位一次；不聚焦，不弹键盘。
+      requestAnimationFrame(() => { if (selected === key) editor.scrollTop = editor.scrollHeight; });
       $('memo-editor').readOnly = S().status().readOnly;
       $('memo-heading').textContent = key === userDay() ? '今天的笔记' : key + ' 的笔记';
       $('memo-day-hint').textContent = '北京时间 · ' + key + ' 04:00 至 ' + shiftDay(key, 1) + ' 03:59';

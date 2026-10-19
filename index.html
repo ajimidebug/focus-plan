@@ -10,12 +10,12 @@
        以前写在页尾，渲染时读到 undefined 就显示成 "v?"。 */
     window.__BUILD = 169;
     window.__MEMO_MODE = true;
-    window.__RELEASE = '169.3.1';
+    window.__RELEASE = '169.3.2';
   </script>
   <meta name="theme-color" content="#2d3a4a" />
   <title>随手记 · 个人备忘录</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="css/style.css?v=169.3.1" />
+  <link rel="stylesheet" href="css/style.css?v=169.3.2" />
   <style id="pip-style">
     /* ===== 🪟 只在小窗（Document Picture-in-Picture）里生效：让悬浮窗铺满整个小窗 ===== */
     html.pip, html.pip body { background: var(--bg, #f5f7fa); margin: 0; padding: 0; }
@@ -119,9 +119,10 @@
       <div class="memo-top"><div><p class="memo-eyebrow">随手记下，稍后再想</p><h2 id="memo-heading">今天的笔记</h2></div><span id="memo-save" role="status">正在读取笔记</span></div>
       <div class="memo-date-row"><button class="btn btn-small" id="memo-prev" aria-label="前一天">←</button><input type="date" id="memo-date" aria-label="笔记日期" data-transient="true"><button class="btn btn-small" id="memo-next" aria-label="后一天">→</button><button class="btn btn-small" id="memo-today">回到今天</button></div>
       <p id="memo-day-hint" class="hint"></p>
-      <div class="memo-paper"><div class="memo-toolbar"><button class="btn btn-small" id="memo-time">＋ 当前时间</button><button class="btn btn-small" id="memo-copy">复制笔记／选中文字</button><button class="btn btn-small" id="memo-download">下载文本</button></div>
+      <div class="memo-paper">
         <textarea id="memo-editor" aria-label="当天笔记" placeholder="直接写下时间线、想法和准备做的事…&#10;&#10;1055坐下来&#10;1103开始看线性代数&#10;&#10;下午想做的事情，也可以记在这里。" spellcheck="false"></textarea>
         <p class="memo-footnote">原话自动保存，不自动分析、计时或安排复习。补记可直接写日期和时间。内容只在当前浏览器；请定期下载完整备份。</p>
+        <div class="memo-toolbar"><button class="btn btn-small" id="memo-time">＋ 当前时间</button><button class="btn btn-small" id="memo-copy">复制笔记／选中文字</button><button class="btn btn-small" id="memo-download">下载文本</button></div>
       </div>
     </section>
     <section id="view-memo-history" class="view">
@@ -349,28 +350,28 @@
     </div>
   </div>
 
-  <script src="js/store.js?v=169.3.1"></script>
-  <script src="js/ui.js?v=169.3.1"></script>
-  <script src="js/tasks.js?v=169.3.1"></script>
-  <script src="js/timeline.js?v=169.3.1"></script>
-  <script src="js/stats.js?v=169.3.1"></script>
-  <script src="js/settings.js?v=169.3.1"></script>
-  <script src="js/sport.js?v=169.3.1"></script>
-  <script src="js/lecture.js?v=169.3.1"></script>
-  <script src="js/calendar.js?v=169.3.1"></script>
-  <script src="js/link.js?v=169.3.1"></script>
-  <script src="js/demo.js?v=169.3.1"></script>
-  <script src="js/queue.js?v=169.3.1"></script>
-  <script src="js/milestones.js?v=169.3.1"></script>
-  <script src="js/memcards.js?v=169.3.1"></script>
-  <script src="js/checkin.js?v=169.3.1"></script>
-  <script src="js/backup.js?v=169.3.1"></script>
-  <script src="js/exams.js?v=169.3.1"></script>
-  <script src="js/mistakes.js?v=169.3.1"></script>
-  <script src="js/badges.js?v=169.3.1"></script>
-  <script src="js/memo.js?v=169.3.1"></script>
-  <script src="js/updates.js?v=169.3.1"></script>
-  <script src="js/app.js?v=169.3.1"></script>
+  <script src="js/store.js?v=169.3.2"></script>
+  <script src="js/ui.js?v=169.3.2"></script>
+  <script src="js/tasks.js?v=169.3.2"></script>
+  <script src="js/timeline.js?v=169.3.2"></script>
+  <script src="js/stats.js?v=169.3.2"></script>
+  <script src="js/settings.js?v=169.3.2"></script>
+  <script src="js/sport.js?v=169.3.2"></script>
+  <script src="js/lecture.js?v=169.3.2"></script>
+  <script src="js/calendar.js?v=169.3.2"></script>
+  <script src="js/link.js?v=169.3.2"></script>
+  <script src="js/demo.js?v=169.3.2"></script>
+  <script src="js/queue.js?v=169.3.2"></script>
+  <script src="js/milestones.js?v=169.3.2"></script>
+  <script src="js/memcards.js?v=169.3.2"></script>
+  <script src="js/checkin.js?v=169.3.2"></script>
+  <script src="js/backup.js?v=169.3.2"></script>
+  <script src="js/exams.js?v=169.3.2"></script>
+  <script src="js/mistakes.js?v=169.3.2"></script>
+  <script src="js/badges.js?v=169.3.2"></script>
+  <script src="js/memo.js?v=169.3.2"></script>
+  <script src="js/updates.js?v=169.3.2"></script>
+  <script src="js/app.js?v=169.3.2"></script>
 
 
   <!-- ✨ 快速上手演示动画 -->
