@@ -177,12 +177,12 @@
       tick();
     } catch (e) { root.textContent = e.message; }
   }
-  function locate() { const el = document.querySelector('#memo-schedule-panel .schedule-scroll'); if (el) el.scrollTop = Math.max(0, (Date.now() - dayStart(selectedDay)) / 60000 * .8 - 130); }
-  function setMode(value) { mode = value; $('view-tasks').classList.toggle('task-schedule-mode', value); $('memo-schedule-panel').hidden = !value; $('task-list-switch').classList.toggle('btn-primary', !value); $('task-schedule-switch').classList.toggle('btn-primary', value); if (value) render(); }
+  function locate(value = Date.now()) { const el = document.querySelector('#memo-schedule-panel .schedule-scroll'); if (el) el.scrollTop = Math.max(0, (value - dayStart(selectedDay)) / 60000 * .8 - 130); }
+  function setMode(value) { mode = value; $('view-tasks').classList.toggle('task-schedule-mode', value); $('memo-schedule-panel').hidden = !value; $('task-list-switch').classList.toggle('btn-primary', !value); $('task-schedule-switch').classList.toggle('btn-primary', value); if (value) { render(); locate(selectedDay === M().naturalDay() ? Date.now() : dayStart(selectedDay) + 12 * 3600000); } }
   function init() {
     selectedDay = M().naturalDay(); $('task-list-switch').onclick = () => setMode(false); $('task-schedule-switch').onclick = () => setMode(true);
     $('memo-trash-open').onclick = () => App.memoActions.trash();
-    $('schedule-active').onclick = () => { const d = state(), session = d.sessions.find(s => s.status === 'running') || d.sessions.find(s => s.status === 'paused'); const item = session && d.items.find(p => p.id === session.itemId); if (item) { selectedDay = item.day; setMode(true); } };
+    $('schedule-active').onclick = () => { const d = state(), session = d.sessions.find(s => s.status === 'running') || d.sessions.find(s => s.status === 'paused'); const item = session && d.items.find(p => p.id === session.itemId); if (item) { selectedDay = item.day; setMode(true); locate(item.start); } };
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } });
     window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();
