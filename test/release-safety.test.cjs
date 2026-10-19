@@ -431,3 +431,61 @@ test('exports include reliable provenance without rewriting notes or guessing ol
   assert(!M.exportText(['2026-10-19']).includes('【任务生成开始'));
   assert.equal(M.read('2026-10-19').text, '原话\n【任务生成】旧文字');
 });
+function scheduleHarness(b) {
+  const h = actionHarness(b); vm.runInContext(source('js/memo-schedule.js'), b.ctx); return { ...h, P: b.ctx.App.memoSchedule };
+}
+test('over-target punches keep individual event amounts and exact undo', async () => {
+  const b = browser(); await b.S.load(); const { A, M } = actionHarness(b);
+  b.S.data().checkins = [{ id: 'h', text: '喝水', target: 1, points: 3, days: {} }];
+  const events = Array.from({ length: 3 }, (_, i) => A.completeCore({ kind: 'checkin', id: 'h', title: '喝水', day: '2026-10-19' }, '记录' + i, actionAt));
+  assert.equal(b.S.data().checkins[0].days['2026-10-19'], 3); assert.equal(b.S.pointsTotal(), 18);
+  A.undoCore(events[1].id, '', actionAt);
+  assert.equal(b.S.data().checkins[0].days['2026-10-19'], 2); assert.equal(b.S.pointsTotal(), 12);
+  assert(!M.read('2026-10-19').text.includes('记录1')); assert(M.read('2026-10-19').text.includes('记录2'));
+});
+test('execution timestamps survive reload, exclude pauses, switch exclusively and end on completion', async () => {
+  const b = browser(); await b.S.load(); const { A, P } = scheduleHarness(b), start = Date.parse(actionAt);
+  b.S.data().queue = [{ id: 'q', text: '跨日任务', points: 5 }, { id: 'r', text: '另一任务', points: 0 }];
+  const one = P.savePlan({ ref: { kind: 'queue', id: 'q' }, title: '跨日任务', day: '2026-10-19', type: 'span', start, end: start + 3600000 });
+  const two = P.savePlan({ ref: { kind: 'queue', id: 'r' }, title: '另一任务', day: '2026-10-19', type: 'point', start: start + 3600000, end: null });
+  const session = P.startCore(one.id, start); P.startCore(one.id, start + 500); assert.equal(P.state().sessions.length, 1);
+  P.pause(one.id, start + 60000); P.startCore(one.id, start + 180000); assert.equal(P.elapsed(session, start + 240000), 120000);
+  P.startCore(two.id, start + 240000); assert.equal(session.status, 'paused'); assert.equal(P.state().sessions.filter(s => s.status === 'running').length, 1);
+  await b.S.save(); const c = browser({ shared: b }); await c.S.load(); const h = scheduleHarness(c);
+  assert.equal(h.P.state().sessions.find(s => s.itemId === one.id).status, 'paused');
+  assert.equal(h.P.elapsed(h.P.state().sessions.find(s => s.itemId === two.id), start + 300000), 60000);
+  h.A.completeCore({ kind: 'queue', id: 'r', title: '另一任务' }, '完成', new Date(start + 300000).toISOString());
+  assert.equal(h.P.state().sessions.find(s => s.itemId === two.id).status, 'ended');
+  assert.equal(h.P.elapsed(h.P.state().sessions.find(s => s.itemId === two.id), start + 600000), 60000);
+});
+test('deleting a completed task withdraws its passage and points; exact restore protects later prose', async () => {
+  const b = browser(); await b.S.load(); const { A, M, P } = scheduleHarness(b);
+  b.S.data().queue = [{ id: 'q', text: '任务', points: 5 }]; M.write('2026-10-19', '独立原话');
+  const p = P.savePlan({ ref: { kind: 'queue', id: 'q' }, title: '任务', day: '2026-10-19', type: 'point', start: Date.parse(actionAt), end: null });
+  P.startCore(p.id, Date.parse(actionAt));
+  A.completeCore({ kind: 'queue', id: 'q', title: '任务' }, '完成文段', actionAt);
+  const entry = A.deleteCore({ kind: 'queue', id: 'q' }, '', actionAt);
+  assert.equal(b.S.pointsTotal(), 0); assert.equal(M.read('2026-10-19').text, '独立原话'); assert.equal(b.S.data().queue.length + b.S.data().queueDone.length, 0);
+  assert.equal(P.state().items[0].deleted, true); assert.equal(P.state().sessions[0].status, 'ended');
+  A.restoreCore(entry.id); assert.equal(b.S.pointsTotal(), 5); assert(M.read('2026-10-19').text.includes('完成文段')); assert.equal(b.S.data().queueDone.length, 1);
+  const another = A.deleteCore({ kind: 'queue', id: 'q' }, '', actionAt);
+  M.write('2026-10-19', '删除后新写的内容');
+  assert.throws(() => A.restoreCore(another.id), /已有新修改/);
+  A.restoreCore(another.id, true); assert.equal(b.S.data().queue[0].id, 'q'); assert.equal(b.S.pointsTotal(), 0); assert.equal(M.read('2026-10-19').text, '删除后新写的内容');
+});
+test('failed delete persistence retries once without duplicating undo, and backup retains recovery snapshots', async () => {
+  const b = browser(); await b.S.load(); const { A } = scheduleHarness(b);
+  b.S.data().queue = [{ id: 'q', text: 'task', points: 5 }]; A.completeCore({ kind: 'queue', id: 'q', title: 'task' }, '记录', actionAt);
+  b.options.localFails = b.options.idbFails = true;
+  await assert.rejects(A.commit(() => A.deleteCore({ kind: 'queue', id: 'q' }, '', actionAt)), /尚未保存/);
+  assert.equal(b.S.data().memoDeleted.length, 1); assert.equal(b.S.pointsTotal(), 0);
+  b.options.localFails = b.options.idbFails = false; await A.commit(() => { throw new Error('must not repeat'); });
+  const pack = JSON.parse(await backupHarness().B.packText(b.S.data(), {}));
+  b.S.reset(); await b.S.flush(); assert(b.S.restoreFrom(pack.data)); A.restoreCore(b.S.data().memoDeleted[0].id); assert.equal(b.S.pointsTotal(), 5);
+});
+test('schedule rejects invalid intervals and assigns overlapping tasks separate columns', async () => {
+  const b = browser(); await b.S.load(); const { P } = scheduleHarness(b); b.S.data().queue = [{ id: 'q', text: '任务' }];
+  assert.throws(() => P.savePlan({ ref: { kind: 'queue', id: 'q' }, title: '任务', day: '2026-10-19', type: 'span', start: 2000, end: 1000 }), /有效/);
+  const placed = P.columns([{ start: 0, end: 60, id: 'a' }, { start: 20, end: 80, id: 'b' }, { start: 80, end: 100, id: 'c' }]);
+  assert.notEqual(placed[0].column, placed[1].column); assert.equal(placed[0].columns, 2); assert.equal(placed[2].columns, 1);
+});

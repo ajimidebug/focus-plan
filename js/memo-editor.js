@@ -62,13 +62,39 @@
     const r = s.getRangeAt(0), pre = document.createRange(); pre.selectNodeContents(root); pre.setEnd(r.startContainer, r.startOffset);
     return { start: pre.toString().length, end: pre.toString().length + r.toString().length };
   }
+  let followFrame = false;
+  function followCaret() {
+    if (followFrame || !root || document.activeElement !== root) return;
+    followFrame = true;
+    requestAnimationFrame(() => {
+      followFrame = false;
+      const selected = window.getSelection();
+      if (!selected || !selected.rangeCount || !root.contains(selected.focusNode)) return;
+      const viewport = window.visualViewport;
+      const visibleTop = viewport ? viewport.offsetTop : 0;
+      const visibleBottom = visibleTop + (viewport ? viewport.height : window.innerHeight);
+      root.style.maxHeight = Math.max(120, Math.min(420, (visibleBottom - visibleTop) * .55)) + 'px';
+      const range = selected.getRangeAt(0).cloneRange(); range.collapse(false);
+      let rect = range.getBoundingClientRect();
+      if (!rect.height && range.startContainer.nodeType === 3 && range.startOffset > 0) {
+        range.setStart(range.startContainer, range.startOffset - 1); rect = range.getBoundingClientRect();
+      }
+      if (!rect.height) return;
+      const box = root.getBoundingClientRect(), pad = 30;
+      if (rect.bottom > box.bottom - pad) root.scrollTop += rect.bottom - box.bottom + pad;
+      else if (rect.top < box.top + pad) root.scrollTop -= box.top + pad - rect.top;
+      const moved = range.getBoundingClientRect();
+      if (moved.bottom > visibleBottom - pad) window.scrollBy(0, moved.bottom - visibleBottom + pad);
+      else if (moved.top < visibleTop + 100) window.scrollBy(0, moved.top - visibleTop - 100);
+    });
+  }
   function select(start, end = start) {
     const walk = document.createTreeWalker(root, 4), nodes = []; let node;
     while ((node = walk.nextNode())) nodes.push(node);
     if (!nodes.length) { root.appendChild(document.createTextNode('')); nodes.push(root.firstChild); }
     function point(offset) { for (const n of nodes) { if (offset <= n.length) return [n, offset]; offset -= n.length; } const n = nodes[nodes.length - 1]; return [n, n.length]; }
     const a = point(start), b = point(end), r = document.createRange(); r.setStart(a[0], a[1]); r.setEnd(b[0], b[1]);
-    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); followCaret();
   }
   function paint(caret) {
     const frag = document.createDocumentFragment();
@@ -140,6 +166,9 @@
   }
   function init(element, onChange) {
     root = element; changed = onChange;
+    ['input', 'keyup', 'click', 'focus', 'compositionupdate', 'compositionend'].forEach(type => root.addEventListener(type, followCaret));
+    document.addEventListener('selectionchange', followCaret);
+    if (window.visualViewport) { window.visualViewport.addEventListener('resize', followCaret); window.visualViewport.addEventListener('scroll', followCaret); }
     root.addEventListener('compositionstart', () => { remember(); composing = true; });
     root.addEventListener('compositionend', () => { composing = false; input(); paint(selection()); changed(); });
     root.addEventListener('beforeinput', e => {

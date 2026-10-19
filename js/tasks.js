@@ -4522,6 +4522,7 @@
       const listKey = row.dataset.list, taskId = row.dataset.id;
       const act = e.target.closest('[data-act]') && e.target.closest('[data-act]').dataset.act;
       // 🗑 v117：今天三栏任意一条都能直接删（先进回收站，可恢复；正在计时的不让删）
+      if (act === 'del' && window.__MEMO_MODE && App.memoActions) { App.memoActions.deleteTask({ kind: 'task', id: taskId, list: listKey, day: S().todayKey() }); return; }
       if (act === 'del') {
         const dToday = S().getDay(S().todayKey());
         const listDel = (dToday.tasks[listKey] || []);
@@ -4687,6 +4688,7 @@
       if (!row) return;
       const taskId = row.dataset.id;
       if (act === 'edit') editTaskModal(listKey, taskId, S().tomorrowKey(), false);
+      else if (act === 'del' && window.__MEMO_MODE && App.memoActions) { App.memoActions.deleteTask({ kind: 'task', id: taskId, list: listKey, day: S().tomorrowKey() }); return; }
       else if (act === 'del') {
         App.ui.confirm('删除这条任务？（先进回收站，可恢复）', '删除', function () {
           const list = S().getDay(S().tomorrowKey()).tasks[listKey];
@@ -4945,6 +4947,7 @@
         }
       },
       del: function () {
+        if (window.__MEMO_MODE && App.memoActions) { App.memoActions.deleteTask({ kind: 'task', id: taskId, list: listKey, day: dayKey }); return; }
         App.ui.confirm('删除这条任务？（先进回收站，可恢复）', '删除', function () {
           trashPush({ kind: 'task', dayKey: dayKey, col: listKey, payload: JSON.parse(JSON.stringify(task)) });
           const idx = day.tasks[listKey].findIndex(function (t) { return t.id === taskId; });

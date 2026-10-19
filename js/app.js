@@ -365,6 +365,7 @@
     if (v === 'tasks' && window.__MEMO_MODE) {
       document.querySelector('#view-tasks [data-tab="today"]').click();
       App.tasks.renderAll();
+      if (App.memoSchedule) App.memoSchedule.render();
       if (App.queue) App.queue.render();
     } else if (v === 'queue' && App.queue) App.queue.render();
     if (v === 'cards' && App.memcards) App.memcards.renderPage();   // 🃏 v93：卡片页
@@ -448,6 +449,7 @@
 
     // 初始化各视图（🧲 v83：队列优先模式下直接落在队列页）
     App.memo.init();
+    if (App.memoSchedule) App.memoSchedule.init();
     switchView('memo');
     App.tasks.renderAll();
     App.timeline.init();

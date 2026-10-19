@@ -350,6 +350,7 @@
 
   /* ---------- 渲染 ---------- */
   function rowHTML(it) {
+    if (it.archived) return '';
     const n = timesToday(it), tg = targetOf(it), done = doneToday(it), st = streakOf(it);
     // 🔥 v108：这是今天第一次打卡时，按钮上直接写明"连击后到手多少分"
     const firstToday = timesTodayAll() === 0;
@@ -360,7 +361,7 @@
       const on = w.times > 0;
       const full = w.times >= tg;
       // 🔁 v119：过去且没打满的圆点 → 直接点就是补卡（今天/未来不在其列）
-      if (w.k < kToday && !full) {
+      if (w.k < kToday && (!full || window.__MEMO_MODE)) {
         return '<span class="ck-dot makeup" data-act="ck-makeup" data-id="' + it.id + '" data-day="' + w.k +
           '" title="' + w.k + '：' + (w.times ? w.times + ' 次，点一下再补一次' : '没打，点一下补这张卡') +
           '（积分照发 · 不触发连击倍率）"></span>';
@@ -371,18 +372,18 @@
     return '<div class="ck-row' + (done ? ' done' : '') + '" data-id="' + it.id + '">' +
       '<div class="ck-main">' +
       '<div class="ck-name">' + esc(it.text) +
-      (tg > 1 ? ' <span class="ck-cnt">' + n + '/' + tg + '</span>' : '') +
+      ((tg > 1 || window.__MEMO_MODE) ? ' <span class="ck-cnt">今日 ' + n + '/' + tg + ' 次' + (n > tg ? ' · 超额 ' + (n - tg) + ' 次' : '') + '</span>' : '') +
       (st > 1 ? '<span class="ck-streak">🔥 这项连续 ' + st + ' 天</span>' : '') +
       (yearDaysOf(it) > 0 ? '<span class="ck-year">今年 ' + yearDaysOf(it) + ' 天</span>' : '') + '</div>' +
       (it.note ? '<div class="ck-note">' + esc(it.note) + '</div>' : '') +
       '<div class="ck-week">' + wk + '</div>' +
       '</div>' +
       '<span class="ck-acts">' +
-      (done
+      (done && !window.__MEMO_MODE
         ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '" title="撤销今天一次">↩ 撤销</button>'
-        : '<button class="btn btn-small btn-primary" data-act="ck-punch" data-id="' + it.id + '">✅ 打卡' +
+        : '<button class="btn btn-small btn-primary" data-act="ck-punch" data-id="' + it.id + '">' + (done ? '＋ 再打一次' : '✅ 打卡') +
           (it.points ? ' +' + gain : '') + (mult > 1 ? '（×' + mult + '）' : '') + '</button>') +
-      (window.__MEMO_MODE && n > 0 && !done ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '">撤销一次</button>' : '') +
+      (window.__MEMO_MODE && n > 0 ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '">撤销一次</button>' : '') +
       (window.__MEMO_MODE ? '<button class="btn btn-small" data-act="ck-history" data-id="' + it.id + '">记录</button>' : '') +
       '<button class="q-ib" data-act="ck-edit" data-id="' + it.id + '" title="改">✏️</button>' +
       '<button class="q-ib" data-act="ck-del" data-id="' + it.id + '" title="删掉">🗑</button>' +
@@ -426,13 +427,14 @@
       '<button class="btn btn-small" data-act="ck-add">＋ 加一个打卡项</button>' +
       '</div>';
 
-    if (window.__MEMO_MODE) h = '<div class="card"><h2>积分打卡</h2><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天未打满的小圆点可补卡。连续打卡倍率保留：7天×2、30天×4、60天×6、90天×8，每天第一笔享受。</p><button class="btn btn-small" data-act="ck-add">＋ 添加打卡项</button>';
+    if (window.__MEMO_MODE) h = '<div class="card"><h2>积分打卡</h2><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续打卡，每次按基础积分记分。连续打卡倍率保留：7天×2、30天×4、60天×6、90天×8，每天第一笔享受。</p><button class="btn btn-small" data-act="ck-add">＋ 添加打卡项</button>';
 
     if (!list.length) {
       h += '<div class="q-empty">还没有。<br>想坚持什么事？加一条，每天来点一下 —— 比如「喝水 2000ml」「23:30 前躺下」。</div>';
     } else {
       h += list.map(rowHTML).join('');
     }
+    if (window.__MEMO_MODE) h += '<details><summary>已停用习惯</summary>' + list.filter(x => x.archived).map(x => '<div class="memo-queue-row">' + esc(x.text) + ' <button class="btn btn-small" data-act="ck-unarchive" data-id="' + esc(x.id) + '">恢复习惯</button><button class="btn btn-small" data-act="ck-history" data-id="' + esc(x.id) + '">历史记录</button></div>').join('') + '</details>';
     h += '</div>';
     h += yearCardHTML();      // 📊 v108：年度统计（一年打卡多少天）
     return h;
@@ -451,10 +453,12 @@
     if (act === 'ck-y-prev') { yearSel = (yearSel || new Date().getFullYear()) - 1; render(); return; }
     if (act === 'ck-y-next') { yearSel = (yearSel || new Date().getFullYear()) + 1; render(); return; }
     if (act === 'ck-edit') { editModal(id); return; }
+    if (act === 'ck-unarchive' && App.memoActions) { App.memoActions.restoreHabit(id); return; }
     if (act === 'ck-history' && App.memoActions) { App.memoActions.checkinHistory(id); return; }
     if (act === 'ck-punch') { punch(id); return; }
     if (act === 'ck-makeup') { makeupPunch(id, b.dataset.day); return; }
     if (act === 'ck-undo') { unpunch(id); return; }
+    if (act === 'ck-del' && window.__MEMO_MODE && App.memoActions) { App.memoActions.archiveHabit(id); return; }
     if (act === 'ck-del') {
       const it = find(id); if (!it) return;
       App.ui.confirm('删掉打卡项「<b>' + esc(it.text) + '</b>」？<br>' +
