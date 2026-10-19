@@ -205,6 +205,7 @@
   }
   function task(list, id) {
     const day = S().todayKey(), t = S().getDay(day).tasks[list].find(x => x.id === id); if (!t) return;
+    if ([App.tasks?.getTimer?.(), App.tasks?.getCdTimer?.()].some(timer => timer?.taskId === id)) { App.ui.toast('原有计时尚未结束，请先结束后再勾选'); return; }
     if (t.fromQueue) return queue(t.fromQueue);
     if (t.fromDaily) return daily(t.fromDaily);
     const spec = { kind: 'task', id, day, list, title: t.text };
@@ -227,9 +228,23 @@
     const day = M().userDay(), spec = { kind: 'daily', id, day, title: it.text };
     if (it.days?.[day]) { const e = latest('daily', id, day); e ? cancelEvent(e) : legacyCancel(spec); } else complete(spec);
   }
+  function checkinHistory(id) {
+    const list = events(S().data()).filter(e => e.kind === 'checkin' && e.sourceId === id && e.active).slice(-50).reverse();
+    const m = App.ui.openModal('打卡记录', '<p class="hint">可取消本版生成的某一次打卡，包括补卡。</p>' + (list.length ? list.map(e => '<div class="memo-queue-row"><p>' + E(e.sourceDay + ' · ' + e.title) + '</p><small>勾选于 ' + E(M().naturalDay(e.at) + ' ' + M().clock(e.at)) + '</small><button class="btn btn-small" data-act="undo-event" data-event="' + E(e.id) + '">取消这次打卡</button></div>').join('') : '<p>暂无本版打卡记录。旧版当天打卡仍可用“撤销”处理。</p>'), '<button class="btn" data-act="close">关闭</button>');
+    App.ui.bindActions({ close: App.ui.closeModal, 'undo-event': b => { const e = list.find(x => x.id === b.dataset.event); if (e) cancelEvent(e); } });
+  }
+  function recover(error) {
+    App.ui.toast(error.message);
+    if (!unsettled || document.getElementById('memo-operation-retry')) return;
+    const box = document.createElement('div'); box.id = 'memo-operation-retry'; box.className = 'memo-task-hint';
+    box.appendChild(document.createTextNode('上次操作尚未保存。'));
+    const button = document.createElement('button'); button.className = 'btn btn-small'; button.textContent = '重试保存'; box.appendChild(button);
+    button.onclick = async () => { button.disabled = true; try { if (await transaction(() => {})) { box.remove(); refresh(); } } catch (e) { App.ui.toast(e.message); } finally { button.disabled = false; } };
+    document.querySelector('.release-panel').appendChild(box);
+  }
   function editQueue(id) {
     const it = S().data().queue.find(x => x.id === id);
-    const m = App.ui.openModal(it ? '修改队列任务' : '添加队列任务', '<label>任务</label><input id="mq-title" maxlength="500"><label>备注（选填）</label><textarea id="mq-note" class="memo-action-text"></textarea><label>完成积分</label><input id="mq-points" type="number" min="0"><p id="memo-action-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="commit">保存</button>', { lock: true });
+    const m = App.ui.openModal(it ? '修改队列任务' : '添加队列任务', '<label for="mq-title">任务</label><input id="mq-title" maxlength="500"><label for="mq-note">备注（选填）</label><textarea id="mq-note" class="memo-action-text"></textarea><label for="mq-points">完成积分</label><input id="mq-points" type="number" min="0"><p id="memo-action-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="commit">保存</button>', { lock: true });
     m.querySelector('#mq-title').value = it?.text || ''; m.querySelector('#mq-note').value = it?.note || ''; m.querySelector('#mq-points').value = it?.points ?? S().settings().queuePoints ?? 5;
     bindCommit(m, () => { const text = m.querySelector('#mq-title').value.trim(); if (!text) throw new Error('请填写任务名称'); const target = id ? S().data().queue.find(x => x.id === id) : { id: S().uid(), createdAt: new Date().toISOString() }; if (!target) throw new Error('任务已移动，请重新打开'); target.text = text; target.note = m.querySelector('#mq-note').value; target.points = Math.max(0, Number(m.querySelector('#mq-points').value) || 0); if (!id) S().data().queue.push(target); });
   }
@@ -246,14 +261,14 @@
     if (act === 'add' || act === 'edit') editQueue(id);
     else if (act === 'done' || act === 'undo') queue(id);
     else if (act === 'show') { showingDone = !showingDone; App.queue.render(); }
-    else if (act === 'delete') App.ui.confirm('删除队列任务“' + E(q.find(x => x.id === id)?.text) + '”？', '删除', async () => { try { await transaction(() => { const i = q.findIndex(x => x.id === id); if (i >= 0) q.splice(i, 1); }); refresh(); } catch (error) { App.ui.toast(error.message); } });
+    else if (act === 'delete') App.ui.confirm('删除队列任务“' + E(q.find(x => x.id === id)?.text) + '”？', '删除', async () => { try { await transaction(() => { const i = q.findIndex(x => x.id === id); if (i >= 0) q.splice(i, 1); }); refresh(); } catch (error) { recover(error); } });
     else if (act === 'up' || act === 'down' || act === 'again') {
       try { await transaction(() => {
         if (act === 'again') { const old = S().data().queueDone.find(x => x.id === id); if (!old) return; const next = copy(old); next.id = S().uid(); delete next.doneDay; delete next.doneAt; delete next.memoCompletionId; (next.subs || []).forEach(s => { s.done = null; }); (next.groups || []).forEach(g => (g.subs || []).forEach(s => { s.done = null; })); q.push(next); }
         else { const i = q.findIndex(x => x.id === id), j = i + (act === 'up' ? -1 : 1); if (i >= 0 && j >= 0 && j < q.length) [q[i], q[j]] = [q[j], q[i]]; }
-      }); refresh(); } catch (error) { App.ui.toast(error.message); }
+      }); refresh(); } catch (error) { recover(error); }
     }
     return true;
   }
-  App.memoActions = { task, queue, checkin, daily, renderQueue, queueClick, busy: () => committing || unsettled, completeCore, undoCore, latest, passage, commit: transaction };
+  App.memoActions = { task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, completeCore, undoCore, latest, passage, commit: transaction };
 })();

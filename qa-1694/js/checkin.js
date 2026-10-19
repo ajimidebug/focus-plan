@@ -382,6 +382,8 @@
         ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '" title="撤销今天一次">↩ 撤销</button>'
         : '<button class="btn btn-small btn-primary" data-act="ck-punch" data-id="' + it.id + '">✅ 打卡' +
           (it.points ? ' +' + gain : '') + (mult > 1 ? '（×' + mult + '）' : '') + '</button>') +
+      (window.__MEMO_MODE && n > 0 && !done ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '">撤销一次</button>' : '') +
+      (window.__MEMO_MODE ? '<button class="btn btn-small" data-act="ck-history" data-id="' + it.id + '">记录</button>' : '') +
       '<button class="q-ib" data-act="ck-edit" data-id="' + it.id + '" title="改">✏️</button>' +
       '<button class="q-ib" data-act="ck-del" data-id="' + it.id + '" title="删掉">🗑</button>' +
       '</span></div>';
@@ -449,6 +451,7 @@
     if (act === 'ck-y-prev') { yearSel = (yearSel || new Date().getFullYear()) - 1; render(); return; }
     if (act === 'ck-y-next') { yearSel = (yearSel || new Date().getFullYear()) + 1; render(); return; }
     if (act === 'ck-edit') { editModal(id); return; }
+    if (act === 'ck-history' && App.memoActions) { App.memoActions.checkinHistory(id); return; }
     if (act === 'ck-punch') { punch(id); return; }
     if (act === 'ck-makeup') { makeupPunch(id, b.dataset.day); return; }
     if (act === 'ck-undo') { unpunch(id); return; }

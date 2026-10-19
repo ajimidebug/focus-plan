@@ -1538,7 +1538,7 @@
 
   function dailyCard() {
     const list = todayDaily();          // 📌 v94：只显示「今天放进来」的
-    const k = S().todayKey();
+    const k = pinToday();
     let h = '<div class="card q-card">';
     h += '<h2>📌 今天的基础任务</h2>';
     h += '<p class="hint" style="margin-top:-2px">把<b>今天最底线要做的几件</b>放这儿（复习、听力、单词那类）。打勾就行 —— ' +

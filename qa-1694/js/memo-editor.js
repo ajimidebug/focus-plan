@@ -77,6 +77,8 @@
       if (x.eventId) { span.className = 'memo-generated'; span.dataset.event = x.eventId; span.dataset.label = x.label || '打卡生成'; span.title = '此文段由勾选生成；取消对应勾选时删除，段内补充也会删除'; }
       span.textContent = x.text; frag.appendChild(span);
     });
+    // A real trailing line keeps Chromium from consuming the final stored newline when typing.
+    const tail = document.createElement('br'); tail.dataset.editorEnd = 'true'; frag.appendChild(tail);
     root.replaceChildren(frag);
     if (caret) select(caret.start, caret.end);
   }
@@ -89,7 +91,20 @@
   function insert(text) {
     if (root.contentEditable === 'false') return;
     const s = selection() || { start: textOf(blocks).length, end: textOf(blocks).length };
-    remember(); blocks = splice(blocks, s.start, s.end, text); root.focus(); paint({ start: s.start + text.length, end: s.start + text.length }); changed();
+    replace(s.start, s.end, text);
+  }
+  function notify() { changed(); root.dispatchEvent(new Event('input', { bubbles: true })); }
+  function replace(start, end, text) { remember(); blocks = splice(blocks, start, end, text); root.focus(); paint({ start: start + text.length, end: start + text.length }); pendingSelection = null; notify(); }
+  function erase(forward) {
+    const s = selection(); if (!s) return;
+    if (s.start !== s.end) return replace(s.start, s.end, '');
+    const value = textOf(blocks);
+    let start = s.start, end = s.end;
+    const chars = Array.from(value.slice(forward ? end : 0, forward ? undefined : start));
+    const segment = forward ? chars[0] : chars[chars.length - 1];
+    if (!segment) return;
+    if (forward) end += segment.length; else start -= segment.length;
+    replace(start, end, '');
   }
   function input() {
     const current = root.textContent;
@@ -110,8 +125,11 @@
       if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') { e.preventDefault(); history(e.inputType === 'historyUndo' ? undo : redo, e.inputType === 'historyUndo' ? redo : undo); return; }
       pendingSelection = selection(); if (pendingSelection) pendingSelection.type = e.inputType;
       if (!e.isComposing && (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak')) { e.preventDefault(); insert('\n'); }
+      else if (!e.isComposing && (e.inputType === 'insertText' || e.inputType === 'insertReplacementText') && e.data != null) { e.preventDefault(); insert(e.data); }
+      else if (!e.isComposing && (e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward')) { e.preventDefault(); erase(e.inputType === 'deleteContentForward'); }
     });
     root.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'End' || e.key === 'Home')) { e.preventDefault(); const end = e.key === 'End' ? textOf(blocks).length : 0; if (e.shiftKey) { const s = selection() || { start: end, end }; select(Math.min(end, s.start), Math.max(end, s.end)); } else select(end); return; }
       if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key.toLowerCase() === 'z' || e.key.toLowerCase() === 'y')) { e.preventDefault(); const forward = e.shiftKey || e.key.toLowerCase() === 'y'; history(forward ? redo : undo, forward ? undo : redo); }
     });
     root.addEventListener('paste', e => { e.preventDefault(); insert(e.clipboardData.getData('text/plain')); });
