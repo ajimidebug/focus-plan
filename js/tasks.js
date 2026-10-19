@@ -773,6 +773,7 @@
 
   /* ---------- 开始计时（弹窗填写计划） ---------- */
   function startTimer(taskKey, taskId) {
+    if (window.__MEMO_MODE) { App.ui.toast('此版本不启用计时，可直接记笔记或勾选任务'); return; }
     if (timer) { App.ui.toast('已有任务在计时中，请先结束或暂停它'); return; }
     const day = S().getDay(S().todayKey());
     const task = day.tasks[taskKey].find(function (t) { return t.id === taskId; });
@@ -861,6 +862,7 @@
    *  那我复习的时候你是不是也得自动计一下时」。点 🃏 进复习时自动开计时：
    *  正计时（沿用上次选的计时方式）、内容按任务名记；已有计时在跑就不打扰。 */
   function autoStartTimer(taskKey, taskId) {
+    if (window.__MEMO_MODE) return 'skip';
     if (timer) { App.ui.toast('⏱ 已有任务在计时 —— 这段复习就记在正在跑的那段里', 4200); return 'busy'; }
     const day = S().getDay(S().todayKey());
     const task = ((day.tasks[taskKey] || []).filter(function (t) { return t.id === taskId; }))[0];
@@ -1655,6 +1657,7 @@
   }
 
   function startCdTimer(taskKey, taskId, subId, groupId) {
+    if (window.__MEMO_MODE) { App.ui.toast('此版本不启用计时，可直接记笔记或勾选任务'); return; }
     const day = S().getDay(S().todayKey());
     const task = day.tasks[taskKey] && day.tasks[taskKey].find(function (t) { return t.id === taskId; });
     const found = findSubInTask(task, subId);
@@ -3006,6 +3009,7 @@
   }
 
   function autoEndDayTick() {
+    if (window.__MEMO_MODE) return false;
     const st = S().settings();
     if (!st.autoEndDay || autoEndBusy) return false;
     if (!autoSettleKey()) return false;            // 没账可结
@@ -3807,6 +3811,7 @@
   }
   // 开始一个小时代：标起点 + 定这一段多长 + 在时长内分配三类
   function startHourPlanModal() {
+    if (window.__MEMO_MODE) { App.ui.toast('此版本不启用计时，可直接记笔记或勾选任务'); return; }
     const day = S().getDay(S().todayKey());
     if (day.activeHourPlan) { App.ui.toast('已有一个小时计划在进行中，先「⏹ 结束」结算'); return; }
     if (day.activeRest) { App.ui.toast('正在休息中，先结束休息再开新的一段'); return; }
@@ -4023,6 +4028,7 @@
   }
   // 定一段休息：类型 + 时长 + 提前填「好好休息」积分
   function startRestModal() {
+    if (window.__MEMO_MODE) { App.ui.toast('此版本不启用计时，可直接记笔记或勾选任务'); return; }
     const day = S().getDay(S().todayKey());
     if (day.activeRest) { App.ui.toast('已经在休息中，先结束休息'); return; }
     const dflt = (S().settings().hourPlanDefaultMin || 30);
@@ -5733,7 +5739,7 @@
   const srNotified = {};     // 已提醒过的轮次（内存态）
   let srBannerAt = 0;
 
-  function srOn() { return S().settings().srEnabled !== false; }
+  function srOn() { if (window.__MEMO_MODE) return false; return S().settings().srEnabled !== false; }
   function srGaps() {
     const g = S().settings().srGaps;
     return (g && g.length) ? g : SR_GAPS_DEF;
@@ -5743,7 +5749,7 @@
   function srKpPoints() { const v = S().settings().srKpPoints; return v == null ? 2 : Math.max(0, +v || 0); }
   function srFinishBonus() { const v = S().settings().srFinishBonus; return v == null ? 5 : Math.max(0, +v || 0); }
   /* ---------- ⏰ v71 学习时段：新知识时间 / 复习时间 ---------- */
-  function slotOn() { return S().settings().slotOn !== false; }
+  function slotOn() { if (window.__MEMO_MODE) return false; return S().settings().slotOn !== false; }
   function slotHM(k) {
     const v = S().settings()[k];
     return /^\d{1,2}:\d{2}$/.test(String(v || '')) ? v : (k === 'slotNewEnd' ? '16:00' : '08:00');
@@ -7023,7 +7029,7 @@
 
   function renderAll() {
     // 🧹 v147：进任务页先把今天成对的重复复习清掉（窄条件：同栏同名且以「复习」开头）
-    try { if (App.memcards && App.memcards.dedupeReviewDupes) App.memcards.dedupeReviewDupes(); } catch (e) { /* 忽略 */ }
+    try { if (!window.__MEMO_MODE && App.memcards && App.memcards.dedupeReviewDupes) App.memcards.dedupeReviewDupes(); } catch (e) { /* 忽略 */ }
     renderToday();
     renderTomorrow();
     // 🎧 三步面板的按钮/预算是动态拼进任务行的，渲染完要重新接一次事件

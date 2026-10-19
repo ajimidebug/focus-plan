@@ -1728,3 +1728,50 @@ body[data-theme="dark"] .hour-card.active, body[data-theme="purple"] .hour-card.
 .storage-blocker p {line-height:1.8;max-width:42rem}
 .storage-blocker button {margin:8px 8px 8px 0}
 [hidden] {display:none !important}
+
+/* 个人备忘录：主要入口保持轻量，旧资料从更多访问。 */
+.memo-layout .brand p { color: #c6d0dc; font-size: 12px; }
+.memo-layout #stat-bar .stat-item { display: none; }
+.memo-layout #stat-bar .stat-item:has(#stat-points) { display: flex; }
+.memo-layout #stat-bar { position: absolute; right: 16px; top: 12px; padding: 0; }
+@media(min-width:701px) { .memo-layout #stat-bar { position: static; padding: 0 24px 8px; } }
+.memo-layout .release-panel { margin: 10px 0 18px; font-size: 12px; }
+.memo-layout main { max-width: 1100px; margin: auto; }
+.memo-layout #view-memo, .memo-layout #view-memo-history { max-width: 820px; margin: 0 auto; }
+.memo-top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0 18px; }
+.memo-top h2 { font-size:25px; font-weight:650; letter-spacing:-.5px; }
+.memo-eyebrow { font-size:12px; color:var(--muted); margin-bottom:3px; }
+#memo-save { font-size:12px; color:#23805d; max-width:45%; }
+#memo-save[data-state="error"] { color:var(--req); }
+.memo-date-row { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.memo-date-row input, #memo-search { border:1px solid var(--line); border-radius:9px; background:var(--card); color:var(--ink); padding:9px 10px; font-size:16px; min-width:0; }
+.memo-date-row input { max-width:160px; }
+.memo-paper { margin-top:18px; background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 4px 22px rgba(26,40,55,.035); overflow:hidden; }
+.memo-toolbar { display:flex; flex-wrap:wrap; gap:6px; padding:12px; border-bottom:1px solid var(--line); }
+#memo-editor { width:100%; min-height:55dvh; display:block; resize:vertical; padding:20px 18px; border:0; outline:none; font-size:17px; line-height:1.9; background:transparent; color:var(--ink); tab-size:2; }
+#memo-editor:focus { box-shadow:inset 3px 0 0 rgba(59,130,246,.25); }
+#memo-editor::placeholder { color:#9aa4b1; }
+.memo-footnote { padding:12px 18px; color:var(--muted); font-size:12px; border-top:1px solid var(--line); }
+#memo-search { width:100%; margin-bottom:14px; }
+.memo-export-box { padding:12px 0 18px; }
+.memo-export-box summary { cursor:pointer; color:var(--primary); margin-bottom:12px; font-size:14px; }
+.memo-history-item { display:block; text-align:left; width:100%; background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:12px; padding:15px 16px; margin:10px 0; }
+.memo-history-item strong { display:block; font-size:15px; margin-bottom:6px; }
+.memo-history-item span { display:block; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--muted); font-size:14px; max-height:5.5em; overflow:hidden; }
+#memo-export-preview, #memo-copy-fallback { width:100%; min-height:40dvh; padding:12px; font-size:16px; line-height:1.7; border:1px solid var(--line); border-radius:8px; color:var(--ink); background:var(--card); }
+.memo-task-hint { padding:12px 15px; background:var(--card); border:1px solid var(--line); border-radius:10px; font-size:13px; color:var(--muted); margin:12px 0; }
+.memo-layout #slot-bar, .memo-layout #review-banner, .memo-layout #hour-card, .memo-layout #streak-bar, .memo-layout #settle-bar, .memo-layout #queue-bar, .memo-layout #link-card,
+.memo-layout .task-timer-btn, .memo-layout [data-act="start"], .memo-layout [data-act="cd-start"], .memo-layout [data-act="g-cd-start"], .memo-layout [data-act="d-start"], .memo-layout [data-act="qrev-start"],
+.memo-layout #view-settings .set-group:has(#set-sr-on), .memo-layout #view-settings .set-group:has(#set-slot-on), .memo-layout #view-settings .set-group:has(#set-float-pip), .memo-layout #view-settings .set-group:has(#set-split),
+.memo-layout .slot-hint, .memo-layout .slot-bar { display:none !important; }
+@media(max-width:700px) {
+  .memo-layout #mobile-nav .mn-btn { font-size:12px; min-height:49px; }
+  .memo-layout #mobile-nav .mn-ico { font-size:22px; }
+  .memo-top { margin-top:8px; }
+  .memo-top h2 { font-size:23px; }
+  .memo-toolbar .btn { font-size:12px; padding:9px 10px; }
+  #memo-editor { padding:16px 14px; min-height:52dvh; }
+  .memo-layout footer { font-size:11px; padding:14px 10px; }
+}
+
+.memo-layout #view-settings .set-group:has(#set-auto-end), .memo-layout [data-mact="demo"] { display:none !important; }

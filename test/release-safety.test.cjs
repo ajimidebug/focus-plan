@@ -228,3 +228,67 @@ test('real photo store and complete backup restore task IDs and image bytes befo
   assert.equal(C.phGet('round-trip-image'), image);
   assert(!messages.some(x => x.includes('未完成')));
 });
+
+function memoHarness(b) { vm.runInNewContext(source('js/memo.js'), b.ctx); return b.ctx.App.memoCore; }
+test('memo user-day uses Shanghai 04:00 across midnight, month boundaries and device zones', async () => {
+  const b = browser(); await b.S.load(); const M = memoHarness(b);
+  for (const [at, expected] of [
+    ['2026-10-19T19:59:00Z', '2026-10-19'],
+    ['2026-10-19T20:00:00Z', '2026-10-20'],
+    ['2026-10-18T16:01:00Z', '2026-10-18'],
+    ['2026-02-28T19:59:00Z', '2026-02-28'],
+    ['2026-12-31T20:00:00Z', '2027-01-01']
+  ]) assert.equal(M.userDay(at), expected);
+  assert.equal(M.clock('2026-10-19T08:55:00Z'), '16:55');
+  assert.equal(M.validDate('2026-02-30'), false);
+});
+test('memo preserves exact multiline raw words and revisions without parsing plans or counting minutes', async () => {
+  const b = browser(); await b.S.load(); const M = memoHarness(b);
+  const raw = '1055坐下来\n1103打开线性代数，打算继续二次型\n大概半小时？\n次日0120还没睡\n<script>test</script>\n';
+  const n = M.write('2026-10-19', raw, '2026-10-19T09:00:00Z');
+  const id = n.id; assert.equal(n.text, raw); assert.equal(n.revision, 1);
+  M.write('2026-10-19', raw); assert.equal(M.read('2026-10-19').revision, 1);
+  M.write('2026-10-19', raw + '更正：时间待核', '2026-10-19T10:00:00Z');
+  assert.equal(M.read('2026-10-19').id, id); assert.equal(M.read('2026-10-19').revision, 2);
+  assert.equal(b.S.getDay('2026-10-18').timeline.length, 1);
+  await b.S.save(); const next = browser({ shared: b }); await next.S.load();
+  assert.equal(memoHarness(next).read('2026-10-19').text, raw + '更正：时间待核');
+});
+test('memo history filters by original text and exports all selected days with identity, revisions and raw text', async () => {
+  const b = browser(); await b.S.load(); const M = memoHarness(b);
+  M.write('2026-10-18', '英语 TEST\n原话'); M.write('2026-10-19', '数学\n计划明天看');
+  assert.equal(M.entries('test').join(','), '2026-10-18');
+  assert.equal(M.entries('', '2026-10-19', '2026-10-19').join(','), '2026-10-19');
+  const text = M.exportText(M.entries());
+  assert(text.indexOf('用户日 2026-10-18') < text.indexOf('用户日 2026-10-19'));
+  assert(text.includes('英语 TEST\n原话')); assert(text.includes('计划明天看')); assert(text.includes('修订：1'));
+  assert(text.includes('不等于事件时间')); assert(text.includes('不代表已发送'));
+});
+test('memo additive data and untouched legacy records survive complete backup and restore', async () => {
+  const b = browser(); await b.S.load(); const M = memoHarness(b);
+  M.write('2026-10-19', 'MEMO-BACKUP-TEST\n1055开始'); await b.S.save();
+  const packed = JSON.parse(await backupHarness().B.packText(b.S.data(), {}));
+  const oldId = M.read('2026-10-19').id;
+  b.S.reset(); await b.S.flush(); assert.equal(b.S.restoreFrom(packed.data), true); await b.S.flush();
+  assert.equal(M.read('2026-10-19').id, oldId); assert.equal(M.read('2026-10-19').text, 'MEMO-BACKUP-TEST\n1055开始');
+  assert.equal(b.S.getDay('2026-10-18').tasks.required[0].id, 'stable-task');
+  assert.equal(b.S.getDay('2026-10-18').timeline[0].id, 'stable-event');
+  assert.equal(b.S.data().version, 1);
+});
+test('memo refuses malformed note data and storage protection without discarding unknown original fields', async () => {
+  const b = browser({ initial: data({ memoNotes: 'future-format' }) }); await b.S.load(); const M = memoHarness(b);
+  assert.throws(() => M.write('2026-10-19', 'new'), /格式/); assert.equal(b.S.data().memoNotes, 'future-format');
+  const c = browser(); await c.S.load(); const C = memoHarness(c);
+  c.mem.set('focusPlanData.v1', JSON.stringify(data({ _storageRevision: 100 })));
+  await c.S.save(); assert.throws(() => C.write('2026-10-19', 'new'), /保护/);
+  assert.equal(c.S.data().memoNotes, undefined);
+});
+test('memo updater blocks unflushed notes and awaits memo flush before activating', async () => {
+  const b = browser(); await b.S.load(); const u = updatesHarness(b); await new Promise(r => setImmediate(r)); u.waiting();
+  b.ctx.App.memo = { busy: () => true, flush: async () => false };
+  assert.equal(await u.U.apply(true), false); assert.equal(u.posted.length, 0);
+  b.ctx.App.memo.busy = () => false;
+  assert.equal(await u.U.apply(true), false); assert.equal(u.posted.length, 0);
+  b.ctx.App.memo.flush = async () => true;
+  assert.equal(await u.U.apply(true), true); assert.equal(u.posted.length, 1);
+});

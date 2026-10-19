@@ -16,6 +16,7 @@
   function busyReason() {
     if (!ready) return '正在读取记录';
     if (App.store.status().readOnly) return '记录处于保护状态';
+    if (App.memo && App.memo.busy()) return '笔记尚未安全保存';
     const T = App.tasks;
     if (T && ((T.getTimer && T.getTimer()) || (T.getCdTimer && T.getCdTimer()))) return '正在计时，请结束本段后更新';
     const day = App.store.getDay(App.store.todayKey());
@@ -46,6 +47,7 @@
     lastMessage = '正在保存并准备更新'; render();
     const epoch = inputEpoch;
     try {
+      if (App.memo && !await App.memo.flush()) throw new Error('笔记保存未完成，暂未更新');
       const saved = await App.store.save();
       const flushed = await App.store.flush();
       await App.memcards.readyPhotos();
@@ -95,7 +97,7 @@
     document.addEventListener('pointerdown', function () { interacted = true; }, { passive: true });
     document.addEventListener('input', function (e) {
       interacted = true; inputEpoch++;
-      if (e.target.matches('input, textarea, select')) dirty.add(e.target);
+      if (e.target.id !== 'memo-editor' && !(e.target.dataset && e.target.dataset.transient) && e.target.matches('input, textarea, select')) dirty.add(e.target);
     });
     // 自动保存的常驻设置项在 change 处理完成且存储确认后解除编辑标记；弹窗内仍等待关闭。
     document.addEventListener('change', function (e) {

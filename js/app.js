@@ -7,7 +7,7 @@
   const App = (window.App = window.App || {});
   const S = () => App.store;
 
-  let currentView = 'tasks';
+  let currentView = 'memo';
   let lastPoints = null;
 
   /* ---------- 顶部统计条 ---------- */
@@ -47,6 +47,10 @@
 
   /* ---------- 公告 / 使用指南 ---------- */
   function aboutModal() {
+    if (window.__MEMO_MODE) {
+      App.ui.openModal('随手记 · 使用说明', '<p>打开就写，输入自动保存。用「当前时间」插入时间，用「历史」搜索或按日期导出。笔记按北京时间凌晨04:00分日。</p><p>任务积分保留原版规则，由你手动结算；不提供计时、新知识时段或自动复习安排。旧记录仍可从更多页面查看。</p><p>内容保存在当前浏览器；请在设置下载完整备份。复制笔记后需自行粘贴发送，网站不会自动传给教练或Git。</p><p>原项目作者：Goko；此版本为个人备忘录定制版。</p>', '<button class="btn" data-act="close">关闭</button>');
+      App.ui.bindActions({ close: App.ui.closeModal }); return;
+    }
     const bodyHTML = '' +
       '<div style="border-left:4px solid #3b82f6;padding:4px 12px;margin-bottom:14px">' +
       '<p style="font-size:13.5px;color:#374151">本工具由 <b>Goko</b> 开发，为个人学习管理而做：<b>系统是账本，你是会计</b>。它不替你做任何决定，只帮你把账算清楚，让你对自己的「时间资产」和「积分资产」一目了然。</p>' +
@@ -335,7 +339,10 @@
 
   /* ---------- 视图切换 ---------- */
   function switchView(v) {
+    if (!v) return;
     currentView = v;
+    document.body.dataset.view = v;
+    if (v === 'memo-history' && App.memo) App.memo.history();
     // 📱 v125：切页时把「更多」抽屉收起来（手机上从抽屉里点页面用）
     const mnSheetNow = document.getElementById('mn-sheet');
     if (mnSheetNow) mnSheetNow.classList.add('hidden');
@@ -369,6 +376,7 @@
 
   function refreshAll() {
     App.tasks.renderAll();
+    if (App.memo) { App.memo.show(document.getElementById('memo-date').value); App.memo.history(); }
     if (App.timeline) App.timeline.render();
     if (App.stats) App.stats.render();
     // 听课三步面板现在挂在任务行里，renderAll 已经带上了，不用再单独渲染
@@ -433,7 +441,8 @@
     if (dbtn) dbtn.onclick = function () { App.demo.open(); };
 
     // 初始化各视图（🧲 v83：队列优先模式下直接落在队列页）
-    switchView(S().settings().queueFirst ? 'queue' : 'tasks');
+    App.memo.init();
+    switchView('memo');
     App.tasks.renderAll();
     App.timeline.init();
 
