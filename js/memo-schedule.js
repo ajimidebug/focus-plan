@@ -43,9 +43,9 @@
   function elapsed(session, now = Date.now()) { return session.chunks.reduce((sum, c) => sum + Math.max(0, (c.end == null ? now : c.end) - c.start), 0); }
   function duration(ms) { const sec = Math.floor(Math.max(0, ms) / 1000); return Math.floor(sec / 3600) + ':' + String(Math.floor(sec / 60) % 60).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); }
   function active() { return state().sessions.find(s => s.status === 'running'); }
-  function pauseCore(session, now) { if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
+  function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
   function startRef(ref, now = Date.now(), itemId = null) {
-    const d = state(), found = resolve(ref); if (!found || found.task.archived) throw new Error('任务已删除或停用，请重新选择');
+    summaryCache = null; const d = state(), found = resolve(ref); if (!found || found.task.archived) throw new Error('任务已删除或停用，请重新选择');
     if (isDone({ ref: found.ref })) throw new Error('任务已完成；取消完成后再计时');
     const running = active(); if (running && key(running.ref) === key(found.ref) && (itemId == null || running.itemId === itemId)) return running;
     if (running) pauseCore(running, now);
@@ -64,6 +64,7 @@
   }
   function isDone(item) { const found = resolve(item.ref); if (!found) return false; const t = found.task, r = found.ref; return r.kind === 'queue' ? !!(t.doneAt || t.doneDay) : (r.kind === 'daily' || r.kind === 'project') ? !!t.days?.[r.day] : !!t.done; }
   function savePlan(input, id) {
+    summaryCache = null;
     const d = state();
     if (!M().validDate(input.day) || !Number.isFinite(input.start) || !['point', 'span'].includes(input.type) || (input.type === 'span' && (!Number.isFinite(input.end) || input.end <= input.start || input.end - input.start > 86400000))) throw new Error('请填写有效的日期和时间，时间段最长24小时');
     const found = resolve(input.ref); if (!found) throw new Error('关联任务已移动，请重新选择');
@@ -183,14 +184,15 @@
       const index = new Map();
       schedule.items.filter(p => !p.deleted).forEach(p => { const k = key(p.ref); if (!index.has(k)) index.set(k, []); index.get(k).push(p); });
       index.forEach(list => list.sort((a, b) => a.start - b.start));
-      summaryCache = { schedule, revision: data._storageRevision, index };
+      const activeIndex = new Map(); (schedule.sessions || []).filter(s => s.status !== 'ended').forEach(s => activeIndex.set(key(s.ref), s));
+      summaryCache = { schedule, revision: data._storageRevision, index, activeIndex };
     }
     const plans = summaryCache.index.get(key(ref)) || [];
     return plans.slice(0, 2).map(p => p.day.slice(5) + ' ' + time(p.start) + (p.end ? '—' + (M().naturalDay(p.end) !== p.day ? '次日' : '') + time(p.end) : '')).join('；') + (plans.length > 2 ? ' 等' + plans.length + '段' : '');
   }
   function rowControls(ref) {
     try { const r = canonical(ref), encoded = esc(JSON.stringify(r)), summary = planSummary(r);
-      const session = state().sessions.slice().reverse().find(s => key(s.ref) === key(r) && s.status !== 'ended');
+      const session = summaryCache?.schedule === S().data().memoSchedule ? summaryCache.activeIndex?.get(key(r)) : null;
       const command = (act, text) => '<button type="button" class="btn btn-small" data-schedule-command="' + act + '" data-schedule-ref="' + encoded + '"' + (session ? ' data-session-id="' + esc(session.id) + '"' : '') + '>' + text + '</button>';
       return '<span class="schedule-row-tools">' + command('plan', summary ? '修改／追加时间' : '安排时间') + (session ? '<strong class="schedule-inline-status" data-inline-session="' + esc(session.id) + '">' + (session.status === 'running' ? '计时中 ' : '已暂停 ') + duration(elapsed(session)) + '</strong>' + command(session.status === 'running' ? 'pause' : 'start', session.status === 'running' ? '暂停' : '继续') + command('end', '结束') : isDone({ ref: r }) ? '<small>已完成</small>' : command('start', '开始计时')) + (summary ? '<small class="schedule-row-summary">' + esc(summary) + '</small>' : '') + '</span>';
     } catch (_) { return '<small>时间安排暂不可用，请先备份</small>'; }
