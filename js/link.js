@@ -242,34 +242,7 @@
     return lines.join('\n');
   }
 
-  function summarizeToday() {
-    const s = S().settings();
-    const key = (s.aiKey || '').trim();
-    if (!key) { App.ui.toast('先到「设置 → AI」填 SiliconFlow API Key'); return; }
-    const text = buildTodayData(S().todayKey());
-    if (!text) { App.ui.toast('今天还没有记录，先做点再去复盘 😄'); return; }
-    const model = (s.aiModel || 'Qwen/Qwen2.5-7B-Instruct').trim();
-    const sys = '你是极客级的学习"逐题诊断"教练。基于今日记录，只输出一个合法、完整的 JSON 对象字符串（不要任何 markdown 代码块、不要前后缀、不要截断）。硬性要求：1) items 必须按题号/题名逐个列出记录里的每一道题，一题都不能漏。2) 对每一题，只根据该题评语的具体内容诊断，指出这题具体缺在哪个知识点/哪一步，next 给只属于这一题的下一步注意，不同题不写同一句。3) 某题没评语时：note 写"未写评语"，problem 写"无法判断"，good 与 next 留空。4) weak 必须是去重后的具体短板(2~4条)；整个回答禁止出现"情绪管理/心态不稳/时间分配/需要加强"这类没有任何具体做法的空话，一个字都不能有。5) advice 只写明天最该做的一件具体可执行的事。6) 输出要短而密，note 每句不超过20字，确保一次写完不截断。格式：{"summary":"一两句","items":[{"name":"题号/题名","status":"完成/未完成/未写评语","note":"评语原文或未写评语","problem":"这题具体短板","good":"亮点(可空)","next":"只属于这题的下步注意"}],"weak":["具体短板1","具体短板2"],"advice":"明天最该做的一件具体的事"}。';
-    const user = '今日记录：\n' + text;
-    App.ui.toast('🤖 AI 正在分析…');
-    fetch('https://api.siliconflow.cn/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],
-        temperature: 0.4, max_tokens: 3000, response_format: { type: 'json_object' }
-      })
-    }).then(function (r) {
-      if (!r.ok) { if (r.status === 401) throw new Error('API Key 无效（401）'); if (r.status === 402) throw new Error('余额不足（402）'); throw new Error('HTTP ' + r.status); }
-      return r.json();
-    }).then(function (data) {
-      const c = data && data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : '';
-      renderAiResult(c, countQuestions());
-    }).catch(function (err) {
-      App.ui.toast('AI 调用失败：' + err.message + '。浏览器直接调用常被跨域拦，可用桌面插件或代理');
-    });
-  }
+  function summarizeToday() { App.ui.toast('此版本不提供联网 AI；可自行导出需要分享的记录。'); }
 
   function countQuestions() {
     const day = S().getDay(S().todayKey());

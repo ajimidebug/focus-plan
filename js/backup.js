@@ -240,7 +240,7 @@
     if (!c.on && kind !== 'manual' && kind !== 'restore') return Promise.resolve(null);
     busy = true;
     // 💾 v121：存快照之前，先把图片池同步成"现在这份"（池子只存一份，不随份数翻倍）
-    return idb().then(syncPool).catch(function () { return null; }).then(function (poolInfo) {
+    return App.memcards.readyPhotos().then(function () { return idb(); }).then(syncPool).then(function (poolInfo) {
       const str = JSON.stringify(S().data());
       const s = sig(str);
       return metaAll().then(function (all) {
@@ -296,27 +296,72 @@
     });
   }
 
-  /* ---------- 恢复 / 导出 / 删除 ---------- */
-  function restore(id) {
-    return bodyGet(id).then(function (b) {
-      if (!b || !b.json) { App.ui.toast('这份备份的内容找不到了（可能被清理了）', 4200); return false; }
-      let obj = null;
-      try { obj = JSON.parse(b.json); } catch (e) { App.ui.toast('这份备份读不出来，可能坏了'); return false; }
-      // 先给"现在这份"留个底，恢复错了还能倒回来
-      return snap('manual').then(function () {
-        const ok = S().restoreFrom(obj);
-        if (!ok) { App.ui.toast('恢复失败：文件结构不对'); return false; }
-        // 💾 v121：图片本体也从池子里写回去（不然卡片回来了、图是裂的）
-        return poolGet().then(function (pool) {
-          let n = 0;
-          try { n = (pool && App.memcards && App.memcards.restorePhotos) ? App.memcards.restorePhotos(pool.photos) : 0; }
-          catch (e) { n = 0; }
-          App.ui.toast(n ? ('♻ 已恢复 —— 连 ' + n + ' 张图片一起（正在重新加载…）') : '♻ 已恢复 —— 正在重新加载…', 4600);
-          setTimeout(function () { try { location.reload(); } catch (e) {} }, 900);
-          return true;
-        });
+  function photoRefs(data) {
+    const ids = new Set();
+    function visit(o) {
+      if (!o || typeof o !== 'object') return;
+      Object.keys(o).forEach(function (key) {
+        if (key === 'frontImgs' || key === 'backImgs') (o[key] || []).forEach(function (id) { ids.add(id); });
+        else visit(o[key]);
       });
-    });
+    }
+    visit(data); return Array.from(ids);
+  }
+  function checkPhotos(data, photos) {
+    const missing = photoRefs(data).filter(function (id) { return typeof photos[id] !== 'string' || !/^data:image\//.test(photos[id]); });
+    if (missing.length) throw new Error('有 ' + missing.length + ' 张引用图片缺失，未生成完整备份／未覆盖现有记录');
+    Object.keys(photos).forEach(function (id) { if (typeof photos[id] !== 'string' || !/^data:image\//.test(photos[id])) throw new Error('图片格式异常'); });
+  }
+  async function digest(text) {
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(hash)).map(function (n) { return n.toString(16).padStart(2, '0'); }).join('');
+  }
+  async function packText(data, photos) {
+    data = JSON.parse(JSON.stringify(data)); photos = Object.assign({}, photos);
+    checkPhotos(data, photos);
+    const pack = { __focusPlan: 2, exportedAt: Date.now(), appRelease: window.__RELEASE || '169', data: data, photos: photos };
+    pack.sha256 = await digest(JSON.stringify({ data: pack.data, photos: pack.photos }));
+    return JSON.stringify(pack);
+  }
+  async function exportCurrentText() {
+    await App.memcards.readyPhotos();
+    // 即使持久化失败，仍允许把内存中的完整数据下载出来救援。
+    await S().flush(); await App.memcards.flushPhotos();
+    return packText(S().data(), photoMap());
+  }
+  async function exportCurrent() {
+    try {
+      const text = await exportCurrentText();
+      const ok = download('focus-plan-full-' + S().todayKey() + '.json', text);
+      App.ui.toast(ok ? '已发起完整备份下载，请在手机“下载”中确认文件' : '无法下载备份，请检查浏览器权限', 6000);
+      return ok;
+    } catch (e) { App.ui.toast('完整备份未生成：' + e.message, 6000); return false; }
+  }
+  async function restoreData(data, photos) {
+    if (!S().validate(data)) throw new Error('数据结构或版本不受支持');
+    await App.memcards.readyPhotos();
+    photos = Object.assign({}, photoMap(), photos || {});
+    checkPhotos(data, photos);
+    const before = await snap('manual');
+    if (!before) throw new Error('恢复前备份失败，已取消覆盖');
+    if (!S().restoreFrom(data)) throw new Error('未能应用记录');
+    App.memcards.restorePhotos(photos);
+    const ok = await S().flush();
+    const photoOK = await App.memcards.flushPhotos();
+    if (!ok || !photoOK) throw new Error('部分记录未能持久保存，暂勿刷新；恢复前备份仍保留在本机');
+    App.ui.toast('记录和图片已保存，即将重新打开', 3000);
+    setTimeout(function () { location.reload(); }, 700);
+    return true;
+  }
+
+  /* ---------- 恢复 / 导出 / 删除 ---------- */
+  async function restore(id) {
+    try {
+      const b = await bodyGet(id);
+      if (!b || !b.json) throw new Error('这份备份的内容找不到了');
+      const pool = await poolGet();
+      return await restoreData(JSON.parse(b.json), (pool && pool.photos) || {});
+    } catch (e) { App.ui.toast('恢复未完成：' + e.message, 6000); return false; }
   }
 
   function download(name, text) {
@@ -331,15 +376,14 @@
     } catch (e) { return false; }
   }
   /** 💾 v121：导出文件的内容（抽出来是为了能被测试直接验，不用真去下载） */
-  function exportTextOf(id) {
-    return bodyGet(id).then(function (b) {
-      if (!b || !b.json) return null;
-      let obj = null;
-      try { obj = JSON.parse(b.json); } catch (e) { return null; }
-      const photos = photoMap();
-      return JSON.stringify({ __focusPlan: 2, exportedAt: Date.now(), data: obj, photos: photos });
-    });
+  async function exportTextOf(id) {
+    await App.memcards.readyPhotos();
+    const b = await bodyGet(id);
+    if (!b || !b.json) return null;
+    const pool = await poolGet();
+    return packText(JSON.parse(b.json), Object.assign({}, (pool && pool.photos) || {}, photoMap()));
   }
+
   function exportOne(id) {
     return exportTextOf(id).then(function (text) {
       if (!text) { App.ui.toast('这份备份的内容找不到了'); return false; }
@@ -351,35 +395,27 @@
         ? ('⬇ 已存成文件：' + nm + '（' + kb(text.length) + '，含 ' + nPh + ' 张图片）')
         : '这个浏览器不让下载，试试换成 Edge/Chrome', 5600);
       return ok;
-    });
+    }).catch(function (e) { App.ui.toast('备份未导出：' + e.message, 6000); return false; });
   }
 
   /* ---------- 💾 v121：从文件导入（吃掉老格式=纯数据 / 新格式=带图片的包） ---------- */
-  function importFromText(text, fname) {
-    let obj = null;
-    try { obj = JSON.parse(String(text || '')); } catch (e) { obj = null; }
-    if (!obj || typeof obj !== 'object') { App.ui.toast('这个文件读不出来（不是备份 json？）', 4800); return false; }
-    const data = (obj.data && typeof obj.data === 'object') ? obj.data : obj;
-    const photos = (obj.photos && typeof obj.photos === 'object') ? obj.photos : null;
-    if (!data || data.version !== 1 || !data.days) { App.ui.toast('这不像专注计划的备份文件', 4800); return false; }
-    const nPh = photos ? Object.keys(photos).length : 0;
-    App.ui.confirm('用这个文件覆盖现在的数据？<br><span class="hint">' +
-      esc(fname || '（文件）') + '　·　含 <b>' + nPh + '</b> 张图片' +
-      (nPh ? '（会一起写回图片库）' : '（<b>这份文件里没有图片</b>，是老格式导出的）') +
-      '<br>⚠️ 现在的数据会被<b>整个替换</b>掉（动手前会自动先存一份"恢复前"的备份）。</span>',
-      '⬆ 导入', function () {
-        snap('manual').then(function () {
-          const ok = S().restoreFrom(data);
-          if (!ok) { App.ui.toast('导入失败：结构不对'); return; }
-          let n = 0;
-          try { n = (photos && App.memcards && App.memcards.restorePhotos) ? App.memcards.restorePhotos(photos) : 0; }
-          catch (e) { n = 0; }
-          App.ui.toast('⬆ 导入完成' + (n ? '（含 ' + n + ' 张图片）' : '') + ' —— 正在重新加载…', 4800);
-          setTimeout(function () { try { location.reload(); } catch (e) {} }, 900);
-        });
+  async function importFromText(text, fname) {
+    try {
+      const obj = JSON.parse(String(text || ''));
+      const data = obj.data || obj;
+      const photos = obj.photos || null;
+      if (!S().validate(data)) throw new Error('数据版本或结构不受支持');
+      if (obj.sha256 && obj.sha256 !== await digest(JSON.stringify({ data: data, photos: photos }))) throw new Error('备份校验未通过，文件可能不完整');
+      await App.memcards.readyPhotos();
+      checkPhotos(data, Object.assign({}, photoMap(), photos || {}));
+      App.ui.confirm('用此文件恢复记录？恢复前会保存当前快照。<br>' + esc(fname || '备份文件') +
+        '<br>含 ' + Object.keys(photos || {}).length + ' 张图片。', '恢复', function () {
+        return restoreData(data, photos).catch(function (e) { App.ui.toast('恢复未完成：' + e.message, 6000); });
       });
-    return true;
+      return true;
+    } catch (e) { App.ui.toast('文件未导入：' + e.message, 6000); return false; }
   }
+
   function importFile() {
     const inp = document.createElement('input');
     inp.type = 'file';
@@ -783,7 +819,8 @@
     importFile: importFile, importFromText: importFromText,     // 💾 v121
     writeAutoPack: writeAutoPack, pickFolder: pickFolder,       // 📁 v154
     autoDirState: function () { return { has: !!dirHandle, needsGrant: dirNeedsGrant, last: lastAutoWrite }; },
-    exportTextOf: exportTextOf,
+    exportTextOf: exportTextOf, exportCurrentText: exportCurrentText, exportCurrent: exportCurrent,
+    packText: packText, checkPhotos: checkPhotos,
     photos: function () { const m = photoMap(); return { n: Object.keys(m).length, mb: photoMBOf(m), map: m }; },
     when: when, kb: kb
   };

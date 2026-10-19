@@ -365,32 +365,7 @@
   /* ---------- 🎙 笔记工坊（本机 127.0.0.1:8890）----------
      入口默认隐藏：只有本机笔记服务在运行时才显示导航按钮。
      别人的设备（没有工坊）看不到这一项，也不会被"双击bat"之类的提示困扰。 */
-  function notesPing(quiet) {
-    const st = document.getElementById('notes-status');
-    const wrap = document.getElementById('notes-frame-wrap');
-    const nav = document.getElementById('nav-notes');
-    if (!st || !wrap) return;
-    fetch('http://127.0.0.1:8890/api/ping', { cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        if (j && j.ok) {
-          if (nav) nav.style.display = '';
-          if (quiet) return; // 开机自检：只负责亮出入口，不打扰当前页面
-          st.innerHTML = '';
-          wrap.style.display = 'block';
-        } else {
-          throw new Error('bad');
-        }
-      })
-      .catch(function () {
-        if (nav) nav.style.display = 'none';
-        if (quiet) return;
-        wrap.style.display = 'none';
-        st.innerHTML = '<div class="card"><h3>🎙 网课笔记工坊没在运行</h3>' +
-          '<p class="hint">这是装在你自己电脑上的功能：双击桌面「笔记网站.bat」启动，然后刷新本页即可。' +
-          '（录音 → 转文字 → AI 笔记，全部在本机完成；其他设备上不会显示这个入口。）</p></div>';
-      });
-  }
+  function notesPing() { const nav = document.getElementById('nav-notes'); if (nav) nav.style.display = 'none'; }
 
   function refreshAll() {
     App.tasks.renderAll();
@@ -401,8 +376,9 @@
   }
 
   /* ---------- 启动 ---------- */
-  function init() {
-    S().load();
+  async function init() {
+    if (App.updates) App.updates.init();
+    if (!await S().load()) { if (App.updates) App.updates.showBlocked(); return; }
 
     // 主导航
     document.querySelectorAll('.nav-btn').forEach(function (b) {
@@ -477,6 +453,7 @@
 
     // 开机自检：本机笔记服务在不在？在 → 亮出「🎙 笔记」入口；不在 → 藏起来
     notesPing(true);
+    if (App.updates) App.updates.appReady();
   }
 
   App.app = {
@@ -487,5 +464,5 @@
     refreshStats: refreshStats
   };
 
-  init();
+  init().catch(function () { if (App.updates) App.updates.showBlocked('启动未完成，未清除记录。请先导出数据后重试。'); });
 })();

@@ -2,16 +2,19 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; worker-src 'self'" />
+  <meta name="referrer" content="no-referrer" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <script>
     /* 版本号。v67 起提到 <head>：设置页等模块渲染得比页尾的 build-check 早，
        以前写在页尾，渲染时读到 undefined 就显示成 "v?"。 */
-    window.__BUILD = 168;
+    window.__BUILD = 169;
+    window.__RELEASE = '169.1';
   </script>
   <meta name="theme-color" content="#2d3a4a" />
   <title>专注计划 · 学习会计系统</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="css/style.css?v=168" />
+  <link rel="stylesheet" href="css/style.css?v=169.1" />
   <style id="pip-style">
     /* ===== 🪟 只在小窗（Document Picture-in-Picture）里生效：让悬浮窗铺满整个小窗 ===== */
     html.pip, html.pip body { background: var(--bg, #f5f7fa); margin: 0; padding: 0; }
@@ -113,6 +116,10 @@
   </div>
 
   <main>
+    <section class="release-panel" aria-live="polite">
+      <div><span id="release-status">正在读取版本</span><br><span id="storage-status">正在读取记录</span></div>
+      <div class="release-actions"><button id="check-update" class="btn btn-small">检查更新</button><button id="apply-update" class="btn btn-small btn-primary" hidden>保存并更新</button></div>
+    </section>
     <!-- 任务视图 -->
     <section id="view-tasks" class="view active">
       <div class="view-tabs">
@@ -172,8 +179,7 @@
     <section id="view-notes" class="view">
       <div id="notes-status"></div>
       <div id="notes-frame-wrap" style="display:none">
-        <iframe id="notes-frame" src="http://127.0.0.1:8890/?embed=1"
-          style="width:100%;height:calc(100vh - 120px);border:1px solid var(--line);border-radius:14px;background:#0b1020"></iframe>
+        <p>此版本未连接本机笔记服务。</p>
       </div>
     </section>
 
@@ -286,12 +292,12 @@
       <div class="card">
         <h3>💾 数据</h3>
         <div class="btn-row">
-          <button id="btn-export-json" class="btn btn-small">导出全部数据 (.json)</button>
+          <button id="btn-export-json" class="btn btn-small">下载完整备份（含图片）</button>
           <button id="btn-export-csv" class="btn btn-small">导出记录 (.csv)</button>
           <button id="btn-import-json" class="btn btn-small">导入数据</button>
           <button id="btn-reset" class="btn btn-small btn-danger">清空全部数据</button>
         </div>
-        <p class="hint">数据保存在浏览器本地（localStorage + IndexedDB 双备份），导出文件可随时恢复。</p>
+        <p class="hint">记录保存在当前浏览器。更新程序会保留记录；完整备份包含卡片图片，请在手机“下载”中确认文件。</p>
       </div>
       <div class="card">
         <h3>💾 自动备份</h3>
@@ -300,7 +306,7 @@
     </section>
   </main>
 
-  <footer>数据仅存于你的浏览器 · 导出即备份 · 分享此页面给朋友即可使用</footer>
+  <footer>记录保存在当前浏览器 · 定期下载完整备份 · 同一网址继续使用</footer>
 
   <div id="modal-root"></div>
   <div id="toast-root"></div>
@@ -330,47 +336,28 @@
     </div>
   </div>
 
-  <script src="js/store.js?v=168"></script>
-  <script src="js/ui.js?v=168"></script>
-  <script src="js/tasks.js?v=168"></script>
-  <script src="js/timeline.js?v=168"></script>
-  <script src="js/stats.js?v=168"></script>
-  <script src="js/settings.js?v=168"></script>
-  <script src="js/sport.js?v=168"></script>
-  <script src="js/lecture.js?v=168"></script>
-  <script src="js/calendar.js?v=168"></script>
-  <script src="js/link.js?v=168"></script>
-  <script src="js/demo.js?v=168"></script>
-  <script src="js/queue.js?v=168"></script>
-  <script src="js/milestones.js?v=168"></script>
-  <script src="js/memcards.js?v=168"></script>
-  <script src="js/checkin.js?v=168"></script>
-  <script src="js/backup.js?v=168"></script>
-  <script src="js/exams.js?v=168"></script>
-  <script src="js/mistakes.js?v=168"></script>
-  <script src="js/badges.js?v=168"></script>
-  <script src="js/app.js?v=168"></script>
-  <script>
-    // PWA：注册 Service Worker（离线可用 / 可添加到主屏幕）
-    if ('serviceWorker' in navigator) {
-      // v67：以前新版本要手动 Ctrl+F5 才生效（老 SW 把旧页面喂给你）。
-      // 现在：① sw.js 里页面本体改走 network-first；
-      //       ② 每次打开都问一句有没有新版本；
-      //       ③ 新 SW 一接管就自动刷新一次 —— 以后上传完不用再强刷。
-      var hadCtl = !!navigator.serviceWorker.controller;
-      var reloaded = false;
-      navigator.serviceWorker.addEventListener('controllerchange', function () {
-        if (!hadCtl || reloaded) return;   // 首次安装 SW 时不算「有更新」，别白刷一次
-        reloaded = true;
-        location.reload();
-      });
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('sw.js').then(function (reg) {
-          try { reg.update(); } catch (err) { }
-        }).catch(function () { /* file:// 下无碍 */ });
-      });
-    }
-  </script>
+  <script src="js/store.js?v=169.1"></script>
+  <script src="js/ui.js?v=169.1"></script>
+  <script src="js/tasks.js?v=169.1"></script>
+  <script src="js/timeline.js?v=169.1"></script>
+  <script src="js/stats.js?v=169.1"></script>
+  <script src="js/settings.js?v=169.1"></script>
+  <script src="js/sport.js?v=169.1"></script>
+  <script src="js/lecture.js?v=169.1"></script>
+  <script src="js/calendar.js?v=169.1"></script>
+  <script src="js/link.js?v=169.1"></script>
+  <script src="js/demo.js?v=169.1"></script>
+  <script src="js/queue.js?v=169.1"></script>
+  <script src="js/milestones.js?v=169.1"></script>
+  <script src="js/memcards.js?v=169.1"></script>
+  <script src="js/checkin.js?v=169.1"></script>
+  <script src="js/backup.js?v=169.1"></script>
+  <script src="js/exams.js?v=169.1"></script>
+  <script src="js/mistakes.js?v=169.1"></script>
+  <script src="js/badges.js?v=169.1"></script>
+  <script src="js/updates.js?v=169.1"></script>
+  <script src="js/app.js?v=169.1"></script>
+
 
   <!-- ✨ 快速上手演示动画 -->
   <style id="demo-style">
@@ -451,81 +438,6 @@
       </div>
     </div>
   </div>
-<script id="build-check">
-/* 交付自检（v54）：把线上实际文件大小和发布时的大小比一遍。
-   有文件没传上去 → 顶部弹红条点名，别再靠猜"为什么改了没生效"。
-   控制台可用：__checkBuild() 重查 / __checkBuild(true) 强制绕过缓存重查 */
-window.__BUILD_SIZES = {
-  "css/style.css": 95669,
-  "js/app.js": 73212,
-  "js/badges.js": 9802,
-  "js/exams.js": 13932,
-  "js/mistakes.js": 18108,
-  "js/memcards.js": 121260,
-  "js/backup.js": 40303,
-  "js/checkin.js": 24522,
-  "js/marked.min.js": 35481,
-  "js/katex.min.js": 275415,
-  "js/mhchem.min.js": 33731,
-  "css/katex.css": 773106,
-  "js/calendar.js": 40800,
-  "js/demo.js": 8261,
-  "js/lecture.js": 42183,
-  "js/link.js": 20710,
-  "js/milestones.js": 10183,
-  "js/queue.js": 121592,
-  "js/settings.js": 30336,
-  "js/sport.js": 25754,
-  "js/stats.js": 53363,
-  "js/store.js": 19422,
-  "js/tasks.js": 422348,
-  "js/timeline.js": 19743,
-  "js/ui.js": 12061,
-  "sw.js": 3707,
-  "version.html": 163112
-};
-(function () {
-  var S = window.__BUILD_SIZES;
-  function warn(bad) {
-    if (document.getElementById('build-warn')) return;
-    var d = document.createElement('div');
-    d.id = 'build-warn';
-    d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#e2545d;color:#fff;' +
-      'font:13px/1.6 system-ui,"Segoe UI","Microsoft YaHei",sans-serif;padding:9px 14px;' +
-      'box-shadow:0 3px 12px rgba(0,0,0,.28)';
-    var names = bad.map(function (x) { return x.f; }).join('、');
-    d.innerHTML = '<button id="build-warn-x" style="float:right;margin:0 0 0 12px;background:rgba(255,255,255,.18);' +
-      'color:#fff;border:1px solid rgba(255,255,255,.55);border-radius:6px;padding:3px 10px;cursor:pointer;font:inherit">' +
-      '✕ 知道了</button><b>⚠️ 线上有 ' + bad.length + ' 个文件还是旧版（没传上去）</b><br>' +
-      '<span style="word-break:break-all">' + names + '</span><br>' +
-      '<span style="opacity:.92">这些改动不会生效。把 focus-plan 里的 js、css 文件夹整个重传一遍，刷新即可。</span>';
-    document.body.appendChild(d);
-    document.getElementById('build-warn-x').onclick = function () { d.remove(); };
-  }
-  function grab(f, q) {
-    return fetch(f + q, { cache: 'no-store' }).then(function (r) {
-      if (!r.ok) return { f: f, bad: true };
-      return r.arrayBuffer().then(function (b) { return { f: f, got: b.byteLength, bad: b.byteLength !== S[f] }; });
-    }).catch(function () { return { f: f, bad: false }; });   // 取不到（离线等）不算数
-  }
-  function run(fresh) {
-    if (!/^https?:/.test(location.protocol)) return Promise.resolve([]);
-    var q = fresh ? ('?fresh=' + Date.now() + Math.random()) : '';
-    return Promise.all(Object.keys(S).map(function (f) { return grab(f, q); })).then(function (res) {
-      var bad = res.filter(function (x) { return x.bad; });
-      if (bad.length) warn(bad);
-      if (fresh) {
-        console.log(res.map(function (x) {
-          return (x.bad ? '❌ ' : '✅ ') + x.f + '  线上 ' + (x.got == null ? '?' : x.got) + ' / 应为 ' + S[x.f];
-        }).join('\n'));
-      }
-      return res;
-    });
-  }
-  window.__checkBuild = run;
-  function kick() { setTimeout(function () { run(false); }, 1200); }
-  if (document.readyState === 'complete') kick(); else window.addEventListener('load', kick);
-})();
-</script>
+
 </body>
 </html>

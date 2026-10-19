@@ -1718,3 +1718,13 @@ body[data-theme="dark"] .hour-card.active, body[data-theme="purple"] .hour-card.
 .q-revsec-note { font-size: 12px; opacity: .75; margin: 2px 0 6px; line-height: 1.5; }
 .q-rev-row.q-rev-rolled { opacity: .93; }
 .q-rev-row.q-rev-rolled .rolled-tag { font-size: 11px; padding: 1px 6px; margin-left: 6px; border-radius: 10px; }
+
+/* 手机端保存与更新状态 */
+.release-panel {display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:12px 0;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;font-size:12px;line-height:1.7}
+.release-actions {display:flex;gap:8px;flex-wrap:wrap}
+#storage-status[data-state="error"], #storage-status[data-state="blocked"] {color:#b42318;font-weight:700}
+#storage-status[data-state="warning"] {color:#9a6700}
+.storage-blocker {position:fixed;inset:0;z-index:999999;background:var(--bg,#fff);color:var(--ink,#18212f);padding:28px 20px;overflow:auto}
+.storage-blocker p {line-height:1.8;max-width:42rem}
+.storage-blocker button {margin:8px 8px 8px 0}
+[hidden] {display:none !important}

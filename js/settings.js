@@ -326,15 +326,14 @@
   /* ---------- 数据按钮 ---------- */
   function bindDataButtons() {
     document.getElementById('btn-export-json').onclick = function () {
-      S().exportJSON();
-      App.ui.toast('已导出 .json 全量备份');
+      App.backup.exportCurrent();
     };
     document.getElementById('btn-export-csv').onclick = function () {
       S().exportCSV();
       App.ui.toast('已导出 .csv 记录（时间轴 + 流水）');
     };
     document.getElementById('btn-import-json').onclick = function () {
-      document.getElementById('import-file').click();
+      App.backup.importFile();
     };
     document.getElementById('btn-reset').onclick = function () {
       App.ui.confirm('确定清空全部数据吗？建议先导出备份。<br/>此操作不可恢复！', '清空全部数据', function () {

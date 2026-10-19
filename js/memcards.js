@@ -692,20 +692,41 @@
     q.forEach(function (f) { try { if (f) f(); } catch (e) { /* 忽略 */ } });
   }
   function phGet(id) { return (id && phCache[id]) || ''; }
-  function phPut(id, dataUrl) {
-    phCache[id] = dataUrl;
-    phOpen().then(function (db) {
-      const tx = db.transaction(PH_STORE, 'readwrite');
-      tx.objectStore(PH_STORE).put({ id: id, dataUrl: dataUrl, at: Date.now() }, id);
-    }).catch(function () { /* 忽略 */ });
+  let phPending = Promise.resolve(true);
+  const phErrors = new Set();
+  function readyPhotos() {
+    return new Promise(function (resolve, reject) {
+      phLoadAll(function () { phFailed ? reject(new Error('图片库未能读取，请重试后备份')) : resolve(); });
+    });
   }
+  function writePhoto(id, value) {
+    phPending = phPending.then(function () {
+      return phOpen().then(function (db) {
+        return new Promise(function (resolve, reject) {
+          const tx = db.transaction(PH_STORE, 'readwrite');
+          if (value === null) tx.objectStore(PH_STORE).delete(id);
+          else tx.objectStore(PH_STORE).put({ id: id, dataUrl: value, at: Date.now() }, id);
+          tx.oncomplete = function () { db.close(); resolve(); };
+          tx.onerror = tx.onabort = function () { db.close(); reject(tx.error || new Error('图片保存失败')); };
+        });
+      }).then(function () { phErrors.delete(id); return true; }, function () {
+        phErrors.add(id);
+        if (App.ui) App.ui.toast('图片保存失败，暂勿刷新；请先下载完整备份', 6000);
+        return false;
+      });
+    });
+    return phPending;
+  }
+  async function flushPhotos() {
+    let wait;
+    do { wait = phPending; await wait; } while (wait !== phPending);
+    return phErrors.size === 0;
+  }
+  function phPut(id, dataUrl) { phCache[id] = dataUrl; return writePhoto(id, dataUrl); }
   function phDel(id) {
-    if (!id) return;
+    if (!id) return Promise.resolve(true);
     delete phCache[id];
-    phOpen().then(function (db) {
-      const tx = db.transaction(PH_STORE, 'readwrite');
-      tx.objectStore(PH_STORE).delete(id);
-    }).catch(function () { /* 忽略 */ });
+    return writePhoto(id, null);
   }
   /** 把选进来的图片压到最长边 1400 / JPEG 0.82（课本照片一般 150~300KB） */
   function compressImage(file, cb) {
@@ -884,7 +905,7 @@
     const addCss = function () {
       if (document.getElementById('katex-css')) return;
       const l = document.createElement('link');
-      l.id = 'katex-css'; l.rel = 'stylesheet'; l.href = 'css/katex.css?v=104';
+      l.id = 'katex-css'; l.rel = 'stylesheet'; l.href = 'css/katex.css?v=169.1';
       document.head.appendChild(l);
     };
     const load = function (src) {
@@ -897,10 +918,10 @@
       });
     };
     addCss();
-    load('js/marked.min.js?v=104').then(function () {
-      return load('js/katex.min.js?v=104');
+    load('js/marked.min.js?v=169.1').then(function () {
+      return load('js/katex.min.js?v=169.1');
     }).then(function () {
-      return load('js/mhchem.min.js?v=104');
+      return load('js/mhchem.min.js?v=169.1');
     }).then(done, done);
   }
 
@@ -2348,6 +2369,7 @@
     phDel: phDel,
     phLoadAll: phLoadAll,
     cleanOrphanPhotos: cleanOrphanPhotos,
+    readyPhotos: readyPhotos, flushPhotos: flushPhotos,
     allPhotos: allPhotos, restorePhotos: restorePhotos,           // 💾 v121 备份带图
     photoMB: function () { return photoStats().mb; },
     orphanPhotoIds: orphanPhotoIds,

@@ -357,29 +357,25 @@
     document.getElementById('tl-keyword').oninput = function () { selKw = this.value.trim(); render(); };
     document.getElementById('tl-export').onclick = exportModal;
     document.getElementById('tl-import').onclick = function () {
-      document.getElementById('import-file').click();
+      App.backup.importFile();
     };
     document.getElementById('import-file').onchange = function () {
-      const f = this.files[0];
+      const f = this.files && this.files[0];
       if (!f) return;
       const reader = new FileReader();
-      reader.onload = function () {
-        const ok = S().importJSON(String(reader.result));
-        App.ui.toast(ok ? '✅ 导入成功，数据已恢复' : '❌ 文件格式不对');
-        if (ok) { App.tasks.renderAll(); render(); if (App.stats) App.stats.render(); }
-        document.getElementById('import-file').value = '';
-      };
+      reader.onload = function () { App.backup.importFromText(String(reader.result), f.name); };
       reader.readAsText(f, 'utf-8');
+      this.value = '';
     };
   }
 
   function exportModal() {
     App.ui.openModal('📤 导出数据', '<p style=\"font-size:13.5px\">选择导出格式：</p>',
-      '<button class=\"btn btn-primary\" data-act=\"json\">导出全部数据 (.json)</button>' +
+      '<button class=\"btn btn-primary\" data-act=\"json\">下载完整备份（含图片）</button>' +
       '<button class=\"btn\" data-act=\"csv\">导出记录 (.csv)</button>' +
       '<button class=\"btn\" data-act=\"cancel\">取消</button>');
     App.ui.bindActions({
-      json: function () { S().exportJSON(); App.ui.closeModal(); App.ui.toast('已导出 .json 备份'); },
+      json: function () { App.backup.exportCurrent(); App.ui.closeModal(); App.ui.toast('已导出 .json 备份'); },
       csv: function () { S().exportCSV(); App.ui.closeModal(); App.ui.toast('已导出 .csv 记录'); },
       cancel: App.ui.closeModal
     });

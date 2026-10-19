@@ -151,16 +151,33 @@
     };
   }
 
-  /* ---------- 存储层 ---------- */
+  /* 程序升级不改变这些存储名称；_storageRevision 仅用于挑选较新的镜像。 */
   let data = null;
-
+  let loaded = false;
+  let blocked = false;
+  let revision = 0;
+  let pending = Promise.resolve(true);
+  let recovery = {};
+  let state = { phase: 'loading', message: '正在读取记录', readOnly: false };
+  function report(phase, message) {
+    state = { phase: phase, message: message || '', readOnly: blocked };
+    if (window.dispatchEvent && window.CustomEvent) window.dispatchEvent(new CustomEvent('focus-storage', { detail: state }));
+  }
+  function stop(message) {
+    blocked = true;
+    report('blocked', message);
+    return false;
+  }
   function idbOpen() {
     return new Promise(function (resolve, reject) {
-      if (!('indexedDB' in window)) { reject(new Error('no indexedDB')); return; }
+      if (!window.indexedDB) { reject(new Error('浏览器数据库不可用')); return; }
       const req = indexedDB.open(DB_NAME, 1);
-      req.onupgradeneeded = function () { req.result.createObjectStore(DB_STORE); };
+      req.onupgradeneeded = function () {
+        if (!req.result.objectStoreNames.contains(DB_STORE)) req.result.createObjectStore(DB_STORE);
+      };
       req.onsuccess = function () { resolve(req.result); };
-      req.onerror = function () { reject(req.error); };
+      req.onerror = function () { reject(req.error || new Error('数据库打开失败')); };
+      req.onblocked = function () { reject(new Error('请关闭其他打开此网站的标签页后重试')); };
     });
   }
   function idbPut(obj) {
@@ -168,66 +185,110 @@
       return new Promise(function (resolve, reject) {
         const tx = db.transaction(DB_STORE, 'readwrite');
         tx.objectStore(DB_STORE).put(obj, DB_KEY);
-        tx.oncomplete = resolve;
-        tx.onerror = function () { reject(tx.error); };
+        tx.oncomplete = function () { db.close(); resolve(true); };
+        tx.onerror = tx.onabort = function () { db.close(); reject(tx.error || new Error('数据库写入失败')); };
       });
-    }).catch(function () { /* 镜像失败不致命 */ });
+    });
   }
   function idbGet() {
     return idbOpen().then(function (db) {
       return new Promise(function (resolve, reject) {
         const tx = db.transaction(DB_STORE, 'readonly');
         const rq = tx.objectStore(DB_STORE).get(DB_KEY);
-        rq.onsuccess = function () { resolve(rq.result); };
-        rq.onerror = function () { reject(rq.error); };
+        let value;
+        rq.onsuccess = function () { value = rq.result; };
+        tx.oncomplete = function () { db.close(); resolve(value); };
+        tx.onerror = tx.onabort = function () { db.close(); reject(tx.error || new Error('数据库读取失败')); };
       });
-    }).catch(function () { return null; });
+    });
   }
-
-  /** 老数据缺的新设置字段自动补默认值（避免 value=undefined / 开关失效） */
-  function mergeDefaults() {
-    if (data) data.settings = Object.assign(defaultSettings(), data.settings || {});
+  function valid(d) {
+    return !!(d && d.version === 1 && d.days && typeof d.days === 'object' && !Array.isArray(d.days)
+      && d.settings && typeof d.settings === 'object' && !Array.isArray(d.settings) && Array.isArray(d.ledger));
   }
-
-  function load() {
-    let fromLocal = false;
+  function normalise(d) {
+    const clean = defaultData();
+    Object.keys(d).forEach(function (k) {
+      if (['__proto__', 'constructor', 'prototype'].indexOf(k) < 0) clean[k] = d[k];
+    });
+    clean.settings = Object.assign(defaultSettings(), d.settings);
+    Object.keys(clean.days).forEach(function (key) {
+      const old = clean.days[key];
+      if (!old || typeof old !== 'object' || Array.isArray(old)) throw new Error('日记录结构异常');
+      const day = Object.assign(freshDay(), old);
+      day.tasks = Object.assign({ required: [], ideal: [], extra: [] }, old.tasks || {});
+      ['required', 'ideal', 'extra'].forEach(function (col) { if (!Array.isArray(day.tasks[col])) throw new Error('任务结构异常'); });
+      if (!Array.isArray(day.timeline) || !Array.isArray(day.sessions)) throw new Error('时间线结构异常');
+      clean.days[key] = day;
+    });
+    return clean;
+  }
+  async function load() {
+    let local = null, mirror = null, localError = null, mirrorError = null;
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) {
-        const d = JSON.parse(raw);
-        if (d && d.version === 1) { data = d; fromLocal = true; }
-      }
-    } catch (e) { /* 损坏则尝试 IndexedDB */ }
-    if (fromLocal) {
-      mergeDefaults();
-      ensureDay(todayKey());
-      return;
+      if (raw !== null) { recovery.local = raw; local = JSON.parse(raw); }
+    } catch (e) { localError = e; }
+    try { mirror = await idbGet(); if (mirror) recovery.mirror = mirror; } catch (e) { mirrorError = e; }
+    if ((local && local.version !== 1) || (mirror && mirror.version !== 1)) {
+      return stop('检测到不受支持的数据版本。原记录已保留，请使用匹配的程序版本；可以先导出原始数据。');
     }
-    // localStorage 缺失/损坏 → 尝试 IndexedDB 镜像
-    idbGet().then(function (d) {
-      if (d && d.version === 1) {
-        data = d;
-        mergeDefaults();
-        ensureDay(todayKey());
-        save();
-      } else {
-        data = defaultData();
-        ensureDay(todayKey());
-        save();
-      }
-      if (typeof App.app !== 'undefined') {
-        App.app.refreshAll();
-        if (App.app.refreshStats) App.app.refreshStats(); // 异步载入后顶栏积分同步
-      }
-      else App.tasks && App.tasks.renderAll && App.tasks.renderAll();
-    });
-    if (!data) { data = defaultData(); ensureDay(todayKey()); }
+    const choices = [local, mirror].filter(valid).sort(function (a, b) { return (+b._storageRevision || 0) - (+a._storageRevision || 0); });
+    if (choices.length) {
+      try { data = normalise(choices[0]); } catch (e) { return stop('记录结构异常，已停止写入并保留原始数据。'); }
+      revision = +data._storageRevision || 0;
+      loaded = true;
+      ensureDay(todayKey());
+      report((localError || mirrorError) ? 'warning' : 'saved', (localError || mirrorError) ? '记录已读取，部分存储不可用；建议导出完整备份' : '记录已读取');
+      return true;
+    }
+    if (recovery.local !== undefined || mirror || localError) return stop('现有记录未能完整读取，已保留原始数据；请先导出后排查。');
+    // 两份记录均确认为空才新建。数据库不可读时不把它当作没有旧记录。
+    if (mirrorError) return stop('无法确认旧记录是否存在，已停止新建；请检查浏览器存储权限后重试。');
+    data = defaultData(); loaded = true; ensureDay(todayKey());
+    return save();
   }
-
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* 配额等 */ }
-    idbPut(JSON.parse(JSON.stringify(data)));
+    if (!loaded || blocked || !data) return Promise.resolve(false);
+    let raw, snapshot, localOK = false;
+    try {
+      const other = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (other && (other.version !== 1 || (+other._storageRevision || 0) > revision)) {
+        stop('其他标签页已写入较新的记录。请导出本页内容，再重新打开网站。');
+        return Promise.resolve(false);
+      }
+    } catch (e) { /* 主通道不可读时仍尝试镜像；最终结果会明确显示。 */ }
+    try {
+      data._storageRevision = ++revision;
+      raw = JSON.stringify(data); snapshot = JSON.parse(raw);
+      localStorage.setItem(KEY, raw); localOK = true;
+    } catch (e) {
+      if (!snapshot) { report('error', '记录无法序列化，请立即导出并停止更新'); return Promise.resolve(false); }
+    }
+    const thisRevision = revision;
+    report('saving', '正在保存');
+    pending = pending.then(function () { return idbPut(snapshot).then(function () { return true; }, function () { return false; }); })
+      .then(function (mirrorOK) {
+        const ok = localOK || mirrorOK;
+        if (thisRevision === revision && !blocked) report(ok ? ((localOK && mirrorOK) ? 'saved' : 'warning') : 'error',
+          ok ? ((localOK && mirrorOK) ? '已保存到手机' : '已保存一份，另一存储不可用；建议备份') : '保存失败，请立即下载完整备份，暂勿刷新');
+        return ok;
+      });
+    return pending;
   }
+  async function flush() {
+    let current;
+    do { current = pending; await current; } while (current !== pending);
+    return !blocked && state.phase !== 'error' && state.phase !== 'loading';
+  }
+  function exportRecovery() { download('focus-plan-recovery-' + todayKey() + '.json', JSON.stringify(recovery, null, 2)); }
+  if (window.addEventListener) window.addEventListener('storage', function (e) {
+    if (e.key !== KEY || !loaded) return;
+    if (e.newValue === null) stop('网站数据已在其他页面清除。本页停止写入，请先导出当前记录。');
+    else {
+      try { const incoming = JSON.parse(e.newValue); if (incoming.version !== 1 || (+incoming._storageRevision || 0) > revision) stop('其他标签页已更新记录。本页停止写入，请重新打开。'); } catch (err) { stop('其他页面改变了存储内容，请先导出当前记录。'); }
+    }
+  });
 
   /* ---------- 数据访问 ---------- */
   function getDay(key) {
@@ -326,7 +387,7 @@
    *     队列、已完成、今天的基础任务、设问卡、打卡、回收站、学科这些**会悄悄丢**，
    *     于是"恢复备份"反而变成丢数据。这里改成：以 defaultData() 打底，逐键覆盖。 */
   function restoreFrom(obj) {
-    if (!obj || typeof obj !== 'object' || !obj.version) return false;
+    if (blocked || !loaded || !valid(obj)) return false;
     try {
       const merged = defaultData();
       merged.createdAt = obj.createdAt || nowIso();
@@ -340,7 +401,8 @@
         if (v === undefined || v === null) return;
         merged[k] = JSON.parse(JSON.stringify(v));
       });
-      data = merged;
+      data = normalise(merged);
+      data._storageRevision = revision;
       ensureDay(todayKey());
       save();
       return true;
@@ -357,7 +419,10 @@
   }
 
   App.store = {
-    load: load, save: save,
+    load: load, save: save, flush: flush,
+    status: function () { return Object.assign({}, state); },
+    exportRecovery: exportRecovery,
+    validate: function (obj) { try { return valid(obj) && !!normalise(JSON.parse(JSON.stringify(obj))); } catch (e) { return false; } },
     getDay: getDay, ensureDay: ensureDay, delDay: delDay,
     peekDay: peekDay, purgeDays: purgeDays,
     addLedger: addLedger, undoLastLedger: undoLastLedger,

@@ -5,7 +5,7 @@
 
 // ---- 浏览器环境 shim ----
 global.window = global;
-const mem = {};
+const mem = { 'focusPlanData.v1': JSON.stringify({version:1,settings:{},days:{},ledger:[]}) };
 global.localStorage = {
   getItem: function (k) { return k in mem ? mem[k] : null; },
   setItem: function (k, v) { mem[k] = String(v); },
@@ -27,7 +27,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async function () {
   console.log('== 初始化 ==');
-  S.load();
+  await S.load();
   await sleep(50); // 等 IDB 降级分支 settle
   assert(!!S.getDay(S.todayKey()), '加载后存在今日数据');
   assert(S.settings().redeemTable.length === 4, '默认兑换表 4 项');
