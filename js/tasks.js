@@ -3607,7 +3607,9 @@
         return '<div class="task-col ' + col.style + ' qf-collapsed" data-col="' + col.key + '">' +
           '<div class="task-col-head"><h3>' + col.name + '</h3>' +
           '<span class="badge">0/0</span></div>' +
-          '<p class="hint" style="margin:2px 0 8px">空着 —— 队列优先模式下不在这里定任务，想做的事进 <b>📋 队列</b> 按顺序做。</p>' +
+          (window.__MEMO_MODE
+            ? '<p class="hint" style="margin:2px 0 8px">这里还没有任务，可以直接添加；想按顺序做，也可以加入本页下方的任务队列。</p>'
+            : '<p class="hint" style="margin:2px 0 8px">空着 —— 队列优先模式下不在这里定任务，想做的事进 <b>📋 队列</b> 按顺序做。</p>') +
           addBtn +
           '</div>';
       }

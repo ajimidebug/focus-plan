@@ -10,12 +10,12 @@
        以前写在页尾，渲染时读到 undefined 就显示成 "v?"。 */
     window.__BUILD = 169;
     window.__MEMO_MODE = true;
-    window.__RELEASE = '169.4.1';
+    window.__RELEASE = '169.4.2';
   </script>
   <meta name="theme-color" content="#2d3a4a" />
   <title>随手记 · 个人备忘录</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="css/style.css?v=169.4.1" />
+  <link rel="stylesheet" href="css/style.css?v=169.4.2" />
   <style id="pip-style">
     /* ===== 🪟 只在小窗（Document Picture-in-Picture）里生效：让悬浮窗铺满整个小窗 ===== */
     html.pip, html.pip body { background: var(--bg, #f5f7fa); margin: 0; padding: 0; }
@@ -42,9 +42,8 @@
       <nav id="main-nav">
         <button class="nav-btn active" data-view="memo">笔记</button>
         <button class="nav-btn" data-view="checkin">积分打卡</button>
+        <button class="nav-btn" data-view="tasks">任务</button>
         <button class="nav-btn" data-view="memo-history">笔记历史</button>
-        <button class="nav-btn" data-view="tasks">当天任务</button>
-        <button class="nav-btn" data-view="queue">任务队列</button>
         <button class="nav-btn" data-view="settings">设置与备份</button>
         <button class="nav-btn" id="btn-ms" title="截止日期">⏳ <span id="ms-mini">截止日期</span></button>
         <button class="nav-btn" id="btn-demo" style="display:none">演示</button>
@@ -136,6 +135,7 @@
     </section>
     <!-- 任务视图 -->
     <section id="view-tasks" class="view">
+      <div class="combined-task-head" id="daily-task-top"><h2 class="combined-task-heading">当天任务</h2><a class="btn btn-small" href="#task-queue-section">查看下方队列 ↓</a></div>
       <div class="view-tabs">
         <button class="tab-btn active" data-tab="today">今天</button>
         <button class="tab-btn" data-tab="tomorrow">明天（提前填写）</button>
@@ -167,9 +167,13 @@
         <div id="tomorrow-columns"></div>
         <p class="hint">提示：今晚填好明天的任务，"结束今天"时未完成的任务也会自动顺延到这里。</p>
       </div>
+      <section id="task-queue-section" aria-label="任务队列">
+        <div class="combined-task-back"><a class="btn btn-small" href="#daily-task-top">↑ 回到当天任务</a></div>
+        <div id="queue-view"></div>
+      </section>
     </section>
 
-    <!-- 📋 队列视图（v77）：按顺序做，没有完成率 -->
+    <!-- 卡片视图 -->
     <section id="view-cards" class="view">
       <div id="cards-view"></div>
     </section>
@@ -181,9 +185,6 @@
       <div id="checkin-view"></div>
     </section>
 
-    <section id="view-queue" class="view">
-      <div id="queue-view"></div>
-    </section>
 
     <!-- 日历视图 -->
     <section id="view-calendar" class="view">
@@ -330,7 +331,7 @@
   <nav id="mobile-nav">
     <button class="nav-btn mn-btn" data-view="memo"><span class="mn-ico">✎</span>笔记</button>
     <button class="nav-btn mn-btn" data-view="checkin"><span class="mn-ico">✓</span>积分打卡</button>
-    <button class="nav-btn mn-btn" data-view="queue"><span class="mn-ico">☷</span>任务队列</button>
+    <button class="nav-btn mn-btn" data-view="tasks"><span class="mn-ico">☷</span>任务</button>
     <button class="mn-btn" id="mn-more"><span class="mn-ico">⋯</span>更多</button>
   </nav>
   <div id="mn-sheet" class="hidden">
@@ -338,7 +339,6 @@
       <div class="mn-head"><b>更多页面</b><button class="mn-sbtn" id="mn-close" style="width:auto;padding:6px 12px">✕ 收起</button></div>
       <div class="mn-grid">
         <button class="nav-btn mn-sbtn" data-view="memo-history">▤ 笔记历史</button>
-        <button class="nav-btn mn-sbtn" data-view="tasks">✓ 当天任务（三栏）</button>
         <button class="nav-btn mn-sbtn" data-view="calendar">📅 原有日历</button>
         <button class="nav-btn mn-sbtn" data-view="stats">历史统计</button>
         <button class="nav-btn mn-sbtn" data-view="cards">🃏 卡片</button>
@@ -353,30 +353,30 @@
     </div>
   </div>
 
-  <script src="js/store.js?v=169.4.1"></script>
-  <script src="js/ui.js?v=169.4.1"></script>
-  <script src="js/tasks.js?v=169.4.1"></script>
-  <script src="js/timeline.js?v=169.4.1"></script>
-  <script src="js/stats.js?v=169.4.1"></script>
-  <script src="js/settings.js?v=169.4.1"></script>
-  <script src="js/sport.js?v=169.4.1"></script>
-  <script src="js/lecture.js?v=169.4.1"></script>
-  <script src="js/calendar.js?v=169.4.1"></script>
-  <script src="js/link.js?v=169.4.1"></script>
-  <script src="js/demo.js?v=169.4.1"></script>
-  <script src="js/queue.js?v=169.4.1"></script>
-  <script src="js/milestones.js?v=169.4.1"></script>
-  <script src="js/memcards.js?v=169.4.1"></script>
-  <script src="js/checkin.js?v=169.4.1"></script>
-  <script src="js/backup.js?v=169.4.1"></script>
-  <script src="js/exams.js?v=169.4.1"></script>
-  <script src="js/mistakes.js?v=169.4.1"></script>
-  <script src="js/badges.js?v=169.4.1"></script>
-  <script src="js/memo-editor.js?v=169.4.1"></script>
-  <script src="js/memo-actions.js?v=169.4.1"></script>
-  <script src="js/memo.js?v=169.4.1"></script>
-  <script src="js/updates.js?v=169.4.1"></script>
-  <script src="js/app.js?v=169.4.1"></script>
+  <script src="js/store.js?v=169.4.2"></script>
+  <script src="js/ui.js?v=169.4.2"></script>
+  <script src="js/tasks.js?v=169.4.2"></script>
+  <script src="js/timeline.js?v=169.4.2"></script>
+  <script src="js/stats.js?v=169.4.2"></script>
+  <script src="js/settings.js?v=169.4.2"></script>
+  <script src="js/sport.js?v=169.4.2"></script>
+  <script src="js/lecture.js?v=169.4.2"></script>
+  <script src="js/calendar.js?v=169.4.2"></script>
+  <script src="js/link.js?v=169.4.2"></script>
+  <script src="js/demo.js?v=169.4.2"></script>
+  <script src="js/queue.js?v=169.4.2"></script>
+  <script src="js/milestones.js?v=169.4.2"></script>
+  <script src="js/memcards.js?v=169.4.2"></script>
+  <script src="js/checkin.js?v=169.4.2"></script>
+  <script src="js/backup.js?v=169.4.2"></script>
+  <script src="js/exams.js?v=169.4.2"></script>
+  <script src="js/mistakes.js?v=169.4.2"></script>
+  <script src="js/badges.js?v=169.4.2"></script>
+  <script src="js/memo-editor.js?v=169.4.2"></script>
+  <script src="js/memo-actions.js?v=169.4.2"></script>
+  <script src="js/memo.js?v=169.4.2"></script>
+  <script src="js/updates.js?v=169.4.2"></script>
+  <script src="js/app.js?v=169.4.2"></script>
 
 
   <!-- ✨ 快速上手演示动画 -->

@@ -340,6 +340,7 @@
   /* ---------- 视图切换 ---------- */
   function switchView(v) {
     if (!v) return;
+    if (window.__MEMO_MODE && v === 'queue') v = 'tasks';
     currentView = v;
     document.body.dataset.view = v;
     if (v === 'memo-history' && App.memo) App.memo.history();
@@ -361,7 +362,11 @@
       if (App.sport.renderToday) App.sport.renderToday();
       if (App.sport.renderPlan) App.sport.renderPlan();
     }
-    if (v === 'queue' && App.queue) App.queue.render();
+    if (v === 'tasks' && window.__MEMO_MODE) {
+      document.querySelector('#view-tasks [data-tab="today"]').click();
+      App.tasks.renderAll();
+      if (App.queue) App.queue.render();
+    } else if (v === 'queue' && App.queue) App.queue.render();
     if (v === 'cards' && App.memcards) App.memcards.renderPage();   // 🃏 v93：卡片页
     if (v === 'mistakes' && App.mistakes) App.mistakes.render();  // 📕 v129：错题本
     if (v === 'checkin' && App.checkin) App.checkin.render();       // ✅ v99：每天打卡

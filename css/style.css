@@ -1802,3 +1802,12 @@ body[data-theme="dark"] .hour-card.active, body[data-theme="purple"] .hour-card.
 .memo-layout [data-act="sr-plan"], .memo-layout #btn-link { display:none !important; }
 
 .memo-layout #view-settings .set-group:has(#set-hour-min), .memo-layout #view-settings .set-group:has(#set-mode) { display:none !important; }
+
+.combined-task-heading { margin:18px 0 12px; font-size:23px; }
+#task-queue-section { margin-top:28px; padding-top:18px; border-top:1px solid var(--line); }
+
+.combined-task-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin:18px 0 12px; }
+.combined-task-head .combined-task-heading { margin:0; }
+.combined-task-head a, .combined-task-back a { text-decoration:none; }
+.combined-task-back { display:flex; justify-content:flex-end; margin-bottom:8px; }
+#daily-task-top, #task-queue-section { scroll-margin-top:110px; }
