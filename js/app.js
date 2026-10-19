@@ -352,6 +352,7 @@
     document.querySelectorAll('.view').forEach(function (sec) {
       sec.classList.toggle('active', sec.id === 'view-' + v);
     });
+    if (v === 'memo') requestAnimationFrame(function () { const editor = document.getElementById('memo-editor'); if (editor) editor.scrollTop = editor.scrollHeight; });
     if (v === 'timeline') App.timeline.render();
     if (v === 'stats') App.stats.render();
     if (v === 'calendar' && App.calendar) App.calendar.render();

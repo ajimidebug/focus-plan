@@ -75,7 +75,9 @@
     blocks.forEach(x => {
       const span = document.createElement('span'); span.dataset.block = x.id;
       if (x.eventId) { span.className = 'memo-generated'; span.dataset.event = x.eventId; span.dataset.label = x.label || '打卡生成'; span.title = '此文段由勾选生成；取消对应勾选时删除，段内补充也会删除'; }
-      span.textContent = x.text; frag.appendChild(span);
+      if (x.eventId && x.text.startsWith('\n')) { frag.appendChild(document.createTextNode('\n')); span.textContent = x.text.slice(1); }
+      else span.textContent = x.text;
+      frag.appendChild(span);
     });
     // A real trailing line keeps Chromium from consuming the final stored newline when typing.
     const tail = document.createElement('br'); tail.dataset.editorEnd = 'true'; frag.appendChild(tail);
