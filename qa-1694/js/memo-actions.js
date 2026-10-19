@@ -117,7 +117,13 @@
       else it.days[event.sourceDay]--;
     }
     d.ledger = d.ledger.filter(l => !event.ledgerIds.includes(l.id));
-    const kept = blocks.filter(b => b.eventId !== id);
+    const kept = []; let removedLine = false;
+    blocks.forEach(block => {
+      if (block.eventId === id) { removedLine = removedLine || block.text.includes('\n'); return; }
+      const previous = kept[kept.length - 1];
+      if (removedLine && previous?.text && block.text && !previous.text.endsWith('\n') && !block.text.startsWith('\n')) kept.push({ id: S().uid(), text: '\n' });
+      kept.push(block); if (block.text) removedLine = false;
+    });
     M().write(event.noteDay, kept.map(b => b.text).join(''), at, kept);
     event.active = false; event.undoneAt = at; event.reason = reason;
     if (event.kind === 'task') withdrawRewards(event.sourceDay);
@@ -196,7 +202,7 @@
       '<button class="btn" data-act="cancel">保留完成</button><button class="btn btn-danger" data-act="commit">确认取消</button>', { lock: true });
     bindCommit(m, () => {
       if (entry) d.ledger = d.ledger.filter(l => l.id !== entry.id);
-      if (spec.kind === 'task') { const task = d.days[spec.day].tasks[spec.list].find(t => t.id === spec.id); task.done = false; }
+      if (spec.kind === 'task') { const task = d.days[spec.day].tasks[spec.list].find(t => t.id === spec.id); task.done = false; if (task.summary) task.summary.done = false; }
       else if (spec.kind === 'queue') { const i = d.queueDone.findIndex(t => t.id === spec.id); if (i < 0) throw new Error('任务已移动'); const it = d.queueDone.splice(i, 1)[0]; delete it.doneDay; delete it.doneAt; d.queue.unshift(it); }
       else { const it = (spec.kind === 'checkin' ? d.checkins : d.daily).find(t => t.id === spec.id); if (spec.kind === 'daily' || it.days[spec.day] <= 1) delete it.days[spec.day]; else it.days[spec.day]--; }
       const reason = m.querySelector('#memo-action-text').value;
@@ -230,7 +236,7 @@
   }
   function checkinHistory(id) {
     const list = events(S().data()).filter(e => e.kind === 'checkin' && e.sourceId === id && e.active).slice(-50).reverse();
-    const m = App.ui.openModal('打卡记录', '<p class="hint">可取消本版生成的某一次打卡，包括补卡。</p>' + (list.length ? list.map(e => '<div class="memo-queue-row"><p>' + E(e.sourceDay + ' · ' + e.title) + '</p><small>勾选于 ' + E(M().naturalDay(e.at) + ' ' + M().clock(e.at)) + '</small><button class="btn btn-small" data-act="undo-event" data-event="' + E(e.id) + '">取消这次打卡</button></div>').join('') : '<p>暂无本版打卡记录。旧版当天打卡仍可用“撤销”处理。</p>'), '<button class="btn" data-act="close">关闭</button>');
+    const m = App.ui.openModal('打卡记录', '<p class="hint">可取消本版生成的某一次打卡，包括补卡。</p>' + (list.length ? list.map(e => '<div class="memo-queue-row"><p>' + E(e.sourceDay + ' · ' + e.title) + '</p><small>勾选于 ' + E(M().naturalDay(e.at) + ' ' + M().clock(e.at)) + ' · 原次积分 +' + e.points + '</small><p class="memo-queue-note">' + E(passage(e).trim().slice(0, 120) || '未写入文段') + '</p><button class="btn btn-small" data-act="undo-event" data-event="' + E(e.id) + '">取消这次打卡</button></div>').join('') : '<p>暂无本版打卡记录。旧版当天打卡仍可用“撤销”处理。</p>'), '<button class="btn" data-act="close">关闭</button>');
     App.ui.bindActions({ close: App.ui.closeModal, 'undo-event': b => { const e = list.find(x => x.id === b.dataset.event); if (e) cancelEvent(e); } });
   }
   function recover(error) {

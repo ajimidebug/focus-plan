@@ -88,9 +88,9 @@
     if (!validDate(key)) return;
     try {
       const n = read(key);
-      selected = key; $('memo-date').value = key;
+      const previousDay = selected; selected = key; $('memo-date').value = key;
       const editor = $('memo-editor');
-      if (document.activeElement === editor && key === selected && App.memoEditor.text() === (n ? n.text : '')) return;
+      if (document.activeElement === editor && key === previousDay && App.memoEditor.text() === (n ? n.text : '')) return;
       App.memoEditor.show(segments(n), S().status().readOnly);
       requestAnimationFrame(() => { if (selected === key) editor.scrollTop = editor.scrollHeight; });
       $('memo-heading').textContent = key === userDay() ? '今天的笔记' : key + ' 的笔记';
