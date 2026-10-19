@@ -55,7 +55,7 @@
   }
   function withdrawRewards(dayKey) {
     const day = S().data().days[dayKey]; if (!day) return;
-    const lost = (day.rewards || []).filter(r => r.memoLedgerId && !eligible(day, r.kind));
+    const lost = (day.rewards || []).filter(r => { if (!r.memoLedgerId) return false; if (!r.dependencies) return !eligible(day, r.kind); const all = Object.values(day.tasks || {}).flat(); return r.dependencies.some(id => !all.some(t => t.id === id && t.done)); });
     const ids = lost.map(r => r.memoLedgerId);
     S().data().ledger = S().data().ledger.filter(l => !ids.includes(l.id));
     day.rewards = (day.rewards || []).filter(r => !ids.includes(r.memoLedgerId));

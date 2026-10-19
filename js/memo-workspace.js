@@ -15,8 +15,8 @@
     else { const j = i + (action === 'up' ? -1 : 1); if (j < 0 || j >= group.length) return; [group[i], group[j]] = [group[j], group[i]]; group.forEach((x, n) => x.rank = n * 1024); }
     orderQueue();
   }
-  async function commit(fn) { try { if (await A.memoActions.commit(fn)) { render(); A.app.refreshStats(); A.memoSchedule.render(); return true; } }
-    catch (e) { A.ui.toast(e.message); $('mw-error').textContent = e.message; } return false; }
+  async function commit(fn) { try { if (await A.memoActions.commit(fn)) { $('mw-error').textContent = ''; render(); A.app.refreshStats(); A.memoSchedule.render(); return true; } }
+    catch (e) { A.ui.toast(e.message); $('mw-error').textContent = e.message; const retry = document.createElement('button'); retry.className = 'btn'; retry.textContent = '重试保存'; retry.onclick = () => commit(() => {}); $('mw-error').appendChild(retry); } return false; }
   function refAttrs(ref) { return 'data-ref="' + esc(JSON.stringify(ref)) + '"'; }
   function card(t, ref, options = {}) {
     const done = ref.kind === 'project' ? !!t.days?.[ref.day] : ref.kind === 'daily' ? !!t.days?.[ref.day] : ref.kind === 'queue' ? !!t.doneAt : !!t.done;
@@ -25,9 +25,9 @@
       (t.note ? '<details class="mw-note"><summary>备注</summary><p>' + esc(t.note) + '</p></details>' : '') + '<div class="mw-task-actions">' + button('edit', '编辑', attrs) + (points != null ? '<small>完成 +' + esc(points) + ' 分</small>' : '<small>完成整组可领取保底奖励</small>') + (options.reorder ? button('pin', t.pinned ? '取消置顶' : '置顶', attrs) + '<details><summary>排序</summary>' + button('up', '上移', attrs) + button('down', '下移', attrs) + '</details>' : '') + '</div>' + A.memoSchedule.rowControls(ref) + '</article>';
   }
   function renderTasks() {
-    taskDay = taskDay || S().todayKey(); const day = S().getDay(taskDay), occurrenceDay = taskDay === S().todayKey() ? M().userDay() : taskDay;
+    taskDay = taskDay || M().naturalDay(); const day = S().getDay(taskDay), occurrenceDay = taskDay === M().naturalDay() ? M().userDay() : taskDay;
     const root = $('mw-today');
-    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + button('today', '今天') + button('tomorrow', '明天') + '</div>' + ['required', 'ideal', 'extra'].map(list => '<section class="mw-group"><div class="mw-group-head"><h2>' + names[list] + '</h2>' + button('add-' + list, '＋ 添加任务', '', true) + '</div>' + (day.tasks[list] || []).filter(t => !t.memoProjectId).map(t => card(t, { kind: 'task', id: t.id, day: taskDay, list })).join('') + (list === 'extra' ? '<p class="hint">一次性任务按日期保留；每日推进项目持续显示。已有任务可在编辑时手动转换。</p>' + projects().filter(p => !p.archived).map(p => card(p, { kind: 'project', id: p.id, day: occurrenceDay })).join('') + '<details><summary>已停用项目</summary>' + (S().data().daily || []).filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-daily', '恢复基础任务', refAttrs({ kind: 'daily', id: p.id })) + '</p>').join('') + projects().filter(p => p.archived).map(p => '<p>' + esc(p.text) + ' ' + button('restore-project', '恢复项目', refAttrs({ kind: 'project', id: p.id })) + '</p>').join('') + '</details>' : '') + '</section>').join('') + ((S().data().daily || []).some(t => !t.archived) ? '<section class="mw-group"><h2>原有基础任务</h2>' + S().data().daily.filter(t => !t.archived).map(t => card(t, { kind: 'daily', id: t.id, day: occurrenceDay })).join('') + '</section>' : '');
+    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + button('today', '今天') + button('tomorrow', '明天') + '</div>' + ['required', 'ideal', 'extra'].map(list => '<section class="mw-group"><div class="mw-group-head"><h2>' + names[list] + '</h2>' + button('add-' + list, '＋ 添加任务', '', true) + '</div>' + (day.tasks[list] || []).filter(t => !t.memoProjectId).map(t => card(t, { kind: 'task', id: t.id, day: taskDay, list })).join('') + (list === 'extra' ? '<p class="hint">一次性任务按日期保留；每日推进项目持续显示。已有任务可在编辑时手动转换。</p>' + projects().filter(p => !p.archived && (!p.createdDay || p.createdDay <= occurrenceDay)).map(p => card(p, { kind: 'project', id: p.id, day: occurrenceDay })).join('') + '<details><summary>已停用项目</summary>' + (S().data().daily || []).filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-daily', '恢复基础任务', refAttrs({ kind: 'daily', id: p.id })) + '</p>').join('') + projects().filter(p => p.archived).map(p => '<p>' + esc(p.text) + ' ' + button('restore-project', '恢复项目', refAttrs({ kind: 'project', id: p.id })) + '</p>').join('') + '</details>' : '') + '</section>').join('') + ((S().data().daily || []).some(t => !t.archived) ? '<section class="mw-group"><h2>原有基础任务</h2>' + S().data().daily.filter(t => !t.archived).map(t => card(t, { kind: 'daily', id: t.id, day: occurrenceDay })).join('') + '</section>' : '');
     $('mw-day').onchange = e => { if (M().validDate(e.target.value)) { taskDay = e.target.value; renderTasks(); } };
   }
   function renderQueue() {
@@ -61,7 +61,7 @@
   }
   function editor(ref, list) {
     if (A.memoActions.busy()) return A.ui.toast('请先重试保存当前操作');
-    const existing = ref && A.memoSchedule.find(ref), day = ref?.day || taskDay || S().todayKey(), kind = ref?.kind || (list === 'queue' ? 'queue' : 'task');
+    const existing = ref && A.memoSchedule.find(ref), day = ref?.day || taskDay || M().naturalDay(), kind = ref?.kind || (list === 'queue' ? 'queue' : 'task');
     const m = A.ui.openModal(existing ? '编辑任务' : '添加' + (names[list] || '队列任务'), '<label for="mw-title">任务名称</label><textarea id="mw-title" rows="2"></textarea><label for="mw-note-edit">备注（选填）</label><textarea id="mw-note-edit" rows="2"></textarea>' +
       (kind === 'task' && (ref?.list || list) === 'required' ? '' : '<label for="mw-points">完成积分</label><input type="number" id="mw-points" min="0">') + (!existing && list === 'extra' ? '<label>完成方式<select id="mw-repeat"><option value="daily">每日推进（04:00分日）</option><option value="once">一次性完成</option></select></label>' : '') +
       timingFields() + (existing ? '<p class="hint">这里可追加一段安排；修改已有时间请点卡片上的“修改／追加时间”。</p>' : '') + '<p id="mw-form-error" role="alert"></p>',
@@ -79,7 +79,7 @@
           if (existing?.memoProjectId) throw new Error('此任务已转换，请编辑对应每日项目');
           if (!d.memoProjects) d.memoProjects = [];
           t = { id: S().uid(), text, days: {}, createdAt: new Date().toISOString(), createdDay: day, source: existing ? { id: existing.id, day, list: ref.list } : null };
-          d.memoProjects.push(t); targetRef = { kind: 'project', id: t.id, day: ref?.day || (day === S().todayKey() ? M().userDay() : day) };
+          d.memoProjects.push(t); targetRef = { kind: 'project', id: t.id, day: ref?.day || (day === M().naturalDay() ? M().userDay() : day) }; t.createdDay = targetRef.day;
           if (existing) { if (existing.done) throw new Error('已完成的旧任务保留历史，请新建每日推进项目'); A.memoSchedule.stopRef(ref); existing.memoProjectId = t.id; }; // Preserve historical source and its ledger; never infer a merge by title.
         } else if (!t) {
           t = { id: S().uid(), createdAt: new Date().toISOString() };
@@ -105,14 +105,14 @@
     $('mw-review-save').onclick = async () => { const text = $('mw-review-text').value; if (await commit(() => { day.review = { text, at: new Date().toISOString() }; })) $('mw-review-status').textContent = '已保存'; };
   }
   function init() {
-    ready = true; taskDay = S().todayKey(); lastDay = taskDay;
+    ready = true; taskDay = M().naturalDay(); lastDay = taskDay;
     const root = $('view-tasks');
     root.insertAdjacentHTML('afterbegin', '<div class="mw-tabs" role="group" aria-label="任务子页面">' + [['today','当天任务'],['queue','任务队列'],['timeline','时间轴']].map(([id, label]) => '<button class="btn" data-mw-pane="' + id + '">' + label + '</button>').join('') + '</div><p id="mw-error" role="alert"></p><div id="mw-today"></div><div id="mw-queue" hidden></div>');
     // Keep legacy review content reachable, with mutation entries retired in memo mode.
     const review = document.createElement('section'); review.id = 'view-memo-review'; review.className = 'view'; review.innerHTML = '<h2>今日复盘</h2><p class="hint">完成和补记请在任务中操作，统一关联笔记、积分与时间轴。</p>'; $('review-card').parentNode.removeChild($('review-card')); review.appendChild(document.createElement('div')).id = 'review-card'; document.querySelector('main').appendChild(review);
     document.querySelectorAll('.mn-grid, header nav').forEach(el => el.insertAdjacentHTML('beforeend', '<button class="nav-btn btn" data-view="memo-review">今日复盘</button>'));
-    document.querySelector('.mn-grid').insertAdjacentHTML('beforeend', '<button class="btn" id="mw-trash">删除记录</button>'); $('mw-trash').onclick = () => A.memoActions.trash();
-    document.querySelectorAll('[data-view="memo-review"]').forEach(b => b.onclick = () => { A.app.switchView('memo-review'); const d = S().getDay(S().todayKey()); renderReview(d); });
+    document.querySelector('.mn-grid').insertAdjacentHTML('beforeend', '<button class="btn" id="mw-trash">删除记录</button>'); $('mw-trash').onclick = () => A.memoActions.trash(); document.querySelector('#main-nav')?.insertAdjacentHTML('beforeend', '<button class="nav-btn btn" id="mw-trash-desktop">删除记录</button>'); if ($('mw-trash-desktop')) $('mw-trash-desktop').onclick = () => A.memoActions.trash();
+    document.querySelectorAll('[data-view="memo-review"]').forEach(b => b.onclick = () => { A.app.switchView('memo-review'); const d = S().getDay(M().naturalDay()); renderReview(d); });
     $('schedule-active').before($('schedule-live')); const live = document.createElement('div'); live.id = 'mw-live'; live.append($('schedule-live'), $('schedule-active')); const controls = document.createElement('span'); controls.id = 'mw-live-controls'; live.appendChild(controls); document.querySelector('main').before(live);
     root.querySelectorAll('[data-mw-pane]').forEach(b => b.onclick = () => showPane(b.dataset.mwPane));
     root.addEventListener('click', e => {
@@ -121,7 +121,7 @@
         if (act.startsWith('add-')) return editor(null, act.slice(4));
         if (act === 'edit') return editor(ref);
         if (act === 'complete') return complete(ref);
-        if (act === 'today' || act === 'tomorrow') { taskDay = act === 'today' ? S().todayKey() : S().tomorrowKey(); return renderTasks(); }
+        if (act === 'today' || act === 'tomorrow') { taskDay = act === 'today' ? M().naturalDay() : M().shiftDay(M().naturalDay(), 1); return renderTasks(); }
         if (act === 'restore-daily') return commit(() => { S().data().daily.find(p => p.id === ref.id).archived = false; A.memoSchedule.state().items.filter(p => p.ref.kind === 'daily' && p.ref.id === ref.id).forEach(p => delete p.suspendedByArchive); });
         if (act === 'restore-project') return commit(() => { projects().find(p => p.id === ref.id).archived = false; A.memoSchedule.state().items.filter(p => p.ref.kind === 'project' && p.ref.id === ref.id).forEach(p => delete p.suspendedByArchive); });
         if (['pin', 'up', 'down'].includes(act)) return commit(() => moveQueue(ref.id, act));
@@ -129,7 +129,7 @@
       if (cardEl && !e.target.closest('button,input,textarea,select,a,summary,details,[data-schedule-command]') && !window.getSelection()?.toString()) { e.stopImmediatePropagation(); editor(JSON.parse(cardEl.dataset.ref)); }
     }, true);
     A.tasks.renderAll = render; A.queue.render = () => preserve(renderQueue);
-    setInterval(() => { const now = S().todayKey(); if (now !== lastDay) { if (taskDay === lastDay) taskDay = now; lastDay = now; render(); } }, 30000);
+    setInterval(() => { const now = M().naturalDay(); if (now !== lastDay) { if (taskDay === lastDay) taskDay = now; lastDay = now; render(); } }, 30000);
     render();
   }
   A.memoWorkspace = { init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects };
