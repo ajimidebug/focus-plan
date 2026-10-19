@@ -546,3 +546,13 @@ test('old timeline records remain in their original store and keep source identi
   assert.equal(records.legacy.length, 2); assert.equal(records.legacy[0].record.id, 'old'); assert.equal(records.legacy[1].record.hourPlanId, 'hp');
   const after = JSON.parse(JSON.stringify(b.S.data())); delete after.memoSchedule; assert.equal(JSON.stringify(after), original);
 });
+test('a year of sessions and hundreds of task plans preserve references without duplicating tasks', async t => {
+  const b = browser(); await b.S.load(); const { P } = scheduleHarness(b), start = Date.parse('2026-10-19T00:00:00+08:00'), d = b.S.data(), n = 500;
+  d.queue = Array.from({ length: n }, (_, i) => ({ id: 'large-' + i, text: '长期任务' + i, points: 1 }));
+  const schedule = P.state();
+  schedule.items = d.queue.map((task, i) => ({ id: 'plan-' + i, ref: { kind: 'queue', id: task.id }, title: task.text, day: '2026-10-19', type: 'point', start: start + i * 60000, end: null }));
+  schedule.sessions = Array.from({ length: 1460 }, (_, i) => ({ id: 'session-' + i, ref: { kind: 'queue', id: 'large-' + i % n }, title: '历史执行', status: 'ended', chunks: [{ start: start - i * 6 * 3600000, end: start - i * 6 * 3600000 + 1800000 }] }));
+  const from = Date.now(); const rows = d.queue.map(task => P.rowControls({ kind: 'queue', id: task.id })); const records = P.visibleRecords('2026-10-19', start);
+  assert.equal(rows.length, n); assert(rows.every(row => row.includes('修改／追加时间'))); assert.equal(records.plans.length, n); assert.equal(d.queue.length, n);
+  t.diagnostic('500 task rows plus selected-day lookup with 1460 stored sessions: ' + (Date.now() - from) + ' ms in the test runtime');
+});
