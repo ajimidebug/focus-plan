@@ -404,3 +404,30 @@ test('removing a generated passage keeps separate handwritten lines separated', 
   M.write('2026-10-19', blocks.map(b => b.text).join(''), actionAt, blocks);
   A.undoCore(event.id, '', actionAt); assert.equal(M.read('2026-10-19').text, '1055坐下来\n1800独立说明');
 });
+test('generated passage edges accept ordinary prose while edits inside remain owned', async () => {
+  const b = browser(); await b.S.load(); const { E } = actionHarness(b);
+  const list = [{ id: 'e', eventId: 'event', text: '任务\n说明\n' }];
+  for (const offset of [0, E.textOf(list).length]) {
+    const edited = E.splice(list, offset, offset, '独立文字');
+    assert.equal(edited.filter(x => x.eventId).map(x => x.text).join(''), '任务\n说明\n');
+    assert.equal(edited.filter(x => !x.eventId).map(x => x.text).join(''), '独立文字');
+  }
+  const inside = E.splice(list, 3, 3, '补充');
+  assert.equal(inside.filter(x => x.eventId).map(x => x.text).join(''), '任务\n补充说明\n');
+});
+test('exports include reliable provenance without rewriting notes or guessing old text', async () => {
+  const b = browser(); await b.S.load(); const { A, M } = actionHarness(b);
+  M.write('2026-10-19', '原话\n【任务生成】旧文字');
+  b.S.data().queue = [{ id: 'q', text: '任务', points: 5 }];
+  const event = A.completeCore({ kind: 'queue', id: 'q', title: '任务' }, '1752【任务勾选】任务\n补充说明', actionAt);
+  const original = JSON.stringify(M.read('2026-10-19'));
+  const exported = M.exportText(['2026-10-19']);
+  assert(exported.includes('【任务生成开始｜来源：任务队列】'));
+  assert(exported.includes('1752【任务勾选】任务\n补充说明'));
+  assert.equal(exported.split('【任务生成开始').length, 2);
+  assert.equal(JSON.stringify(M.read('2026-10-19')), original);
+  assert.equal(M.exportBlocks([{ id: 'unknown', eventId: 'missing', text: '未知来源' }]), '未知来源');
+  A.undoCore(event.id, '', actionAt);
+  assert(!M.exportText(['2026-10-19']).includes('【任务生成开始'));
+  assert.equal(M.read('2026-10-19').text, '原话\n【任务生成】旧文字');
+});

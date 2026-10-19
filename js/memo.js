@@ -50,11 +50,24 @@
       return n.text.trim() && (!from || key >= from) && (!to || key <= to) && (!q || n.text.toLocaleLowerCase().includes(q));
     });
   }
+  function exportBlocks(list) {
+    const all = S().data().memoEvents;
+    const events = new Map((Array.isArray(all) ? all : []).filter(e => e && e.active).map(e => [e.id, e]));
+    const sources = { queue: '任务队列', task: '当天任务', daily: '基础任务', checkin: '积分打卡' };
+    return list.map(b => {
+      const event = b.eventId && events.get(b.eventId);
+      if (!event || !sources[event.kind]) return b.text;
+      const label = event.kind === 'checkin' ? '打卡生成' : '任务生成';
+      // Keep every original character; wrappers are export-only and never saved into the memo.
+      return (b.text.startsWith('\n') ? '' : '\n') + '【' + label + '开始｜来源：' + sources[event.kind] + '】\n' + b.text +
+        (b.text.endsWith('\n') ? '' : '\n') + '【' + label + '结束】\n';
+    }).join('');
+  }
   function exportText(keys) {
     const lines = ['个人备忘录', '时区：Asia/Shanghai；用户日：04:00—次日03:59。', '以下为原始笔记，可能包含事实、计划、感受和疑问；录入/修改时间不等于事件时间。', '复制或导出不代表已发送给教练或已归档。', ''];
     keys.slice().sort().forEach(key => {
       const n = read(key); if (!n) return;
-      lines.push('===== 用户日 ' + key + ' =====', '笔记标识：' + n.id + '；修订：' + n.revision, '首次录入：' + n.createdAt + '；最后修改：' + n.updatedAt, '', n.text, '');
+      lines.push('===== 用户日 ' + key + ' =====', '笔记标识：' + n.id + '；修订：' + n.revision, '首次录入：' + n.createdAt + '；最后修改：' + n.updatedAt, '', exportBlocks(segments(n)), '');
     });
     return lines.join('\n');
   }
@@ -130,7 +143,7 @@
   }
   function currentText() {
     // 即使存储处于保护/错误状态，也能救出输入框里的文字。
-    return '用户日：' + selected + '（北京时间04:00分界）\n\n' + App.memoEditor.text();
+    return '用户日：' + selected + '（北京时间04:00分界）\n\n' + exportBlocks(App.memoEditor.read());
   }
   async function copyCurrent() {
     const el = $('memo-editor');
@@ -186,5 +199,5 @@
     show(selected);
   }
   App.memo = { init, show, history, flush, busy, copyCurrent, selected: () => selected };
-  App.memoCore = { naturalDay, userDay, clock, shiftDay, validDate, read, write, entries, exportText, segments };
+  App.memoCore = { naturalDay, userDay, clock, shiftDay, validDate, read, write, entries, exportText, segments, exportBlocks };
 })();

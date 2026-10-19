@@ -23,7 +23,7 @@
     let at = 0, owner = null;
     list.forEach(x => {
       const stop = at + x.text.length;
-      if (start >= at && start < stop && end <= stop) owner = x;
+      if ((start === end ? start > at : start >= at) && start < stop && end <= stop) owner = x;
       at = stop;
     });
     const out = []; at = 0; let added = false;
@@ -78,11 +78,30 @@
       if (x.eventId && x.text.startsWith('\n')) { frag.appendChild(document.createTextNode('\n')); span.textContent = x.text.slice(1); }
       else span.textContent = x.text;
       frag.appendChild(span);
+      if (x.eventId) {
+        // Empty button: its visible caption is CSS, so selection/text offsets stay plain-text only.
+        const next = document.createElement('button'); next.type = 'button'; next.contentEditable = 'false';
+        next.className = 'memo-continue'; next.setAttribute('aria-label', '在这段后继续写笔记');
+        next.onmousedown = e => e.preventDefault(); next.onclick = () => continueAfter(x.id);
+        next.disabled = root.contentEditable === 'false'; frag.appendChild(next);
+      }
     });
     // A real trailing line keeps Chromium from consuming the final stored newline when typing.
     const tail = document.createElement('br'); tail.dataset.editorEnd = 'true'; frag.appendChild(tail);
     root.replaceChildren(frag);
     if (caret) select(caret.start, caret.end);
+  }
+  function continueAfter(id) {
+    if (root.contentEditable === 'false' || composing) return;
+    let end = 0;
+    const index = blocks.findIndex(x => x.id === id); if (index < 0) return;
+    for (let i = 0; i <= index; i++) end += blocks[i].text.length;
+    const next = blocks[index + 1];
+    if (next && !next.eventId) {
+      root.focus(); select(end + (next.text.startsWith('\n') ? 1 : 0)); return;
+    }
+    remember(); blocks.splice(index + 1, 0, plain('\n')); blocks = normalize(blocks);
+    root.focus(); paint({ start: end + 1, end: end + 1 }); pendingSelection = null; notify();
   }
   function snapshot() { return { blocks: clone(blocks), caret: selection() }; }
   function remember(caret) { const snap = snapshot(); if (caret) snap.caret = caret; undo.push(snap); if (undo.length > 150) undo.shift(); redo = []; }

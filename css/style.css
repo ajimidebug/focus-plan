@@ -1752,8 +1752,11 @@ body[data-theme="dark"] .hour-card.active, body[data-theme="purple"] .hour-card.
 #memo-editor:focus { box-shadow:inset 3px 0 0 rgba(59,130,246,.25); }
 #memo-editor { white-space:pre-wrap; overflow-wrap:anywhere; word-break:normal; cursor:text; -webkit-user-select:text; user-select:text; }
 #memo-editor:empty::before { content:attr(data-placeholder); color:#9aa4b1; pointer-events:none; }
-.memo-generated { background:rgba(79,145,220,.12); border-bottom:2px solid rgba(79,145,220,.35); box-decoration-break:clone; -webkit-box-decoration-break:clone; }
-.memo-generated::before { content:attr(data-label) ' · '; color:#376b9d; font-size:11px; font-weight:600; user-select:none; }
+.memo-generated { display:block; position:relative; margin:8px 0 0; padding:9px 12px 5px; background:rgba(79,145,220,.10); border:1px solid rgba(79,145,220,.25); border-left:3px solid #5289bc; border-radius:6px; }
+.memo-generated::before { display:block; content:attr(data-label); margin-bottom:5px; color:#376b9d; font-size:11px; line-height:1.5; font-weight:600; user-select:none; pointer-events:none; }
+.memo-continue { display:block; margin:0 0 8px auto; padding:6px 10px; border:1px solid var(--line); border-radius:0 0 6px 6px; background:var(--card); color:#376b9d; font:inherit; font-size:12px; cursor:pointer; user-select:none; }
+.memo-continue::after { content:'继续写笔记 ↵'; }
+.memo-continue:focus-visible { outline:2px solid #5289bc; outline-offset:2px; }
 .memo-source-hint { margin:0; padding:0 18px 10px; font-size:11px; color:var(--muted); }
 .memo-paper .memo-footnote { margin:0; border-top:0; border-bottom:1px solid var(--line); }
 .memo-action-text { display:block; width:100%; min-height:120px; margin:8px 0 14px; padding:12px; border:1px solid var(--line); border-radius:8px; font:inherit; font-size:16px; white-space:pre-wrap; color:var(--ink); background:var(--card); }
@@ -1811,3 +1814,18 @@ body[data-theme="dark"] .hour-card.active, body[data-theme="purple"] .hour-card.
 .combined-task-head a, .combined-task-back a { text-decoration:none; }
 .combined-task-back { display:flex; justify-content:flex-end; margin-bottom:8px; }
 #daily-task-top, #task-queue-section { scroll-margin-top:110px; }
+
+/* Queue hierarchy follows the user's order, without assigning priorities. */
+.memo-queue-item { padding:16px; margin:10px 0; border:1px solid var(--line); border-radius:10px; background:var(--card); }
+.memo-queue-item strong { display:block; font-size:16px; line-height:1.5; font-weight:600; color:var(--ink); }
+.memo-queue-current { background:rgba(79,145,220,.09); border-left:4px solid #5289bc; }
+.memo-queue-current strong { font-size:18px; font-weight:700; }
+.memo-queue-number { display:block; margin-bottom:5px; font-size:12px; color:var(--muted); }
+.memo-queue-current .memo-queue-number { color:#376b9d; font-weight:600; }
+.memo-queue-item .memo-queue-points { display:inline-block; padding:3px 8px; border-radius:5px; background:rgba(36,130,83,.10); color:#287347; font-size:12px; font-weight:600; }
+.memo-queue-note { font-weight:400; line-height:1.6; }
+.memo-queue-completed { margin:8px 0; padding:14px; border-radius:8px; background:rgba(120,130,140,.07); }
+.memo-queue-completed strong { font-size:15px; font-weight:500; }
+.memo-queue-more { margin-left:auto; align-self:center; font-size:12px; color:var(--muted); }
+.memo-queue-more summary { cursor:pointer; padding:8px; }
+.memo-queue-more .btn { margin:4px 8px; }
