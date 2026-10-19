@@ -27,7 +27,7 @@
     return d.checkins;
   }
   function find(id) { return D().filter(function (x) { return x.id === id; })[0] || null; }
-  function today() { return S().todayKey(); }
+  function today() { return window.__MEMO_MODE && App.memoCore ? App.memoCore.userDay() : S().todayKey(); }
   function keyOf(dt) {
     const z = function (n) { return (n < 10 ? '0' : '') + n; };
     return dt.getFullYear() + '-' + z(dt.getMonth() + 1) + '-' + z(dt.getDate());
@@ -191,6 +191,7 @@
 
   /* ---------- 打卡 / 取消 ---------- */
   function punch(id) {
+    if (window.__MEMO_MODE && App.memoActions) return App.memoActions.checkin(id);
     const it = find(id); if (!it) return;
     const k = today();
     if (!it.days) it.days = {};
@@ -216,6 +217,7 @@
       (stAll > 1 ? ' · 连续打卡 ' + stAll + ' 天' : ''), 4200);
   }
   function unpunch(id) {
+    if (window.__MEMO_MODE && App.memoActions) return App.memoActions.checkin(id, today(), true);
     const it = find(id); if (!it) return;
     const k = today();
     const n = (it.days && it.days[k]) || 0;
@@ -264,6 +266,10 @@
     return null;
   }
   function makeupPunch(id, k) {
+    if (window.__MEMO_MODE && App.memoActions) {
+      if (!k || k >= today() || k < shiftKey(today(), -6)) { App.ui.toast('只能补最近六天的卡'); return; }
+      return App.memoActions.checkin(id, k);
+    }
     const it = find(id); if (!it) return;
     const err = makeupCore(it, k);
     if (err) { App.ui.toast('⚠️ ' + err); return; }
@@ -279,7 +285,7 @@
     const v = it || { text: '', points: 5, target: 1, note: '' };
     // 🔁 v119：编辑已有项时，列最近 6 天补卡勾选（今天除外 —— 今天的卡用页面按钮打）
     let mkHTML = '';
-    if (!isNew) {
+    if (!isNew && !window.__MEMO_MODE) {
       const tg0 = targetOf(it);
       let rows = '';
       for (let i = 6; i >= 1; i--) {
@@ -376,6 +382,8 @@
         ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '" title="撤销今天一次">↩ 撤销</button>'
         : '<button class="btn btn-small btn-primary" data-act="ck-punch" data-id="' + it.id + '">✅ 打卡' +
           (it.points ? ' +' + gain : '') + (mult > 1 ? '（×' + mult + '）' : '') + '</button>') +
+      (window.__MEMO_MODE && n > 0 && !done ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '">撤销一次</button>' : '') +
+      (window.__MEMO_MODE ? '<button class="btn btn-small" data-act="ck-history" data-id="' + it.id + '">记录</button>' : '') +
       '<button class="q-ib" data-act="ck-edit" data-id="' + it.id + '" title="改">✏️</button>' +
       '<button class="q-ib" data-act="ck-del" data-id="' + it.id + '" title="删掉">🗑</button>' +
       '</span></div>';
@@ -418,6 +426,8 @@
       '<button class="btn btn-small" data-act="ck-add">＋ 加一个打卡项</button>' +
       '</div>';
 
+    if (window.__MEMO_MODE) h = '<div class="card"><h2>积分打卡</h2><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天未打满的小圆点可补卡。连续打卡倍率保留：7天×2、30天×4、60天×6、90天×8，每天第一笔享受。</p><button class="btn btn-small" data-act="ck-add">＋ 添加打卡项</button>';
+
     if (!list.length) {
       h += '<div class="q-empty">还没有。<br>想坚持什么事？加一条，每天来点一下 —— 比如「喝水 2000ml」「23:30 前躺下」。</div>';
     } else {
@@ -441,6 +451,7 @@
     if (act === 'ck-y-prev') { yearSel = (yearSel || new Date().getFullYear()) - 1; render(); return; }
     if (act === 'ck-y-next') { yearSel = (yearSel || new Date().getFullYear()) + 1; render(); return; }
     if (act === 'ck-edit') { editModal(id); return; }
+    if (act === 'ck-history' && App.memoActions) { App.memoActions.checkinHistory(id); return; }
     if (act === 'ck-punch') { punch(id); return; }
     if (act === 'ck-makeup') { makeupPunch(id, b.dataset.day); return; }
     if (act === 'ck-undo') { unpunch(id); return; }
@@ -463,7 +474,13 @@
     render();
   }
 
+  function memoPoints(it, day) {
+    if (!it) return 0;
+    const mult = day === today() && timesTodayAll() === 0 ? multOf(streakWithToday()) : 1;
+    return Math.max(0, Number(it.points) || 0) * mult;
+  }
   App.checkin = {
+    memoPoints: memoPoints,
     init: init,
     render: render,
     pageHTML: pageHTML,

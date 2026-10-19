@@ -26,11 +26,19 @@
     if (!n || typeof n.text !== 'string' || typeof n.id !== 'string') throw new Error('这天的笔记格式异常，请先导出完整备份');
     return n;
   }
-  function write(key, text, at = new Date().toISOString()) {
+  function segments(note) {
+    if (!note) return [{ id: S().uid(), text: '' }];
+    if (note.blocks === undefined) return [{ id: note.id + '-original', text: note.text }];
+    if (note.blockVersion !== 1 || !Array.isArray(note.blocks) || note.blocks.some(b => !b || typeof b.id !== 'string' || typeof b.text !== 'string' || (b.eventId !== undefined && typeof b.eventId !== 'string')) || note.blocks.map(b => b.text).join('') !== note.text) throw new Error('笔记文段格式异常，请先下载完整备份');
+    return note.blocks.map(b => Object.assign({}, b));
+  }
+  function write(key, text, at = new Date().toISOString(), blocks) {
     if (S().status().readOnly || !validDate(key)) throw new Error('记录处于保护状态，未覆盖笔记');
     const old = read(key);
-    if (old && old.text === text) return old;
+    if (old && old.text === text && (blocks === undefined || JSON.stringify(old.blocks) === JSON.stringify(blocks))) return old;
     const next = Object.assign({}, old || {}, { id: old ? old.id : S().uid(), text, createdAt: old ? old.createdAt : at, updatedAt: at, revision: (old && Number(old.revision) || 0) + 1 });
+    if (blocks !== undefined) { next.blocks = blocks; next.blockVersion = 1; }
+    else if (next.blocks !== undefined) { next.blocks = [{ id: S().uid(), text }]; next.blockVersion = 1; }
     if (!S().data().memoNotes) S().data().memoNotes = {};
     S().data().memoNotes[key] = next;
     return next;
@@ -65,7 +73,7 @@
     if (!$('memo-editor')) return Promise.resolve(true);
     const epoch = ++inputVersion;
     try {
-      write(selected, $('memo-editor').value);
+      write(selected, App.memoEditor.text(), new Date().toISOString(), App.memoEditor.read());
       saving = true; state('正在保存…');
       pending = S().save().then(ok => {
         if (epoch === inputVersion) { saving = false; statusText(); }
@@ -75,37 +83,33 @@
     return pending;
   }
   async function flush() { const ok = await pending; return ok && await S().flush(); }
-  function busy() { return saving || S().status().readOnly || S().status().phase === 'error'; }
+  function busy() { return App.memoEditor.busy() || (App.memoActions && App.memoActions.busy()) || saving || S().status().readOnly || S().status().phase === 'error'; }
   function show(key) {
     if (!validDate(key)) return;
     try {
       const n = read(key);
-      selected = key; $('memo-date').value = key;
+      const previousDay = selected; selected = key; $('memo-date').value = key;
       const editor = $('memo-editor');
-      editor.value = n ? n.text : '';
-      const end = editor.value.length;
-      editor.setSelectionRange(end, end);
-      editor.scrollTop = editor.scrollHeight;
-      // 隐藏视图和手机布局完成后再定位一次；不聚焦，不弹键盘。
+      if (document.activeElement === editor && key === previousDay && App.memoEditor.text() === (n ? n.text : '')) return;
+      App.memoEditor.show(segments(n), S().status().readOnly);
       requestAnimationFrame(() => { if (selected === key) editor.scrollTop = editor.scrollHeight; });
-      $('memo-editor').readOnly = S().status().readOnly;
       $('memo-heading').textContent = key === userDay() ? '今天的笔记' : key + ' 的笔记';
       $('memo-day-hint').textContent = '北京时间 · ' + key + ' 04:00 至 ' + shiftDay(key, 1) + ' 03:59';
       $('memo-editor').dataset.day = key;
       statusText();
-    } catch (e) { $('memo-editor').readOnly = true; state(e.message, true); }
+    } catch (e) { $('memo-editor').contentEditable = 'false'; state(e.message, true); }
   }
   async function openDay(key) {
     if (!await flush()) { state('当前内容尚未安全保存，请先复制或下载，暂不切换日期', true); $('memo-date').value = selected; return false; }
     show(key); return true;
   }
   function insertTime() {
-    const el = $('memo-editor'); if (el.readOnly) return;
+    const el = $('memo-editor'); if (S().status().readOnly) return;
     const now = Date.now(), date = naturalDay(now);
     const stamp = date === selected ? clock(now) : (date === shiftDay(selected, 1) && userDay(now) === selected ? '次日' + clock(now) : date + ' ' + clock(now));
-    const a = el.selectionStart, b = el.selectionEnd;
-    const text = (a > 0 && el.value[a - 1] !== '\n' ? '\n' : '') + stamp + ' ';
-    el.setRangeText(text, a, b, 'end'); el.focus(); persist();
+    const pos = App.memoEditor.selection();
+    const a = pos ? pos.start : App.memoEditor.text().length;
+    App.memoEditor.insert((a > 0 && App.memoEditor.text()[a - 1] !== '\n' ? '\n' : '') + stamp.replace(':', '') + ' ');
   }
   async function copyText(text) {
     let copied = false;
@@ -126,11 +130,12 @@
   }
   function currentText() {
     // 即使存储处于保护/错误状态，也能救出输入框里的文字。
-    return '用户日：' + selected + '（北京时间04:00分界）\n\n' + $('memo-editor').value;
+    return '用户日：' + selected + '（北京时间04:00分界）\n\n' + App.memoEditor.text();
   }
   async function copyCurrent() {
     const el = $('memo-editor');
-    if (el.selectionStart !== el.selectionEnd) return copyText(el.value.slice(el.selectionStart, el.selectionEnd));
+    const selection = App.memoEditor.selection();
+    if (selection && selection.start !== selection.end) return copyText(App.memoEditor.text().slice(selection.start, selection.end));
     if (!await flush()) return copyText(currentText());
     return copyText(read(selected) ? exportText([selected]) : currentText());
   }
@@ -163,7 +168,7 @@
   }
   function init() {
     selected = userDay();
-    $('memo-editor').addEventListener('input', persist);
+    App.memoEditor.init($('memo-editor'), persist);
     $('memo-editor').addEventListener('blur', flush);
     $('memo-time').onclick = insertTime;
     $('memo-today').onclick = () => openDay(userDay());
@@ -177,9 +182,9 @@
     $('memo-export').onclick = exportRange;
     document.addEventListener('visibilitychange', () => { if (document.hidden) flush(); });
     window.addEventListener('pagehide', flush);
-    window.addEventListener('focus-storage', () => { statusText(); if (S().status().readOnly) $('memo-editor').readOnly = true; });
+    window.addEventListener('focus-storage', () => { statusText(); if (S().status().readOnly) $('memo-editor').contentEditable = 'false'; });
     show(selected);
   }
-  App.memo = { init, show, history, flush, busy, copyCurrent };
-  App.memoCore = { naturalDay, userDay, clock, shiftDay, validDate, read, write, entries, exportText };
+  App.memo = { init, show, history, flush, busy, copyCurrent, selected: () => selected };
+  App.memoCore = { naturalDay, userDay, clock, shiftDay, validDate, read, write, entries, exportText, segments };
 })();

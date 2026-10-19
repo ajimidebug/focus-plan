@@ -99,7 +99,7 @@
   /* ---------- 📌 v94：每日必做 = 「今天的基础任务」（只今天有效）----------
    * 用户原话：「我把它放进去了，那我今天就要做这些是最基本的，我不可能每天都做一样的」
    * 所以：条目只在**加入的那一天**出现，第二天自动清掉 —— 明天做什么，明天再挑。 */
-  function pinToday() { return S().todayKey(); }
+  function pinToday() { return window.__MEMO_MODE && App.memoCore ? App.memoCore.userDay() : S().todayKey(); }
   /** 今天该显示的那些（顺带把老数据里没有 pinnedDay 的补成今天） */
   function todayDaily() {
     const k = pinToday();
@@ -244,6 +244,7 @@
 
   /** 保证「当前条」在任务页上有一条未完成的真副本；不是当前条的旧副本收回队列 */
   function ensureMaterialized() {
+    if (window.__MEMO_MODE) return false;
     const d = S().data();
     if (!d || !Array.isArray(d.queue)) return false;
     const cur = d.queue[0] || null;
@@ -704,6 +705,7 @@
     App.ui.toast(it.points > 0 ? ('🏅 打勾完成得 ' + it.points + ' 分') : '这条完成时不发分（改成 0 了）');
   }
   function dToggle(id) {
+    if (window.__MEMO_MODE && App.memoActions) return App.memoActions.daily(id);
     const it = findIn(DY(), id);
     if (!it) return;
     if (!it.days) it.days = {};
@@ -1536,7 +1538,7 @@
 
   function dailyCard() {
     const list = todayDaily();          // 📌 v94：只显示「今天放进来」的
-    const k = S().todayKey();
+    const k = pinToday();
     let h = '<div class="card q-card">';
     h += '<h2>📌 今天的基础任务</h2>';
     h += '<p class="hint" style="margin-top:-2px">把<b>今天最底线要做的几件</b>放这儿（复习、听力、单词那类）。打勾就行 —— ' +
@@ -1824,6 +1826,7 @@
   }
 
   function render() {
+    if (window.__MEMO_MODE && App.memoActions) return App.memoActions.renderQueue(dailyCard());
     try { pruneDaily(); } catch (e) { /* 忽略 */ }   // 📌 v94：顺手把昨天的「今天基础」清掉
     try { ensureMaterialized(); } catch (e) { /* 忽略 */ }
     const root = document.getElementById('queue-view');
@@ -1872,6 +1875,7 @@
 
   /* ---------- 事件 ---------- */
   function onClick(e) {
+    if (window.__MEMO_MODE && App.memoActions && e.target.closest('[data-act^="mq-"]')) { App.memoActions.queueClick(e); return; }
     const b = e.target && e.target.closest ? e.target.closest('[data-act]') : null;
     if (!b || !b.dataset) return;
     const act = b.dataset.act;

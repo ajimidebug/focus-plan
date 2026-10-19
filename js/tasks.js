@@ -2461,6 +2461,7 @@
 
   /* ---------- 打勾 / 取消打勾（含积分记账与奖励触发） ---------- */
   function toggleTask(listKey, taskId) {
+    if (window.__MEMO_MODE && App.memoActions) return App.memoActions.task(listKey, taskId);
     const dayKey = S().todayKey();
     const day = S().getDay(dayKey);
     const task = day.tasks[listKey].find(function (t) { return t.id === taskId; });

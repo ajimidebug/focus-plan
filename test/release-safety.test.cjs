@@ -292,3 +292,115 @@ test('memo updater blocks unflushed notes and awaits memo flush before activatin
   b.ctx.App.memo.flush = async () => true;
   assert.equal(await u.U.apply(true), true); assert.equal(u.posted.length, 1);
 });
+
+function actionHarness(b) {
+  memoHarness(b);
+  vm.runInNewContext(source('js/memo-editor.js'), b.ctx);
+  vm.runInNewContext(source('js/memo-actions.js'), b.ctx);
+  b.ctx.App.memo.flush = async () => b.S.flush();
+  b.ctx.App.checkin = { memoPoints: (it, day) => Math.max(0, Number(it.points) || 0) * (day === '2026-10-19' ? 2 : 1) };
+  return { A: b.ctx.App.memoActions, M: b.ctx.App.memoCore, E: b.ctx.App.memoEditor };
+}
+const actionAt = '2026-10-19T09:52:00.000Z';
+test('queue completion and exact undo survive reload, text editing, repricing and renaming', async () => {
+  const b = browser(); await b.S.load(); const { A, M, E } = actionHarness(b);
+  M.write('2026-10-19', '1055坐下来\n打算背英语');
+  b.S.data().queue = [{ id: 'q1', text: '环工3-3初背', points: 7 }, { id: 'q2', text: '后面这条' }];
+  const event = A.completeCore({ kind: 'queue', id: 'q1', title: '环工3-3初背' }, '1752【任务勾选】环工3-3初背', actionAt);
+  assert.equal(b.S.pointsTotal(), 7); assert.equal(b.S.data().queue[0].id, 'q2');
+  let blocks = M.segments(M.read('2026-10-19'));
+  const pos = M.read('2026-10-19').text.indexOf('环工3-3初背');
+  blocks = E.splice(blocks, pos, pos + 8, '改写任务\n另补一句');
+  blocks.push({ id: 'handwritten', text: '\n1800这是独立手写说明' });
+  M.write('2026-10-19', E.textOf(blocks), actionAt, blocks);
+  b.S.data().queueDone[0].text = '后来改名'; b.S.data().queueDone[0].points = 99;
+  b.S.data().ledger.push({ id: 'manual', points: 3, type: 'adjust' });
+  await b.S.save();
+  const c = browser({ shared: b }); await c.S.load(); const h = actionHarness(c);
+  assert(h.A.passage(h.A.latest('queue', 'q1')).includes('另补一句'));
+  h.A.undoCore(event.id);
+  assert.equal(c.S.pointsTotal(), 3); assert.equal(c.S.data().queue[0].id, 'q1');
+  assert.equal(h.M.read('2026-10-19').text, '1055坐下来\n打算背英语\n1800这是独立手写说明');
+  assert(!c.S.data().ledger.some(l => l.memoEventId === event.id));
+});
+test('blank completion has points and state, but no passage; empty undo writes no cancellation', async () => {
+  const b = browser(); await b.S.load(); const { A, M } = actionHarness(b);
+  M.write('2026-10-19', '原话'); b.S.data().queue = [{ id: 'q1', text: '任务', points: 0 }];
+  const e = A.completeCore({ kind: 'queue', id: 'q1', title: '任务' }, '', actionAt);
+  assert.equal(A.passage(e), ''); assert.equal(b.S.data().queue.length, 0); assert.equal(b.S.pointsTotal(), 0);
+  A.undoCore(e.id, '', actionAt); assert.equal(M.read('2026-10-19').text, '原话');
+});
+test('repeat habit punches retain individual amounts and cancel just the selected occurrence', async () => {
+  const b = browser(); await b.S.load(); const { A, M } = actionHarness(b);
+  b.S.data().checkins = [{ id: 'h1', text: '喝水', points: 5, target: 3, days: {} }];
+  const one = A.completeCore({ kind: 'checkin', id: 'h1', day: '2026-10-19', title: '喝水' }, '第一笔', actionAt);
+  b.S.data().checkins[0].points = 3;
+  const two = A.completeCore({ kind: 'checkin', id: 'h1', day: '2026-10-19', title: '喝水' }, '第二笔', actionAt);
+  assert.equal(b.S.pointsTotal(), 16);
+  A.undoCore(one.id, '', actionAt);
+  assert.equal(b.S.pointsTotal(), 6); assert.equal(b.S.data().checkins[0].days['2026-10-19'], 1);
+  assert(!M.read('2026-10-19').text.includes('第一笔')); assert(M.read('2026-10-19').text.includes('第二笔'));
+  A.undoCore(two.id, '刚才点错了', actionAt); assert.equal(b.S.pointsTotal(), 0);
+  assert(M.read('2026-10-19').text.includes('【取消勾选】喝水：刚才点错了'));
+});
+test('backfill keeps the attributed day distinct from the operation-time note across 04:00', async () => {
+  const b = browser(); await b.S.load(); const { A, M } = actionHarness(b);
+  b.S.data().checkins = [{ id: 'h', text: '背英语', points: 5, target: 1, days: {} }];
+  const e = A.completeCore({ kind: 'checkin', id: 'h', day: '2026-10-17', title: '背英语' }, '补记17日', '2026-10-18T19:59:00.000Z');
+  assert.equal(e.noteDay, '2026-10-18'); assert.equal(b.S.data().ledger[0].date, '2026-10-17');
+  assert.equal(b.S.data().checkins[0].days['2026-10-17'], 1);
+  A.undoCore(e.id, '补错日子', '2026-10-18T20:01:00.000Z');
+  assert.equal(M.read('2026-10-18').text, ''); assert(M.read('2026-10-19').text.includes('补错日子'));
+});
+test('cancelled task withdraws only newly linked dependent rewards and cannot farm bonuses', async () => {
+  const b = browser(); await b.S.load(); const { A } = actionHarness(b), day = b.S.getDay('2026-10-19');
+  day.tasks.required = [{ id: 'r', text: '必须' }]; day.tasks.ideal = [{ id: 'i', text: '理想' }]; day.tasks.extra = [{ id: 'x', text: '拓展' }];
+  const r = A.completeCore({ kind: 'task', id: 'r', list: 'required', day: '2026-10-19', title: '必须' }, '必须', actionAt, [{ kind: 'base', points: 10 }]);
+  A.completeCore({ kind: 'task', id: 'i', list: 'ideal', day: '2026-10-19', title: '理想' }, '理想', actionAt);
+  A.completeCore({ kind: 'task', id: 'x', list: 'extra', day: '2026-10-19', title: '拓展' }, '拓展', actionAt, [{ kind: 'perfect', points: 20 }]);
+  assert.equal(b.S.pointsTotal(), 45);
+  b.S.data().ledger.push({ id: 'other-reward', points: 8, type: 'reward-base', date: '2026-10-18' });
+  A.undoCore(r.id, '', actionAt); assert.equal(b.S.pointsTotal(), 23); assert.equal(day.rewards.length, 0);
+  A.completeCore({ kind: 'task', id: 'r', list: 'required', day: '2026-10-19', title: '必须' }, '', actionAt, [{ kind: 'base', points: 10 }, { kind: 'perfect', points: 20 }]);
+  assert.equal(b.S.pointsTotal(), 53);
+});
+test('one operation is not duplicated by double submit or persistence retry after total storage failure', async () => {
+  const b = browser(); await b.S.load(); const { A } = actionHarness(b);
+  b.S.data().queue = [{ id: 'q', text: 'task', points: 9 }]; let mutations = 0;
+  b.options.localFails = b.options.idbFails = true;
+  await assert.rejects(A.commit(() => { mutations++; A.completeCore({ kind: 'queue', id: 'q', title: 'task' }, 'text', actionAt); }), /尚未保存/);
+  assert.equal(A.busy(), true); assert.equal(mutations, 1);
+  b.options.localFails = b.options.idbFails = false;
+  assert.equal(await A.commit(() => { mutations++; }), true); assert.equal(mutations, 1); assert.equal(b.S.pointsTotal(), 9); assert.equal(A.busy(), false);
+  assert.throws(() => A.completeCore({ kind: 'queue', id: 'q', title: 'task' }, 'duplicate', actionAt), /已经/);
+});
+test('complete backup restores generated passages and exact ledger/event links', async () => {
+  const b = browser(); await b.S.load(); const { A } = actionHarness(b);
+  b.S.data().queue = [{ id: 'q', text: 'task', points: 5 }]; const e = A.completeCore({ kind: 'queue', id: 'q', title: 'task' }, 'saved text', actionAt);
+  const pack = JSON.parse(await backupHarness().B.packText(b.S.data(), {}));
+  b.S.reset(); await b.S.flush(); assert(b.S.restoreFrom(pack.data)); await b.S.flush();
+  A.undoCore(e.id, '', actionAt); assert.equal(b.S.pointsTotal(), 0); assert.equal(b.S.data().queue[0].id, 'q');
+});
+test('cross-passage replacement preserves retained ownership and never captures surrounding prose', async () => {
+  const b = browser(); await b.S.load(); const { E } = actionHarness(b);
+  const input = [{ id: 'a', text: '普通' }, { id: 'b', eventId: 'e', text: '生成文字' }, { id: 'c', text: '手写' }];
+  const output = E.splice(input, 1, 7, '替换');
+  assert.equal(E.textOf(output), '普替换写'); assert(!output.some(x => x.eventId));
+  const inside = E.splice(input, 3, 4, '新增说明');
+  assert.equal(inside.filter(x => x.eventId === 'e').map(x => x.text).join(''), '生新增说明文字');
+  const atEnd = E.splice(input, 8, 8, '正文'); assert(!atEnd[atEnd.length - 1].eventId);
+});
+test('repeated matching words use the actual selected range rather than guessing passage identity', async () => {
+  const b = browser(); await b.S.load(); const { E } = actionHarness(b);
+  const change = E.diff('aaaa', 'aaa', { start: 2, end: 2, type: 'deleteContentBackward' });
+  assert.equal(change.start, 1); assert.equal(change.end, 2);
+  const insertion = E.diff('aaaa', 'aaaaa', { start: 1, end: 1, type: 'insertText' }); assert.equal(insertion.start, 1);
+});
+test('removing a generated passage keeps separate handwritten lines separated', async () => {
+  const b = browser(); await b.S.load(); const { A, M } = actionHarness(b);
+  M.write('2026-10-19', '1055坐下来'); b.S.data().queue = [{ id: 'q', text: 'task', points: 5 }];
+  const event = A.completeCore({ kind: 'queue', id: 'q', title: 'task' }, '1752【任务勾选】task', actionAt);
+  const blocks = M.segments(M.read('2026-10-19')); blocks.push({ id: 'outside', text: '1800独立说明' });
+  M.write('2026-10-19', blocks.map(b => b.text).join(''), actionAt, blocks);
+  A.undoCore(event.id, '', actionAt); assert.equal(M.read('2026-10-19').text, '1055坐下来\n1800独立说明');
+});

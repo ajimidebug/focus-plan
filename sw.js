@@ -1,128 +1,136 @@
 /* 此文件由 prepare-release.mjs 生成；代码缓存与学习记录分开管理。 */
-const RELEASE = '169.3.2';
+const RELEASE = '169.4';
 const ASSETS = [
   {
-    "url": "./index.html?v=169.3.2",
-    "sha256": "9beebc72e36172af9b12edb7d2715458c3f6fa1645771ff9f69dcd94f7337c6b"
+    "url": "./index.html?v=169.4",
+    "sha256": "18bfc332fdff9597e7d12e1bb3b1ea3c37d9a350676fc289f83d0a9287f38ffc"
   },
   {
-    "url": "./version.html?v=169.3.2",
+    "url": "./version.html?v=169.4",
     "sha256": "7a82aef2612c437f0d584e526bf1d11947d0620fc3de4fec1170342308f83b57"
   },
   {
-    "url": "./css/style.css?v=169.3.2",
-    "sha256": "23cf9ae224e65cba50037f739404df8211111daac27abdbd66832eb05d2c2ed8"
+    "url": "./css/style.css?v=169.4",
+    "sha256": "bad0923b9b77dd7957182ef36595528e794480217c6eb7b3ac433861c3f24a78"
   },
   {
-    "url": "./css/katex.css?v=169.3.2",
+    "url": "./css/katex.css?v=169.4",
     "sha256": "c596bf225b14e4e817fb4f1b801f6f85682e8b92fa457d12af2c0b891eb96bcc"
   },
   {
-    "url": "./js/app.js?v=169.3.2",
+    "url": "./js/app.js?v=169.4",
     "sha256": "6f64199de0082f19636f1c5ffd73be991fae70199eb23ed358fb1521007e66e2"
   },
   {
-    "url": "./js/backup.js?v=169.3.2",
+    "url": "./js/backup.js?v=169.4",
     "sha256": "979264c92e4434fd175cc420aff0ab06de623a11f175f8fbaf673855601c48a3"
   },
   {
-    "url": "./js/badges.js?v=169.3.2",
+    "url": "./js/badges.js?v=169.4",
     "sha256": "8a5cb3be5508cbd504040b26ffed48b236d4d16c1f05a709e52a809611fc2929"
   },
   {
-    "url": "./js/calendar.js?v=169.3.2",
+    "url": "./js/calendar.js?v=169.4",
     "sha256": "cff68efd8857a8892b930fcf269d7d82d77065ccd02e4101342339eb5fa7c71b"
   },
   {
-    "url": "./js/checkin.js?v=169.3.2",
-    "sha256": "faee0e93b324fd5a290621de06291b71dc9d48c907875fcb7c091af213da3257"
+    "url": "./js/checkin.js?v=169.4",
+    "sha256": "97b404ff2d8c7f4c0a12fa0b1549284c785b48ca486c3636870f741442a3d19c"
   },
   {
-    "url": "./js/demo.js?v=169.3.2",
+    "url": "./js/demo.js?v=169.4",
     "sha256": "a2a5f017e3ac0ebd8cbfd508c7bb95d361dafd4946a744fd0e4b025f93b28bb9"
   },
   {
-    "url": "./js/exams.js?v=169.3.2",
+    "url": "./js/exams.js?v=169.4",
     "sha256": "99da6d693304cd5483f71894978693f8b7cdd11bb2e7c9698b78ac722be36f20"
   },
   {
-    "url": "./js/katex.min.js?v=169.3.2",
+    "url": "./js/katex.min.js?v=169.4",
     "sha256": "2ec26e326d3b141856db1c4d46c07ac3618923c7032d4fcf65f66718ea5cda00"
   },
   {
-    "url": "./js/lecture.js?v=169.3.2",
+    "url": "./js/lecture.js?v=169.4",
     "sha256": "b25bacaee1d24924b3d4ac6ecb967a1ae2e732d853a7532ced268bf18235efee"
   },
   {
-    "url": "./js/link.js?v=169.3.2",
+    "url": "./js/link.js?v=169.4",
     "sha256": "bdbe316d78091867df2f186e8d190092e0bfca1934ac9062a4f897d915e87914"
   },
   {
-    "url": "./js/marked.min.js?v=169.3.2",
+    "url": "./js/marked.min.js?v=169.4",
     "sha256": "2b5f392ea73cf6f79ab6529e8e0d3bdce7f36c320aa29153a0d4949775344baf"
   },
   {
-    "url": "./js/memcards.js?v=169.3.2",
-    "sha256": "552cb509781b809188637197f993070816d04e2afc51f5349dd1a77154248d98"
+    "url": "./js/memcards.js?v=169.4",
+    "sha256": "c20970935241fda279082e25ead0bd7224cb93637b8a022cd4dff2564dbece18"
   },
   {
-    "url": "./js/memo.js?v=169.3.2",
-    "sha256": "c788e76d22e54e9f3f689156f573cde77b9c3bf6ae21789aee8ade7bdda25bdd"
+    "url": "./js/memo-actions.js?v=169.4",
+    "sha256": "ce0594fd97c95fb37baaa07f94af1fc4b9997a9db035d02149c61e75b26364a1"
   },
   {
-    "url": "./js/mhchem.min.js?v=169.3.2",
+    "url": "./js/memo-editor.js?v=169.4",
+    "sha256": "430b38ff9d8d1a2fcfeb37604f6acb7ddb46b19f53d38d85025f3296b80bd00c"
+  },
+  {
+    "url": "./js/memo.js?v=169.4",
+    "sha256": "4407639944931603971c988c7e7b3473a1ddc909a8ac9124c68c7e01a12f0032"
+  },
+  {
+    "url": "./js/mhchem.min.js?v=169.4",
     "sha256": "cdf8174ee9a8113fcecc79cf24209754554e080efe19b767940c9aec5864a834"
   },
   {
-    "url": "./js/milestones.js?v=169.3.2",
+    "url": "./js/milestones.js?v=169.4",
     "sha256": "f0834aaaf137c3de2a6ac250b8ad75102885bf414c190a1a0ee56801ab24da17"
   },
   {
-    "url": "./js/mistakes.js?v=169.3.2",
+    "url": "./js/mistakes.js?v=169.4",
     "sha256": "a0df83f6fc839461703366364c2487c88adc2932e6fb671edba11fa5b587be90"
   },
   {
-    "url": "./js/queue.js?v=169.3.2",
-    "sha256": "797dd0a2839522aca8f8c0722126a35dba3c7b3e0d4743e76d199918ee856556"
+    "url": "./js/queue.js?v=169.4",
+    "sha256": "afead75511ab2371e265273f7350613c20291bee40ecc271d79f4ed92cf373e8"
   },
   {
-    "url": "./js/settings.js?v=169.3.2",
+    "url": "./js/settings.js?v=169.4",
     "sha256": "2961f5be664b1ed8e9e86e2efcc3c6f7927152506d2d849ffd35985534e83d40"
   },
   {
-    "url": "./js/sport.js?v=169.3.2",
+    "url": "./js/sport.js?v=169.4",
     "sha256": "fbd6e64d9c02a42dfd1f606dd399451a1a9eb885fbe1c666b3318004c124bc54"
   },
   {
-    "url": "./js/stats.js?v=169.3.2",
+    "url": "./js/stats.js?v=169.4",
     "sha256": "5849ec142ff8aff4796bdb907d5e34c65fe56fc99506fa0c96efe8440ee62c9c"
   },
   {
-    "url": "./js/store.js?v=169.3.2",
+    "url": "./js/store.js?v=169.4",
     "sha256": "b0eb46b5bd277997dac95946d8a297b954ebcdd731037f6fb4996d3ad491659a"
   },
   {
-    "url": "./js/tasks.js?v=169.3.2",
-    "sha256": "2a54d336689d39b323706b2a0c48acce86110c6576847f618858396921e75a77"
+    "url": "./js/tasks.js?v=169.4",
+    "sha256": "c29b7bf5d6c8a0eea000782780b406ee75653b56950fa7f9ebbe271c570dff5d"
   },
   {
-    "url": "./js/timeline.js?v=169.3.2",
+    "url": "./js/timeline.js?v=169.4",
     "sha256": "fdc9f3381ee7073c76ec1d1d3d93054e2705fc50cfc0a319ca095b90ed51180f"
   },
   {
-    "url": "./js/ui.js?v=169.3.2",
+    "url": "./js/ui.js?v=169.4",
     "sha256": "a2bb33f11407494983cf89d04b1c3a8f903120cb290ba4c260d052eed7c2817c"
   },
   {
-    "url": "./js/updates.js?v=169.3.2",
+    "url": "./js/updates.js?v=169.4",
     "sha256": "3aefe6bba39cff1190d70549a1ef7381e63c92d956e7899dfcaeac3210d4dd8a"
   },
   {
-    "url": "./manifest.webmanifest?v=169.3.2",
+    "url": "./manifest.webmanifest?v=169.4",
     "sha256": "6db6c99f8f9693b54fa0066ae609bf824216e47094fd01b28487a9bd059a9402"
   },
   {
-    "url": "./icon.svg?v=169.3.2",
+    "url": "./icon.svg?v=169.4",
     "sha256": "57cc2f36576a189060fe6d592a51bdf7c7f4adea9d489418e44f2d79afa6f74a"
   }
 ];

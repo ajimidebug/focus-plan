@@ -1750,6 +1750,22 @@ body[data-theme="dark"] .hour-card.active, body[data-theme="purple"] .hour-card.
 .memo-toolbar { display:flex; flex-wrap:wrap; gap:6px; padding:12px; border-top:1px solid var(--line); }
 #memo-editor { width:100%; height:clamp(200px, 38dvh, 420px); min-height:180px; max-height:60dvh; overflow-y:auto; display:block; resize:vertical; padding:20px 18px; border:0; outline:none; font-size:17px; line-height:1.9; background:transparent; color:var(--ink); tab-size:2; }
 #memo-editor:focus { box-shadow:inset 3px 0 0 rgba(59,130,246,.25); }
+#memo-editor { white-space:pre-wrap; overflow-wrap:anywhere; word-break:normal; cursor:text; -webkit-user-select:text; user-select:text; }
+#memo-editor:empty::before { content:attr(data-placeholder); color:#9aa4b1; pointer-events:none; }
+.memo-generated { background:rgba(79,145,220,.12); border-bottom:2px solid rgba(79,145,220,.35); box-decoration-break:clone; -webkit-box-decoration-break:clone; }
+.memo-generated::before { content:attr(data-label) ' · '; color:#376b9d; font-size:11px; font-weight:600; user-select:none; }
+.memo-source-hint { margin:0; padding:0 18px 10px; font-size:11px; color:var(--muted); }
+.memo-paper .memo-footnote { margin:0; border-top:0; border-bottom:1px solid var(--line); }
+.memo-action-text { display:block; width:100%; min-height:120px; margin:8px 0 14px; padding:12px; border:1px solid var(--line); border-radius:8px; font:inherit; font-size:16px; white-space:pre-wrap; color:var(--ink); background:var(--card); }
+.memo-delete-preview { white-space:pre-wrap; overflow-wrap:anywhere; max-height:30dvh; overflow:auto; padding:12px; border:1px solid var(--line); background:rgba(79,145,220,.07); font:inherit; font-size:14px; }
+#memo-action-error { color:var(--req); font-size:13px; }
+.memo-queue-head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:14px 0; }
+.memo-queue-row { padding:14px 0; border-bottom:1px solid var(--line); }
+.memo-queue-row strong { white-space:pre-wrap; overflow-wrap:anywhere; }
+.memo-queue-row small { display:block; margin-top:5px; color:var(--muted); }
+.memo-queue-note { margin:6px 0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; color:var(--muted); }
+.memo-queue-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.memo-layout .modal .field:has([id$="-lec-on"]) { display:none; }
 #memo-editor::placeholder { color:#9aa4b1; }
 .memo-footnote { padding:12px 18px; color:var(--muted); font-size:12px; border-top:1px solid var(--line); }
 #memo-search { width:100%; margin-bottom:14px; }
