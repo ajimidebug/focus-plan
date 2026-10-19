@@ -422,7 +422,7 @@ test('exports include reliable provenance without rewriting notes or guessing ol
   const event = A.completeCore({ kind: 'queue', id: 'q', title: '任务' }, '1752【任务勾选】任务\n补充说明', actionAt);
   const original = JSON.stringify(M.read('2026-10-19'));
   const exported = M.exportText(['2026-10-19']);
-  assert(exported.includes('【任务生成开始｜来源：任务队列】'));
+  assert(exported.includes('旧文字\n【任务生成开始｜来源：任务队列】'));
   assert(exported.includes('1752【任务勾选】任务\n补充说明'));
   assert.equal(exported.split('【任务生成开始').length, 2);
   assert.equal(JSON.stringify(M.read('2026-10-19')), original);

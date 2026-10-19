@@ -59,7 +59,7 @@
       if (!event || !sources[event.kind]) return b.text;
       const label = event.kind === 'checkin' ? '打卡生成' : '任务生成';
       // Keep every original character; wrappers are export-only and never saved into the memo.
-      return (b.text.startsWith('\n') ? '' : '\n') + '【' + label + '开始｜来源：' + sources[event.kind] + '】\n' + b.text +
+      return '\n【' + label + '开始｜来源：' + sources[event.kind] + '】\n' + b.text +
         (b.text.endsWith('\n') ? '' : '\n') + '【' + label + '结束】\n';
     }).join('');
   }
