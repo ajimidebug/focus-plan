@@ -489,3 +489,9 @@ test('schedule rejects invalid intervals and assigns overlapping tasks separate 
   const placed = P.columns([{ start: 0, end: 60, id: 'a' }, { start: 20, end: 80, id: 'b' }, { start: 80, end: 100, id: 'c' }]);
   assert.notEqual(placed[0].column, placed[1].column); assert.equal(placed[0].columns, 2); assert.equal(placed[2].columns, 1);
 });
+test('protected storage refuses schedule and deletion mutations before touching state', async () => {
+  const b = browser(); await b.S.load(); const { A } = scheduleHarness(b);
+  b.ctx.localStorage.setItem('focusPlanData.v1', JSON.stringify({ ...b.S.data(), _storageRevision: 999999 }));
+  await b.S.save(); assert.equal(b.S.status().readOnly, true);
+  let touched = false; await assert.rejects(A.commit(() => { touched = true; }), /保护/); assert.equal(touched, false);
+});

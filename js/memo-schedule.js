@@ -118,7 +118,9 @@
   function tick() {
     try {
       const d = state(), now = Date.now(), current = d.sessions.find(s => s.status === 'running');
-      const live = $('schedule-live'); if (live) live.textContent = current ? '执行中 · ' + current.title + ' ' + duration(elapsed(current, now)) : '';
+      const paused = d.sessions.filter(s => s.status === 'paused');
+      const live = $('schedule-live'); if (live) live.textContent = current ? '执行中 · ' + current.title + ' ' + duration(elapsed(current, now)) : paused.length ? '有 ' + paused.length + ' 项执行计时已暂停' : '';
+      const back = $('schedule-active'); if (back) back.hidden = !current && !paused.length;
       if (!mode || document.hidden) return;
       document.querySelectorAll('[data-schedule-elapsed]').forEach(el => { const s = d.sessions.find(s => s.id === el.dataset.scheduleElapsed); if (s) el.textContent = duration(elapsed(s, now)); });
       const start = dayStart(selectedDay), pos = (now - start) / 60000;
@@ -149,13 +151,18 @@
         '<div class="schedule-legend"><span>时间</span><strong>计划</strong><strong>实际执行</strong></div><div class="schedule-scroll"><div class="schedule-axis"><div class="schedule-hours">' + Array.from({ length: 24 }, (_, i) => '<span style="top:' + i * 48 + 'px">' + String(i).padStart(2, '0') + ':00</span>').join('') + '</div><div class="schedule-lane">' + columns(planEvents).map(e => box(e, false)).join('') + '</div><div class="schedule-lane">' + columns(chunks).map(e => box(e, true)).join('') + '</div><div id="schedule-now"></div></div></div><div class="schedule-cards">' + plans.map(p => {
           const sessions = d.sessions.filter(s => s.itemId === p.id), session = sessions.find(s => s.status !== 'ended'), task = find(p.ref), missing = !task;
           return '<article class="schedule-card"><strong>' + esc(task?.text || p.title) + '</strong><p>' + esc(time(p.start) + (p.end ? '—' + (M().naturalDay(p.end) !== p.day ? '次日' : '') + time(p.end) : ' · 时间点')) + ' · <span data-plan-clock="' + esc(p.id) + '"></span></p>' + sessions.map(s => '<p class="hint">' + ({ running: '执行中', paused: '已暂停', ended: '已结束' }[s.status]) + ' <span data-schedule-elapsed="' + esc(s.id) + '">' + duration(elapsed(s)) + '</span></p>').join('') + '<div class="memo-queue-actions">' + (missing ? '<span>原任务已移动</span>' : '<button class="btn btn-small" data-sc="' + (session?.status === 'running' ? 'pause' : 'start') + '" data-id="' + esc(p.id) + '"' + (isDone(p) ? ' disabled' : '') + '>' + (session?.status === 'running' ? '暂停' : session ? '继续计时' : '开始计时') + '</button>' + (session ? '<button class="btn btn-small" data-sc="stop" data-id="' + esc(p.id) + '">结束计时</button>' : '') + '<button class="btn btn-small btn-primary" data-sc="complete" data-id="' + esc(p.id) + '">' + (isDone(p) ? '取消完成' : '勾选完成') + '</button>') + '<button class="btn btn-small" data-sc="edit" data-id="' + esc(p.id) + '">改计划</button><button class="btn btn-small" data-sc="unschedule" data-id="' + esc(p.id) + '">移除计划</button></div></article>';
-        }).join('') + '</div><details class="card"><summary>待安排任务（' + waiting.length + '）</summary>' + waiting.map((x, i) => '<div class="memo-queue-row"><strong>' + esc(x.title) + '</strong> <button class="btn btn-small" data-sc="arrange" data-index="' + i + '">安排时间</button></div>').join('') + '</details><details class="card"><summary>当天执行记录（包括已移除计划）</summary>' + d.sessions.filter(s => s.chunks.some(c => c.start < end && (c.end ?? now) >= start)).map(s => '<p>' + esc(s.title) + ' · ' + duration(elapsed(s)) + ' · ' + ({ running: '执行中', paused: '已暂停', ended: '已结束' }[s.status]) + '</p>').join('') + '</details>';
+        }).join('') + '</div><details class="card"><summary>待安排任务（' + waiting.length + '）</summary>' + waiting.map((x, i) => '<div class="memo-queue-row"><strong>' + esc(x.title) + '</strong> <button class="btn btn-small" data-sc="arrange" data-index="' + i + '">安排时间</button><button class="btn btn-small" data-sc="start-now" data-index="' + i + '">现在开始</button></div>').join('') + '</details><details class="card"><summary>当天执行记录（包括已移除计划）</summary>' + d.sessions.filter(s => s.chunks.some(c => c.start < end && (c.end ?? now) >= start)).map(s => '<p>' + esc(s.title) + ' · ' + duration(elapsed(s)) + ' · ' + ({ running: '执行中', paused: '已暂停', ended: '已结束' }[s.status]) + '</p>').join('') + '</details>';
       root.querySelector('#schedule-date').onchange = e => { if (M().validDate(e.target.value)) { selectedDay = e.target.value; render(); } };
       root.onclick = async e => {
         const button = e.target.closest('[data-sc]'); if (!button) return;
         const act = button.dataset.sc, id = button.dataset.id, item = d.items.find(p => p.id === id);
         if (act === 'add' || act === 'edit') return choosePlan(id);
         if (act === 'arrange') return choosePlan(null, waiting[Number(button.dataset.index)]?.ref);
+        if (act === 'start-now') {
+          const source = waiting[Number(button.dataset.index)]; if (!source) return;
+          const start = () => perform(() => { const now = Date.now(); selectedDay = M().naturalDay(now); const item = savePlan({ ref: source.ref, title: source.title, day: selectedDay, type: 'point', start: now, end: null }); startCore(item.id, now); });
+          return active() ? App.ui.confirm('暂停当前执行任务，并从现在开始计时这项任务？', '切换计时', start) : start();
+        }
         if (act === 'today') { selectedDay = M().naturalDay(); render(); return; }
         if (act === 'now') { if (selectedDay !== M().naturalDay()) { selectedDay = M().naturalDay(); render(); } locate(); return; }
         if (act === 'retry') return perform(() => {});
@@ -175,6 +182,7 @@
   function init() {
     selectedDay = M().naturalDay(); $('task-list-switch').onclick = () => setMode(false); $('task-schedule-switch').onclick = () => setMode(true);
     $('memo-trash-open').onclick = () => App.memoActions.trash();
+    $('schedule-active').onclick = () => { const d = state(), session = d.sessions.find(s => s.status === 'running') || d.sessions.find(s => s.status === 'paused'); const item = session && d.items.find(p => p.id === session.itemId); if (item) { selectedDay = item.day; setMode(true); } };
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } });
     window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();

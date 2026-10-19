@@ -140,6 +140,7 @@
     App.memo?.history(); App.tasks?.renderAll(); App.queue?.render(); App.checkin?.render(); App.memoSchedule?.render(); App.app?.refreshStats();
   }
   async function transaction(mutate) {
+    if (S().status().readOnly) throw new Error('记录处于保护状态，未进行修改');
     if (committing) return false;
     committing = true;
     try {
