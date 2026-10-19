@@ -79,7 +79,7 @@
       numRow('set-ideal-points', '新理想任务默认积分', s.idealPoints, '分/条') +
       numRow('set-ext-points', '新拓展任务默认积分', s.extPoints, '分/条') +
       numRow('set-sub-points', '新小题默认积分', s.subDefaultPoints, '分/题') +
-      '<p class="hint">每条任务的积分现在直接写在任务后面（任务行上的数字框），随时可单独修改：完成这条给多少分由你定。这里的数值只是新任务的默认值。</p>' +
+      '<p class="hint">每条任务可在“编辑”中单独调整积分；这里设置新任务的默认值。</p>' +
       '</div>' +
       '<div class="set-group"><h4>🌱 长期拓展任务：没做完怎么算</h4>' +
       (s.extStrict
@@ -143,7 +143,7 @@
       '<p class="hint">有些"还没到"的日期会不小心在数据里留下记录（点开过日历就会）。这里能一次看清楚：' +
       '<b>空白的</b>一键删掉；你<b>提前安排</b>了任务的未来日期会单独标出来，默认不动它。</p>' +
       '</div>' +
-      '<div class="set-group"><h4>🏆 完美额外奖励（三类全部完成时）</h4>' +
+      '<div class="set-group"><h4>🏆 当天任务全部完成奖励（每日推进不计入）</h4>' +
       numRow('set-perfect-points', '全部任务完成奖励积分（可自定义）', s.perfectRewardPoints, '分') +
       '</div>' +
       '<div class="set-group"><h4>⏱ 小时计划</h4>' +

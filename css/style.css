@@ -1952,3 +1952,23 @@ body[data-theme="dark"] .memo-queue-item .memo-queue-points, body[data-theme="pu
 #mw-live-controls { display:inline-flex; gap:4px; }
 #mw-live-controls .btn { min-height:40px; }
 @media(max-height:500px) { .schedule-toolbar select,.schedule-toolbar input { max-width:155px; } .schedule-toolbar { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); } .schedule-toolbar > * { width:100%; min-width:0; } .schedule-toolbar input { grid-column:span 2; } }
+.memo-layout #view-settings .set-group:has(#set-ext-debt-rate),
+.memo-layout #view-settings .set-group:has(#set-group-reward),
+.memo-layout #view-settings .set-group:has(#set-ext-strict),
+.memo-layout #view-settings .set-row:has(#set-sub-points),
+.memo-layout #view-settings .set-row:has(#set-qfirst),
+.memo-layout #view-settings .set-row:has(#set-queue-bar) { display:none !important; }
+.mw-task .mw-task-actions .schedule-row-tools { display:contents; }
+body.memo-layout[data-view="tasks"] .app-header { position:static; }
+@media(max-height:500px) {
+  .memo-layout .header-top { padding:5px 12px; }
+  .memo-layout .brand p { display:none; }
+  .memo-layout main { margin-top:4px; }
+  .memo-layout .release-panel { margin:4px 0; padding:4px 8px; gap:5px; line-height:1.3; flex-wrap:nowrap; min-height:36px; }
+  .memo-layout .release-panel > div:first-child { min-width:0; font-size:10px; }
+  .memo-layout .release-panel br { display:none; }
+  .memo-layout #storage-status { margin-left:5px; }
+  .memo-layout .release-panel .btn { font-size:11px; min-height:28px; padding:3px 7px; }
+  .mw-toolbar { margin:4px 0; }
+  .mw-group-head { margin:4px 0; }
+}

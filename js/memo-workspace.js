@@ -21,8 +21,8 @@
   function card(t, ref, options = {}) {
     const done = ref.kind === 'project' ? !!t.days?.[ref.day] : ref.kind === 'daily' ? !!t.days?.[ref.day] : ref.kind === 'queue' ? !!t.doneAt : !!t.done;
     const attrs = refAttrs(ref), points = ref.kind === 'task' && ref.list === 'required' ? null : t.points ?? (ref.kind === 'project' ? 5 : ref.kind === 'daily' ? 2 : ref.kind === 'queue' ? S().settings().queuePoints ?? 5 : ref.list === 'ideal' ? S().settings().idealPoints ?? 10 : S().settings().extPoints ?? 5);
-    return '<article class="mw-task' + (done ? ' mw-done' : '') + (options.first ? ' mw-first' : '') + '" data-mw-card ' + attrs + '><div class="mw-task-heading">' + button('complete', done ? '✓' : '○', attrs + ' aria-label="' + (done ? '取消完成：' : '完成：') + esc(t.text) + '" aria-pressed="' + done + '"') + '<strong>' + esc(t.text) + '</strong></div>' + (ref.kind === 'queue' ? '<small>' + (t.pinned ? '📌 置顶 · ' : '') + '队列第 ' + options.number + ' 项</small>' : ref.kind === 'project' ? '<small>每日推进 · ' + esc(ref.day) + ' · ' + (done ? '今日已完成' : '今日未完成') + '</small>' : '') +
-      (t.note ? '<details class="mw-note"><summary>备注</summary><p>' + esc(t.note) + '</p></details>' : '') + '<div class="mw-task-actions">' + button('edit', '编辑', attrs) + (points != null ? '<small>完成 +' + esc(points) + ' 分</small>' : '<small>完成整组可领取保底奖励</small>') + (options.reorder ? button('pin', t.pinned ? '取消置顶' : '置顶', attrs) + '<details><summary>排序</summary>' + button('up', '上移', attrs) + button('down', '下移', attrs) + '</details>' : '') + '</div>' + A.memoSchedule.rowControls(ref) + '</article>';
+    return '<article class="mw-task' + (done ? ' mw-done' : '') + (options.first ? ' mw-first' : '') + '" data-mw-card ' + attrs + '><div class="mw-task-heading">' + button('complete', done ? '✓' : '○', attrs + ' aria-label="' + (done ? '取消完成：' : '完成：') + esc(t.text) + '" aria-pressed="' + done + '"') + '<strong>' + esc(t.text) + '</strong></div>' + (ref.kind === 'queue' ? '<small>' + (t.pinned ? '📌 置顶 · ' : '') + '队列第 ' + options.number + ' 项</small>' : ref.kind === 'project' ? '<small>每日推进 · ' + esc(ref.day) + ' · ' + (done ? '当日已完成' : '当日未完成') + '</small>' : '') +
+      (t.note ? '<details class="mw-note"><summary>备注</summary><p>' + esc(t.note) + '</p></details>' : '') + '<div class="mw-task-actions">' + button('edit', '编辑', attrs) + (points != null ? '<small>完成 +' + esc(points) + ' 分</small>' : '<small>完成整组可领取保底奖励</small>') + (options.reorder ? button('pin', t.pinned ? '取消置顶' : '置顶', attrs) + '<details><summary>排序</summary>' + button('up', '上移', attrs) + button('down', '下移', attrs) + '</details>' : '') + A.memoSchedule.rowControls(ref) + '</div></article>';
   }
   function renderTasks() {
     taskDay = taskDay || M().naturalDay(); const day = S().getDay(taskDay), occurrenceDay = taskDay === M().naturalDay() ? M().userDay() : taskDay;
@@ -43,7 +43,7 @@
     root?.querySelectorAll('details').forEach(el => { if (disclosures.has(detailKey(el))) el.open = true; });
     if (ref && document.body.dataset.view === 'tasks' && pane !== 'timeline') requestAnimationFrame(() => { const next = [...root.querySelectorAll('[data-mw-card]')].find(el => el.dataset.ref === ref); if (next) window.scrollBy(0, next.getBoundingClientRect().top - offset); });
   }
-  function render() { if (!ready) return; preserve(() => { renderTasks(); renderQueue(); applyPane(); }); A.memoSchedule.tick?.(); }
+  function render() { if (!ready) return; preserve(() => { renderTasks(); renderQueue(); applyPane(); }); A.memoSchedule.tick?.(); A.app?.refreshStats(); }
   function applyPane() { ['today', 'queue', 'timeline'].forEach(p => { const el = $(p === 'timeline' ? 'memo-schedule-panel' : 'mw-' + p); el.hidden = p !== pane; document.querySelector('[data-mw-pane="' + p + '"]').setAttribute('aria-pressed', String(p === pane)); }); }
   function showPane(next, save = true, options = {}) {
     if (save) positions[pane] = window.scrollY;
