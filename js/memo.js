@@ -77,7 +77,7 @@
   }
   function statusText() {
     const st = S().status();
-    if (st.readOnly) return state('记录保护中，请复制或下载当前文字', true);
+    if (st.readOnly) return state('记录保护中，请复制全文', true);
     if (saving) return state('正在保存…');
     state(st.phase === 'saved' ? '已保存到手机' : st.message, st.phase === 'error');
   }
@@ -91,7 +91,7 @@
       pending = S().save().then(ok => {
         if (epoch === inputVersion) { saving = false; statusText(); }
         return ok;
-      }).catch(() => { if (epoch === inputVersion) { saving = false; state('保存失败，请复制或下载当前文字，暂勿关闭', true); } return false; });
+      }).catch(() => { if (epoch === inputVersion) { saving = false; state('保存失败，请复制全文，暂勿关闭', true); } return false; });
     } catch (e) { saving = false; state(e.message, true); pending = Promise.resolve(false); }
     return pending;
   }
@@ -113,7 +113,7 @@
     } catch (e) { $('memo-editor').contentEditable = 'false'; state(e.message, true); }
   }
   async function openDay(key) {
-    if (!await flush()) { state('当前内容尚未安全保存，请先复制或下载，暂不切换日期', true); $('memo-date').value = selected; return false; }
+    if (!await flush()) { state('当前内容尚未安全保存，请先复制全文，暂不切换日期', true); $('memo-date').value = selected; return false; }
     show(key); return true;
   }
   function insertTime() {
@@ -149,6 +149,10 @@
     const el = $('memo-editor');
     const selection = App.memoEditor.selection();
     if (selection && selection.start !== selection.end) return copyText(App.memoEditor.text().slice(selection.start, selection.end));
+    if (!await flush()) return copyText(currentText());
+    return copyText(read(selected) ? exportText([selected]) : currentText());
+  }
+  async function copyFull() {
     if (!await flush()) return copyText(currentText());
     return copyText(read(selected) ? exportText([selected]) : currentText());
   }
@@ -189,7 +193,7 @@
     $('memo-prev').onclick = () => openDay(shiftDay(selected, -1));
     $('memo-next').onclick = () => openDay(shiftDay(selected, 1));
     $('memo-copy').onclick = copyCurrent;
-    $('memo-download').onclick = () => download('备忘录-' + selected + '.txt', currentText());
+    $('memo-copy-full').onclick = copyFull;
     $('memo-search').oninput = history;
     $('memo-from').value = shiftDay(userDay(), -6); $('memo-to').value = userDay();
     $('memo-export').onclick = exportRange;
@@ -198,6 +202,6 @@
     window.addEventListener('focus-storage', () => { statusText(); if (S().status().readOnly) $('memo-editor').contentEditable = 'false'; });
     show(selected);
   }
-  App.memo = { init, show, history, flush, busy, copyCurrent, selected: () => selected };
+  App.memo = { init, show, history, flush, busy, copyCurrent, copyFull, selected: () => selected };
   App.memoCore = { naturalDay, userDay, clock, shiftDay, validDate, read, write, entries, exportText, segments, exportBlocks };
 })();

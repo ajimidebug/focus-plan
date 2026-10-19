@@ -556,3 +556,21 @@ test('a year of sessions and hundreds of task plans preserve references without 
   assert.equal(rows.length, n); assert(rows.every(row => row.includes('修改／追加时间'))); assert.equal(records.plans.length, n); assert.equal(d.queue.length, n);
   t.diagnostic('500 task rows plus selected-day lookup with 1460 stored sessions: ' + (Date.now() - from) + ' ms in the test runtime');
 });
+
+test('copy full ignores selected text and rescues unsaved editor text', async () => {
+  const b = browser(); await b.S.load(); const M = memoHarness(b);
+  const elements = new Map();
+  b.ctx.document = { getElementById(id) { if (!elements.has(id)) elements.set(id, { dataset: {} }); return elements.get(id); } };
+  b.ctx.requestAnimationFrame = () => {};
+  let copied = '', blocks = [{ id: 'manual', text: '第一行\n完整末行' }];
+  b.ctx.navigator = { clipboard: { writeText: async text => { copied = text; } } };
+  b.ctx.App.ui = { toast() {} };
+  b.ctx.App.memoEditor = { show() {}, selection: () => ({ start: 0, end: 3 }), text: () => '第一行\n完整末行', read: () => blocks };
+  M.write('2026-10-19', '第一行\n完整末行');
+  b.ctx.App.memo.show('2026-10-19');
+  await b.ctx.App.memo.copyCurrent(); assert.equal(copied, '第一行');
+  await b.ctx.App.memo.copyFull(); assert(copied.includes('第一行\n完整末行')); assert(copied.includes('2026-10-19'));
+  b.ctx.App.store.flush = async () => false;
+  blocks = [{ id: 'rescue', text: '尚未保存的新文字\n最后一行' }];
+  await b.ctx.App.memo.copyFull(); assert(copied.includes('尚未保存的新文字\n最后一行'));
+});
