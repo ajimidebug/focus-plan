@@ -1861,3 +1861,38 @@ body[data-theme="dark"] .memo-generated::before, body[data-theme="purple"] .memo
 body[data-theme="dark"] .memo-continue, body[data-theme="purple"] .memo-continue { color:#a6cef4; }
 body[data-theme="dark"] .memo-queue-item .memo-queue-points, body[data-theme="purple"] .memo-queue-item .memo-queue-points { color:#9fdfb8; }
 @media(max-width:700px) { .schedule-header { flex-wrap:wrap; } .task-view-switch .btn { padding:9px; font-size:12px; } .schedule-block { padding:3px; } .schedule-cards { grid-template-columns:1fr; } }
+
+/* Unified timeline: proportional bars, a single page scroll, compact windows. */
+.schedule-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:8px 0; }
+.schedule-toolbar input, .schedule-toolbar select { width:auto; max-width:100%; min-height:34px; font:inherit; font-size:13px; padding:5px 7px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
+.schedule-toolbar input[type="date"] { max-width:150px; }
+.schedule-filters { margin:8px 0 12px; font-size:13px; }
+.schedule-filters label { display:inline-flex; gap:5px; align-items:center; margin:8px; }
+.schedule-filters input[type="checkbox"] { width:auto; }
+.schedule-chart { border:1px solid var(--line); border-radius:8px; padding:8px 5px 16px; background:var(--card); }
+.schedule-axis { grid-template-columns:46px minmax(0,1fr) minmax(0,1fr); background:repeating-linear-gradient(to bottom,transparent 0,transparent 71px,var(--line) 71px,var(--line) 72px); }
+.schedule-legend { grid-template-columns:46px minmax(0,1fr) minmax(0,1fr); margin:0 0 6px; }
+.schedule-chart[data-mode="plan"] .schedule-actual-lane, .schedule-chart[data-mode="plan"] .schedule-legend > :last-child,
+.schedule-chart[data-mode="actual"] .schedule-plan-lane, .schedule-chart[data-mode="actual"] .schedule-legend > :nth-child(2) { display:none; }
+.schedule-chart[data-mode="plan"] .schedule-axis, .schedule-chart[data-mode="actual"] .schedule-axis,
+.schedule-chart[data-mode="plan"] .schedule-legend, .schedule-chart[data-mode="actual"] .schedule-legend { grid-template-columns:46px minmax(0,1fr); }
+.schedule-block { min-height:0; min-width:0; margin:0; text-align:left; cursor:pointer; border:1px solid #6d99bd; padding:2px 4px; color:#244d73; font:inherit; font-size:12px; }
+.schedule-block span { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.schedule-new { background:#d9efe3; border-color:#6d9f80; color:#214d32; }
+.schedule-plan-lane .schedule-new { background:#e4eefb; border-color:#7c9fc3; color:#244d73; }
+.schedule-legacy { background:#e8e9ed; border-color:#9ba1ac; color:#3e4550; }
+.schedule-aggregate { background:transparent; border-style:dashed; }
+.schedule-short { padding:0; border:0; border-top:2px solid currentColor; overflow:visible; background:none; }
+.schedule-short span { display:none; }
+.schedule-short::after { content:''; position:absolute; left:0; right:0; top:-10px; height:22px; }
+.schedule-point { border-top-style:dashed; }
+.schedule-point::before { content:''; position:absolute; top:-5px; left:0; width:8px; height:8px; border-radius:50%; background:currentColor; }
+.schedule-kind { display:block; font-size:11px; color:var(--muted); margin-bottom:5px; }
+.schedule-old-card { background:var(--card); border-style:dashed; }
+.schedule-row-tools { display:flex; flex-wrap:wrap; gap:5px; align-items:center; width:100%; margin:7px 0; }
+.schedule-row-summary { display:block; width:100%; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+.schedule-row-tools .btn { font-size:12px; padding:6px 9px; }
+.memo-layout .modal { max-height:calc(100dvh - 24px); overflow-y:auto; }
+.memo-layout .modal-actions { position:sticky; bottom:-1px; background:var(--card); padding-top:10px; padding-bottom:4px; z-index:2; }
+@media(max-width:600px) { .schedule-header h2 { font-size:20px; } .schedule-cards { grid-template-columns:1fr; } .schedule-toolbar select { flex:1; min-width:120px; } }
+@media(max-height:500px) { .memo-layout .app-header { padding-top:5px; padding-bottom:5px; } .task-view-switch { margin:6px 0 10px; } .schedule-header h2 { font-size:18px; margin:4px 0; } .schedule-explanation { font-size:11px; margin:5px 0; } .memo-layout .modal { padding:12px; } .memo-layout .modal-actions { margin-top:8px; } }

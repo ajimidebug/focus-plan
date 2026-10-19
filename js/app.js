@@ -340,6 +340,8 @@
   /* ---------- 视图切换 ---------- */
   function switchView(v) {
     if (!v) return;
+    const unifiedTimeline = window.__MEMO_MODE && v === 'timeline';
+    if (unifiedTimeline) v = 'tasks';
     if (window.__MEMO_MODE && v === 'queue') v = 'tasks';
     currentView = v;
     document.body.dataset.view = v;
@@ -365,7 +367,7 @@
     if (v === 'tasks' && window.__MEMO_MODE) {
       document.querySelector('#view-tasks [data-tab="today"]').click();
       App.tasks.renderAll();
-      if (App.memoSchedule) App.memoSchedule.render();
+      if (App.memoSchedule) { App.memoSchedule.render(); if (unifiedTimeline) App.memoSchedule.open({ legacy: true }); }
       if (App.queue) App.queue.render();
     } else if (v === 'queue' && App.queue) App.queue.render();
     if (v === 'cards' && App.memcards) App.memcards.renderPage();   // 🃏 v93：卡片页

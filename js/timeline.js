@@ -392,7 +392,8 @@
 
   App.timeline = {
     init: init, render: render,
-    setDate: function (k) { selDate = k; },
+    showHourDetails: hourPlanDetail,
+    setDate: function (k) { selDate = k; if (App.memoSchedule) App.memoSchedule.setDay(k); },
     getDate: function () { return selDate; }
   };
 })();

@@ -62,6 +62,7 @@
   }
   function completeCore(spec, text, at = new Date().toISOString(), choices = []) {
     if (S().status().readOnly) throw new Error('记录保护中，暂不能勾选');
+    if (spec.kind === 'task' && App.memoSchedule) { const found = App.memoSchedule.resolve({ kind: 'task', id: spec.id, day: spec.day, list: spec.list }); if (found?.ref.kind === 'task') spec = Object.assign({}, spec, { list: found.ref.list }); }
     const d = S().data(), event = { id: S().uid(), kind: spec.kind, sourceId: spec.id, sourceDay: spec.day || M().userDay(at), sourceList: spec.list || '', noteDay: M().userDay(at), at, active: true, ledgerIds: [], points: 0, title: spec.title };
     events(d); // Validate before making any changes.
     noteBlocks(event.noteDay);
@@ -91,7 +92,7 @@
       it.days[event.sourceDay] = spec.kind === 'daily' ? Date.parse(at) : n + 1;
       ledger(event, spec.kind === 'checkin' ? 'earn-checkin' : 'earn-daily', amount, (spec.kind === 'checkin' ? '打卡：' : '今日基础任务：') + it.text);
     } else throw new Error('无法识别勾选来源');
-    App.memoSchedule?.stopRef({ kind: spec.kind, id: spec.id, day: spec.kind === 'task' ? spec.day : undefined, list: spec.kind === 'task' ? spec.list : undefined }, Date.parse(at));
+    App.memoSchedule?.stopRef({ kind: spec.kind, id: spec.id, day: (spec.kind === 'task' || spec.kind === 'daily') ? spec.day : undefined, list: spec.kind === 'task' ? spec.list : undefined }, Date.parse(at));
     events(d).push(event); append(event, text); grantRewards(event, choices); return event;
   }
   function undoCore(id, reason = '', at = new Date().toISOString()) {
@@ -107,7 +108,7 @@
       if (pos < 0) { const prev = d.queue.findIndex(x => x.id === event.beforeId); pos = prev >= 0 ? prev + 1 : Math.min(event.queuePosition || 0, d.queue.length); }
       d.queue.splice(pos, 0, it);
     } else if (event.kind === 'task') {
-      const task = d.days[event.sourceDay]?.tasks[event.sourceList]?.find(t => t.id === event.sourceId);
+      const task = locateTask({ kind: 'task', id: event.sourceId, day: event.sourceDay, list: event.sourceList });
       if (!task) throw new Error('原任务已移动，暂不能自动取消');
       if (task.memoCompletionId !== event.id) throw new Error('任务已有其他完成记录，暂不能取消这一笔');
       task.done = false; delete task.memoCompletionId; if (task.summary) task.summary.done = false;
@@ -158,7 +159,7 @@
   function complete(spec) {
     if (committing || unsettled) { App.ui.toast('请先完成当前操作或重试保存'); return; }
     const at = new Date().toISOString(), day = M().userDay(at), label = spec.kind === 'checkin' ? '积分打卡' : '任务勾选';
-    const suffix = spec.day && spec.day !== day ? '（补记 ' + spec.day + '）' : '';
+    const suffix = spec.day && spec.day !== day ? (spec.day > day ? '（任务日期 ' : '（补记 ') + spec.day + '）' : '';
     const options = rewardChoices(spec), settings = S().settings();
     const m = App.ui.openModal('确认' + (spec.kind === 'checkin' ? '打卡' : '完成'),
       '<p class="hint">时间只表示本次勾选时刻。可补充、改写或清空；清空后仍完成并记积分。</p>' +
@@ -214,10 +215,11 @@
     });
   }
   function task(list, id, sourceDay) {
-    const day = sourceDay || S().todayKey(), t = S().getDay(day).tasks[list].find(x => x.id === id); if (!t) return;
+    const day = sourceDay || S().todayKey();
+    const location = Object.entries(S().getDay(day).tasks).find(([_, items]) => items.some(t => t.id === id)); if (!location) return; list = location[0]; const t = location[1].find(t => t.id === id);
     if ([App.tasks?.getTimer?.(), App.tasks?.getCdTimer?.()].some(timer => timer?.taskId === id)) { App.ui.toast('原有计时尚未结束，请先结束后再勾选'); return; }
     if (t.fromQueue) return queue(t.fromQueue);
-    if (t.fromDaily) return daily(t.fromDaily);
+    if (t.fromDaily) return daily(t.fromDaily, day);
     const spec = { kind: 'task', id, day, list, title: t.text };
     if (!t.done) complete(spec); else { const e = latest('task', id, day); e ? cancelEvent(e) : legacyCancel(spec); }
   }
@@ -233,9 +235,9 @@
     if (cancel) { const e = latest('checkin', id, day); e ? cancelEvent(e) : legacyCancel(spec); }
     else complete(spec);
   }
-  function daily(id) {
+  function daily(id, sourceDay) {
     const it = (S().data().daily || []).find(x => x.id === id); if (!it) return;
-    const day = M().userDay(), spec = { kind: 'daily', id, day, title: it.text };
+    const day = sourceDay || M().userDay(), spec = { kind: 'daily', id, day, title: it.text };
     if (it.days?.[day]) { const e = latest('daily', id, day); e ? cancelEvent(e) : legacyCancel(spec); } else complete(spec);
   }
   function checkinHistory(id) {
@@ -263,7 +265,7 @@
     const root = document.getElementById('queue-view'); if (!root) return;
     const d = S().data(), q = d.queue || [], done = d.queueDone || [];
     const button = (act, id, text) => '<button class="btn btn-small' + (act === 'done' ? ' btn-primary' : '') + '" data-act="mq-' + act + '" data-id="' + E(id) + '">' + text + '</button>';
-    function row(it, i) { return '<div class="memo-queue-row memo-queue-item ' + (i === 0 ? 'memo-queue-current' : 'memo-queue-next') + '"><div><span class="memo-queue-number">' + (i === 0 ? '当前 · 1' : '顺序 ' + (i + 1)) + '</span><strong>' + E(it.text) + '</strong>' + (it.note ? '<p class="memo-queue-note">' + E(it.note) + '</p>' : '') + '<small class="memo-queue-points">完成 +' + Math.max(0, Number(it.points ?? S().settings().queuePoints ?? 5)) + ' 积分</small></div><div class="memo-queue-actions">' + button('done', it.id, '✓ 完成') + button('edit', it.id, '修改') + (i > 0 ? button('up', it.id, '上移') : '') + (i < q.length - 1 ? button('down', it.id, '下移') : '') + '<details class="memo-queue-more"><summary>更多操作</summary>' + button('delete', it.id, '删除') + '</details></div></div>'; }
+    function row(it, i) { return '<div class="memo-queue-row memo-queue-item ' + (i === 0 ? 'memo-queue-current' : 'memo-queue-next') + '"><div><span class="memo-queue-number">' + (i === 0 ? '当前 · 1' : '顺序 ' + (i + 1)) + '</span><strong>' + E(it.text) + '</strong>' + (it.note ? '<p class="memo-queue-note">' + E(it.note) + '</p>' : '') + '<small class="memo-queue-points">完成 +' + Math.max(0, Number(it.points ?? S().settings().queuePoints ?? 5)) + ' 积分</small></div><div class="memo-queue-actions">' + button('done', it.id, '✓ 完成') + button('edit', it.id, '修改') + (App.memoSchedule ? App.memoSchedule.rowControls({ kind: 'queue', id: it.id }) : '') + (i > 0 ? button('up', it.id, '上移') : '') + (i < q.length - 1 ? button('down', it.id, '下移') : '') + '<details class="memo-queue-more"><summary>更多操作</summary>' + button('delete', it.id, '删除') + '</details></div></div>'; }
     root.innerHTML = '<div class="card"><div class="memo-queue-head"><h2>任务队列</h2>' + button('add', '', '＋ 添加任务') + '</div><p class="hint">按你排的顺序，完成一条后下一条顶上。也可提前完成后面的任务；没有每日数量要求。</p>' + (q.length ? '<h3>当前</h3>' + row(q[0], 0) + '<h3>接下来</h3>' + (q.length > 1 ? q.slice(1).map((it, i) => row(it, i + 1)).join('') : '<p class="hint">后面暂时没有任务。</p>') : '<p class="hint">队列空着。把准备做的事情加进来即可。</p>') + '<div class="memo-queue-head"><h3>已完成（' + done.length + '）</h3>' + button('show', '', showingDone ? '收起' : '展开') + '</div>' + (showingDone ? done.slice(0, 60).map(it => '<div class="memo-queue-row memo-queue-completed"><div><strong>✓ ' + E(it.text) + '</strong><small>' + E(it.doneDay || '') + '</small></div><div class="memo-queue-actions">' + button('undo', it.id, '取消完成') + button('again', it.id, '再做一次') + button('delete-done', it.id, '删除') + '</div></div>').join('') : '') + '</div>' + ((d.daily || []).length ? '<details class="card"><summary>今天的基础任务（原有）</summary>' + dailyHTML + '</details>' : '');
   }
   async function queueClick(e) {
@@ -284,25 +286,70 @@
 
   function locateTask(spec) {
     const d = S().data();
-    return spec.kind === 'queue' ? (d.queue || []).concat(d.queueDone || []).find(t => t.id === spec.id) : d.days[spec.day]?.tasks[spec.list]?.find(t => t.id === spec.id);
+    return spec.kind === 'queue' ? (d.queue || []).concat(d.queueDone || []).find(t => t.id === spec.id) : Object.values(d.days[spec.day]?.tasks || {}).flat().find(t => t.id === spec.id);
   }
   function linkedEvent(spec, task) {
     if (task.fromQueue) return latest('queue', task.fromQueue);
     if (task.fromDaily) return latest('daily', task.fromDaily, spec.day);
     return latest(spec.kind, spec.id, spec.day);
   }
+  const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const snapshotValue = value => value === undefined ? undefined : copy(value);
   function deletionChanges(before, after) {
     const changes = [];
-    for (const name of ['queue', 'queueDone', 'daily', 'checkins', 'ledger', 'memoEvents', 'memoSchedule']) {
-      if (JSON.stringify(before[name]) !== JSON.stringify(after[name])) changes.push({ path: [name], before: before[name], after: copy(after[name]), had: before[name] !== undefined });
+    function walk(a, b, path) {
+      if (equal(a, b)) return;
+      if (path[0] === 'memoNotes' && path.length === 2) { changes.push({ op: 'note', path, before: snapshotValue(a), after: snapshotValue(b), had: a !== undefined }); return; }
+      const indexed = value => Array.isArray(value) && value.every(x => x && typeof x.id === 'string') && new Set(value.map(x => x.id)).size === value.length;
+      if (indexed(a) && indexed(b)) {
+        const keys = new Set(a.concat(b).map(x => x.id));
+        keys.forEach(id => { const old = a.find(x => x.id === id), next = b.find(x => x.id === id);
+          if (old && next) walk(old, next, path.concat({ id }));
+          else { const i = a.findIndex(x => x.id === id); changes.push({ op: 'entity', path, id, before: snapshotValue(old), after: snapshotValue(next), had: !!old, previous: a[i - 1]?.id, next: a[i + 1]?.id, index: Math.max(0, i) }); }
+        }); return;
+      }
+      if (a && b && !Array.isArray(a) && !Array.isArray(b) && typeof a === 'object' && typeof b === 'object') {
+        new Set([...Object.keys(a), ...Object.keys(b)]).forEach(k => walk(a[k], b[k], path.concat(k))); return;
+      }
+      changes.push({ op: 'field', path, before: snapshotValue(a), after: snapshotValue(b), had: a !== undefined });
     }
-    for (const name of ['days', 'memoNotes']) {
-      const keys = new Set([...Object.keys(before[name] || {}), ...Object.keys(after[name] || {})]);
-      keys.forEach(key => { if (JSON.stringify(before[name]?.[key]) !== JSON.stringify(after[name]?.[key])) changes.push({ path: [name, key], before: before[name]?.[key], after: copy(after[name]?.[key]), had: before[name]?.[key] !== undefined }); });
-    }
+    ['queue', 'queueDone', 'daily', 'checkins', 'ledger', 'memoEvents', 'memoSchedule', 'days', 'memoNotes'].forEach(k => walk(before[k] || (k === 'memoNotes' ? {} : before[k]), after[k] || (k === 'memoNotes' ? {} : after[k]), [k]));
     return changes;
   }
+  function pathValue(root, path) { let value = root; for (const part of path) value = typeof part === 'object' ? value?.find(x => x.id === part.id) : value?.[part]; return value; }
+  function restoredNote(change) {
+    const current = M().read(change.path[1]), oldText = change.after?.text || '', currentText = current?.text || '';
+    if (!currentText.startsWith(oldText)) throw new Error('相关笔记已有新修改，不能覆盖。可仅恢复为未完成任务。');
+    const blocks = M().segments(current), prefix = [], extra = []; let at = 0;
+    blocks.forEach(b => { const split = Math.max(0, Math.min(b.text.length, oldText.length - at)); if (split) prefix.push(Object.assign({}, b, { text: b.text.slice(0, split) })); if (split < b.text.length) extra.push(Object.assign({}, b, { text: b.text.slice(split) })); at += b.text.length; });
+    const semantic = list => App.memoEditor.normalize(list).map(b => [b.eventId || '', b.text]);
+    if (!equal(semantic(prefix), semantic(M().segments(change.after || null)))) throw new Error('文段关联已有新修改，不能覆盖。可仅恢复为未完成任务。');
+    const prior = M().segments(change.before || null).filter(b => b.text), ids = new Set(prior.map(b => b.id));
+    extra.forEach(b => { if (ids.has(b.id)) b.id = S().uid(); });
+    if (prior.length && extra.length && !prior[prior.length - 1].text.endsWith('\n') && !extra[0].text.startsWith('\n')) prior.push({ id: S().uid(), text: '\n' });
+    const restored = App.memoEditor.normalize(prior.concat(extra)); return { blocks: restored, text: restored.map(b => b.text).join('') };
+  }
+  function restoreChanges(entry) {
+    const d = S().data(), prepared = [];
+    for (const change of entry.changes) {
+      if (change.op === 'note') { prepared.push([change, restoredNote(change)]); continue; }
+      const current = change.op === 'entity' ? pathValue(d, change.path)?.find(x => x.id === change.id) : pathValue(d, change.path);
+      if (!equal(current, change.after)) throw new Error('相关记录已有新修改，不能覆盖。可选择“仅恢复为未完成任务”。');
+      prepared.push([change, null]);
+    }
+    prepared.forEach(([change, note]) => {
+      if (change.op === 'note') { M().write(change.path[1], note.text, new Date().toISOString(), note.blocks); return; }
+      if (change.op === 'entity') {
+        const list = pathValue(d, change.path), index = list.findIndex(x => x.id === change.id); if (index >= 0) list.splice(index, 1);
+        if (change.had) { let pos = list.findIndex(x => x.id === change.next); if (pos < 0) { const prev = list.findIndex(x => x.id === change.previous); pos = prev >= 0 ? prev + 1 : Math.min(change.index, list.length); } list.splice(pos, 0, copy(change.before)); } return;
+      }
+      let parent = d;
+      change.path.slice(0, -1).forEach(part => { parent = typeof part === 'object' ? parent.find(x => x.id === part.id) : parent[part] || (parent[part] = {}); });
+      const last = change.path[change.path.length - 1]; if (change.had) parent[last] = copy(change.before); else delete parent[last];
+    });
+  }
   function deleteCore(spec, reason = '', at = new Date().toISOString()) {
+    if (spec.kind === 'task') { const location = Object.entries(S().data().days[spec.day]?.tasks || {}).find(([_, items]) => items.some(t => t.id === spec.id)); if (location) spec = Object.assign({}, spec, { list: location[0] }); }
     const d = S().data(), original = locateTask(spec); if (!original) throw new Error('任务已移动或删除');
     if (d.memoDeleted !== undefined && !Array.isArray(d.memoDeleted)) throw new Error('删除记录格式异常，请先备份');
     const before = copy(d), payload = copy(original.fromQueue ? (d.queue || []).concat(d.queueDone || []).find(t => t.id === original.fromQueue) || original : original), event = linkedEvent(spec, original);
@@ -327,11 +374,7 @@
   function restoreCore(id, unfinished = false) {
     const d = S().data(), entry = (d.memoDeleted || []).find(x => x.id === id && !x.restored); if (!entry) throw new Error('这条删除记录已恢复');
     if (!unfinished) {
-      for (const change of entry.changes) {
-        let current = d; change.path.forEach(k => { current = current?.[k]; });
-        if (JSON.stringify(current) !== JSON.stringify(change.after)) throw new Error('相关笔记或任务已有新修改，不能覆盖。可选择“仅恢复为未完成任务”。');
-      }
-      entry.changes.forEach(change => { let parent = d; change.path.slice(0, -1).forEach(k => { parent = parent[k] || (parent[k] = {}); }); const last = change.path[change.path.length - 1]; if (change.had) parent[last] = copy(change.before); else delete parent[last]; });
+      restoreChanges(entry);
       // Historical execution is restored, but never silently restart a running timer.
       if (d.memoSchedule) d.memoSchedule.sessions.filter(s => s.status === 'running' && s.ref?.id === entry.canonical.id && s.ref?.kind === entry.canonical.kind).forEach(s => { const c = s.chunks[s.chunks.length - 1]; c.end = Math.max(c.start, Date.parse(entry.at)); s.status = 'paused'; });
     } else {

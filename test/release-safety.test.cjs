@@ -495,3 +495,54 @@ test('protected storage refuses schedule and deletion mutations before touching 
   await b.S.save(); assert.equal(b.S.status().readOnly, true);
   let touched = false; await assert.rejects(A.commit(() => { touched = true; }), /保护/); assert.equal(touched, false);
 });
+test('task column moves keep plan identity, completion links and exact cancellation', async () => {
+  const b = browser(); await b.S.load(); const { A, P } = scheduleHarness(b), day = b.S.getDay('2026-10-19');
+  day.tasks.required = [{ id: 'stable', text: '任务' }];
+  const ref = { kind: 'task', id: 'stable', day: '2026-10-19', list: 'required' };
+  const plan = P.savePlan({ ref, title: '任务', day: '2026-10-19', type: 'point', start: Date.parse(actionAt), end: null });
+  day.tasks.ideal.push(day.tasks.required.pop());
+  assert.equal(P.find(ref).id, 'stable'); assert.equal(P.resolve(ref).ref.list, 'ideal');
+  const session = P.startCore(plan.id, Date.parse(actionAt));
+  const event = A.completeCore({ ...ref, title: '任务' }, '完成', actionAt);
+  assert.equal(session.status, 'ended'); assert.equal(b.S.pointsTotal(), 10);
+  day.tasks.extra.push(day.tasks.ideal.pop()); A.undoCore(event.id, '', actionAt);
+  assert.equal(day.tasks.extra[0].done, false); assert.equal(b.S.pointsTotal(), 0);
+});
+test('unplanned execution adds no plan; multiple planned segments share one task', async () => {
+  const b = browser(); await b.S.load(); const { P, A } = scheduleHarness(b), start = Date.parse(actionAt);
+  b.S.data().queue = [{ id: 'q', text: '同一任务', points: 3 }]; const ref = { kind: 'queue', id: 'q' };
+  P.startRef(ref, start); assert.equal(P.state().items.length, 0); assert.equal(P.state().sessions[0].itemId, null);
+  P.stopRef(ref, start + 60000);
+  P.savePlan({ ref, title: '同一任务', day: '2026-10-19', type: 'span', start, end: start + 1800000 });
+  P.savePlan({ ref, title: '同一任务', day: '2026-10-19', type: 'span', start: start + 3600000, end: start + 5400000 });
+  assert.equal(P.state().items.length, 2); assert.equal(b.S.data().queue.length, 1);
+  A.completeCore({ ...ref, title: '同一任务' }, '', actionAt); assert.equal(b.S.pointsTotal(), 3);
+});
+test('daily aliases resolve to the original day occurrence and completion ends its execution', async () => {
+  const b = browser(); await b.S.load(); const { P, A } = scheduleHarness(b);
+  b.S.data().daily = [{ id: 'd', text: '基础', points: 2, days: {} }];
+  b.S.getDay('2026-10-19').tasks.required = [{ id: 'copy', fromDaily: 'd', text: '基础' }];
+  const ref = { kind: 'task', id: 'copy', day: '2026-10-19', list: 'required' };
+  assert.equal(P.resolve(ref).ref.kind, 'daily');
+  const s = P.startRef(ref, Date.parse(actionAt));
+  A.completeCore({ kind: 'daily', id: 'd', day: '2026-10-19', title: '基础' }, '', actionAt);
+  assert.equal(s.status, 'ended'); assert.equal(P.find(ref).id, 'd');
+});
+test('restore deleted completion preserves unrelated tasks, ledger rows and appended prose', async () => {
+  const b = browser(); await b.S.load(); const { A, M } = scheduleHarness(b);
+  b.S.data().queue = [{ id: 'q', text: '任务', points: 5 }]; M.write('2026-10-19', '原话');
+  A.completeCore({ kind: 'queue', id: 'q', title: '任务' }, '生成文段', actionAt);
+  const deletion = A.deleteCore({ kind: 'queue', id: 'q' }, '', actionAt);
+  b.S.data().queue.push({ id: 'later', text: '后来新增的任务' }); b.S.data().ledger.push({ id: 'manual-later', type: 'adjust', points: 8 });
+  const blocks = M.segments(M.read('2026-10-19')); blocks.push({ id: 'later-prose', text: '\n删除后续写' }); M.write('2026-10-19', blocks.map(x => x.text).join(''), actionAt, blocks);
+  A.restoreCore(deletion.id);
+  assert.equal(b.S.pointsTotal(), 13); assert.equal(b.S.data().queue[0].id, 'later');
+  assert(M.read('2026-10-19').text.includes('生成文段')); assert(M.read('2026-10-19').text.endsWith('删除后续写'));
+});
+test('old timeline records remain in their original store and keep source identities', async () => {
+  const b = browser(); await b.S.load(); const { P } = scheduleHarness(b);
+  b.S.getDay('2026-10-19').timeline = [{ id: 'old', start: 60, end: 90, minutes: 20, content: '旧原话', auto: false, unknown: { retained: true } }, { id: 'aggregate', hourPlanId: 'hp', start: 60, end: 120, minutes: 60, content: '小时代汇总' }];
+  const original = JSON.stringify(b.S.data()); const records = P.visibleRecords('2026-10-19', Date.parse(actionAt));
+  assert.equal(records.legacy.length, 2); assert.equal(records.legacy[0].record.id, 'old'); assert.equal(records.legacy[1].record.hourPlanId, 'hp');
+  const after = JSON.parse(JSON.stringify(b.S.data())); delete after.memoSchedule; assert.equal(JSON.stringify(after), original);
+});

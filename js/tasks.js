@@ -3559,6 +3559,7 @@
     return '<div class="task-row' + (task.done ? ' done' : '') + (lecPanel ? ' lec-running' : '') + '" data-list="' + listKey + '" data-id="' + task.id + '">' +
       '<span class="task-check' + (task.done ? ' checked' : '') + '" data-act="check">✓</span>' +
       '<span class="task-text" data-act="edit">' + S().esc(task.text) + '</span>' +
+      (window.__MEMO_MODE && App.memoSchedule ? App.memoSchedule.rowControls({ kind: 'task', id: task.id, list: listKey, day: S().todayKey() }) : '') +
       carryTagHTML(task) +
       modeTagHTML(task) +
       lecTagHTML(task) +
@@ -4593,6 +4594,7 @@
         return '<div class="task-row' + (lecPanel ? ' lec-running' : '') + '" data-list="' + col.key + '" data-id="' + t.id + '">' +
           '<span class="task-check" style="visibility:hidden">✓</span>' +
           '<span class="task-text" data-act="edit">' + S().esc(t.text) + '</span>' +
+          (window.__MEMO_MODE && App.memoSchedule ? App.memoSchedule.rowControls({ kind: 'task', id: t.id, list: col.key, day: S().tomorrowKey() }) : '') +
           carryTagHTML(t) +
           lecTagHTML(t) +
           ptsInput +
