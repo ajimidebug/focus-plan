@@ -1896,3 +1896,6 @@ body[data-theme="dark"] .memo-queue-item .memo-queue-points, body[data-theme="pu
 .memo-layout .modal-actions { position:sticky; bottom:-1px; background:var(--card); padding-top:10px; padding-bottom:4px; z-index:2; }
 @media(max-width:600px) { .schedule-header h2 { font-size:20px; } .schedule-cards { grid-template-columns:1fr; } .schedule-toolbar select { flex:1; min-width:120px; } }
 @media(max-height:500px) { .memo-layout .app-header { padding-top:5px; padding-bottom:5px; } .task-view-switch { margin:6px 0 10px; } .schedule-header h2 { font-size:18px; margin:4px 0; } .schedule-explanation { font-size:11px; margin:5px 0; } .memo-layout .modal { padding:12px; } .memo-layout .modal-actions { margin-top:8px; } }
+.memo-layout .task-row { flex-wrap:wrap; align-items:flex-start; }
+.memo-layout .task-row > .task-text { flex:1 1 calc(100% - 40px); min-width:0; white-space:pre-wrap; line-height:1.6; }
+.memo-layout .task-row > .schedule-row-tools { flex:1 0 100%; width:100%; min-width:0; }
