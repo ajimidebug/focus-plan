@@ -182,7 +182,7 @@
       '</div>' +
       '<p class="hint" style="margin-top:-2px">所有打卡项合起来算：<b>那天只要打过任意一项，就算一天</b>。' +
       '格子颜色越深 = 那天打得越多（超过 2 次就到顶）。<b>以后的日子留白</b>，还没到不算。' +
-      (hint ? '<br>🔥 连击：再连续 <b>' + hint.need + '</b> 天，每天第一次打卡就是 <b>×' + hint.mult + '</b>。' :
+      (S().data().memoCurrency?.version === 2 ? '<br>连续奖励：7／30／60／90天每天一次固定加1／2／3／5分。' : hint ? '<br>🔥 连击：再连续 <b>' + hint.need + '</b> 天，每天第一次打卡就是 <b>×' + hint.mult + '</b>。' :
         '<br>🔥 连击已经到顶（×' + multOf(streakWithToday()) + '）—— 保持住！') +
       '</p>' +
       rows +
@@ -303,7 +303,7 @@
     }
     const modal = App.ui.openModal(isNew ? '✅ 加一个打卡项' : '✏️ 改打卡项',
       '<p class="hint" style="margin-top:0">每天要养成的小习惯 —— 喝水、保健品、运动、几点休息都行。' +
-      '打一次卡得一次分，也能看连续了多少天。</p>' +
+      '每次打卡分别记录；可得积分依照当前规则和当日次数计算。</p>' +
       '<div class="field"><label>打卡项（想坚持的事）</label>' +
       '<input id="ck-text" type="text" value="' + esc(v.text) + '" placeholder="比如：喝水 2000ml / 运动 20 分钟 / 23:30 前躺下" /></div>' +
       '<div class="field-row">' +
@@ -354,8 +354,8 @@
     const n = timesToday(it), tg = targetOf(it), done = doneToday(it), st = streakOf(it);
     // 🔥 v108：这是今天第一次打卡时，按钮上直接写明"连击后到手多少分"
     const firstToday = timesTodayAll() === 0;
-    const mult = firstToday ? multOf(streakWithToday()) : 1;
-    const gain = Math.max(0, +it.points || 0) * mult;
+    const mult = S().data().memoCurrency?.version === 2 ? 1 : firstToday ? multOf(streakWithToday()) : 1;
+    const gain = window.__MEMO_MODE ? memoPoints(it, today()) : Math.max(0, +it.points || 0) * mult;
     const kToday = today();
     const wk = weekOf(it).map(function (w) {
       const on = w.times > 0;
@@ -364,7 +364,7 @@
       if (w.k < kToday && (!full || window.__MEMO_MODE)) {
         return '<span class="ck-dot makeup" data-act="ck-makeup" data-id="' + it.id + '" data-day="' + w.k +
           '" title="' + w.k + '：' + (w.times ? w.times + ' 次，点一下再补一次' : '没打，点一下补这张卡') +
-          '（积分照发 · 不触发连击倍率）"></span>';
+          '（按目标和当日次数计算积分，不补发连续奖励）"></span>';
       }
       return '<span class="ck-dot' + (full ? ' on' : (on ? ' half' : '')) + '" title="' + w.k + '：' +
         (w.times ? w.times + ' 次' : '没打') + '"></span>';
@@ -382,7 +382,7 @@
       (done && !window.__MEMO_MODE
         ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '" title="撤销今天一次">↩ 撤销</button>'
         : '<button class="btn btn-small btn-primary" data-act="ck-punch" data-id="' + it.id + '">' + (done ? '＋ 再打一次' : '✅ 打卡') +
-          (it.points ? ' +' + gain : '') + (mult > 1 ? '（×' + mult + '）' : '') + '</button>') +
+          (window.__MEMO_MODE ? ' +' + gain + '分' : it.points ? ' +' + gain : '') + (mult > 1 ? '（×' + mult + '）' : '') + '</button>') +
       (window.__MEMO_MODE && n > 0 ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '">撤销一次</button>' : '') +
       (window.__MEMO_MODE ? '<button class="btn btn-small" data-act="ck-history" data-id="' + it.id + '">记录</button>' : '') +
       '<button class="q-ib" data-act="ck-edit" data-id="' + it.id + '" title="改">✏️</button>' +
@@ -427,7 +427,7 @@
       '<button class="btn btn-small" data-act="ck-add">＋ 加一个打卡项</button>' +
       '</div>';
 
-    if (window.__MEMO_MODE) h = '<div class="card"><h2>积分打卡</h2><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续打卡，每次按基础积分记分。连续打卡倍率保留：7天×2、30天×4、60天×6、90天×8，每天第一笔享受。</p><button class="btn btn-small" data-act="ck-add">＋ 添加打卡项</button>';
+    if (window.__MEMO_MODE) h = '<div class="card"><h2>积分打卡</h2><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续记录；本次可得积分显示在按钮上，积分规则与额外得分次数在设置中查看。</p><button class="btn btn-small" data-act="ck-add">＋ 添加打卡项</button>';
 
     if (!list.length) {
       h += '<div class="q-empty">还没有。<br>想坚持什么事？加一条，每天来点一下 —— 比如「喝水 2000ml」「23:30 前躺下」。</div>';
@@ -480,6 +480,7 @@
 
   function memoPoints(it, day) {
     if (!it) return 0;
+    const award = App.memoCurrency?.quote(it, day); if (award) return award.total;
     const mult = day === today() && timesTodayAll() === 0 ? multOf(streakWithToday()) : 1;
     return Math.max(0, Number(it.points) || 0) * mult;
   }

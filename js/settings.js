@@ -394,9 +394,16 @@
     m.classList.add('rd-modal');
     App.ui.bindActions({
       redeem: function (btn) {
+        if (window.__MEMO_MODE && App.memoActions?.busy()) { App.ui.toast('请先重试保存当前操作，再兑换'); return; }
         const pts = +btn.dataset.pts;
         const item = btn.dataset.item;
+        const operationId = S().uid();
         App.ui.confirm('用 ' + pts + ' 积分兑换「' + item + '」？', '兑换', function () {
+          if (window.__MEMO_MODE && App.memoCurrency) {
+            App.memoActions.commit(() => App.memoCurrency.redeemCore(item, pts, operationId)).then(ok => {
+              if (!ok) return; App.ui.closeModal(); App.ui.toast('已兑换「' + item + '」，扣 ' + pts + ' 分'); App.app.refreshStats();
+            }).catch(e => App.ui.toast(e.message)); return;
+          }
           S().addLedger(S().todayKey(), 'redeem', { points: -pts, note: '兑换：' + item });
           App.ui.closeModal();
           App.ui.floatAt(document.getElementById('stat-points'), '-' + pts + '分', 'neg');

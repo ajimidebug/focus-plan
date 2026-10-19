@@ -53,7 +53,7 @@
   function exportBlocks(list) {
     const all = S().data().memoEvents;
     const events = new Map((Array.isArray(all) ? all : []).filter(e => e && e.active).map(e => [e.id, e]));
-    const sources = { queue: '任务队列', task: '当天任务', daily: '基础任务', checkin: '积分打卡' };
+    const sources = { queue: '任务队列', task: '当天任务', daily: '基础任务', project: '每日推进', checkin: '积分打卡' };
     return list.map(b => {
       const event = b.eventId && events.get(b.eventId);
       if (!event || !sources[event.kind]) return b.text;

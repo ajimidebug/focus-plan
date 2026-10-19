@@ -574,3 +574,62 @@ test('copy full ignores selected text and rescues unsaved editor text', async ()
   blocks = [{ id: 'rescue', text: '尚未保存的新文字\n最后一行' }];
   await b.ctx.App.memo.copyFull(); assert(copied.includes('尚未保存的新文字\n最后一行'));
 });
+
+test('daily projects isolate occurrences, aliases and completion markers without fabricating execution', async () => {
+  const b = browser(); await b.S.load(); const { A, P, M } = scheduleHarness(b);
+  const d = b.S.data(); d.memoProjects = [{ id: 'project', text: '长期项目', points: 7, days: {} }];
+  d.days['2026-10-18'].tasks.extra.push({ id: 'old', text: '长期项目', memoProjectId: 'project' });
+  assert.equal(P.resolve({ kind: 'task', id: 'old', list: 'extra', day: '2026-10-18' }).ref.kind, 'project');
+  const one = A.completeCore({ kind: 'project', id: 'project', title: '长期项目', day: '2026-10-18' }, '第一天', actionAt);
+  const two = A.completeCore({ kind: 'project', id: 'project', title: '长期项目', day: '2026-10-19' }, '第二天', actionAt);
+  assert.equal(b.S.pointsTotal(), 14); assert.equal(P.state().sessions.length, 0);
+  assert.equal(P.visibleRecords('2026-10-19').completions.length, 2);
+  assert.throws(() => A.completeCore({ kind: 'project', id: 'project', day: '2026-10-19' }, '', actionAt));
+  A.undoCore(one.id, '', actionAt); assert.equal(b.S.pointsTotal(), 7); assert(d.memoProjects[0].days['2026-10-19']); assert(!d.memoProjects[0].days['2026-10-18']);
+  assert.equal(P.visibleRecords('2026-10-19').completions.length, 1); assert(M.exportText(['2026-10-19']).includes('每日推进'));
+  assert(two.active);
+});
+test('queue pin and group ordering survive completion, cancellation and unrelated edits', async () => {
+  const b = browser(); await b.S.load(); const { A } = actionHarness(b);
+  vm.runInContext(source('js/memo-workspace.js'), b.ctx); const W = b.ctx.App.memoWorkspace;
+  b.S.data().queue = [{ id: 'a', text: 'A', points: 2 }, { id: 'b', text: 'B', points: 3 }, { id: 'c', text: 'C', points: 4 }];
+  W.moveQueue('c', 'pin'); assert.equal(W.sortedQueue()[0].id, 'c');
+  const event = A.completeCore({ kind: 'queue', id: 'c', title: 'C' }, '', actionAt);
+  W.moveQueue('b', 'pin'); A.undoCore(event.id, '', actionAt);
+  assert.equal(W.sortedQueue().filter(t => t.pinned).length, 2); assert.equal(b.S.data().queue.length, 3); assert.equal(b.S.pointsTotal(), 0);
+});
+function currencyHarness(b) {
+  const h = scheduleHarness(b); vm.runInContext(source('js/memo-currency.js'), b.ctx);
+  b.ctx.App.checkin.streakWithToday = () => 30;
+  b.ctx.App.checkin.memoPoints = (it, day) => b.ctx.App.memoCurrency.quote(it, day)?.total || 0;
+  return { ...h, C: b.ctx.App.memoCurrency };
+}
+test('new currency caps paid punches, retains exact awards and never reallocates cancelled bonus', async () => {
+  const b = browser(); await b.S.load(); const { A, M, C } = currencyHarness(b), day = M.userDay();
+  b.S.data().memoCurrency = { version: 2, claims: {}, extraPaidCount: 0 };
+  const h = { id: 'h', text: '重复打卡', points: 5, target: 1, days: {} }; b.S.data().checkins = [h];
+  const one = A.completeCore({ kind: 'checkin', id: 'h', title: h.text, day }, '', new Date().toISOString());
+  const two = A.completeCore({ kind: 'checkin', id: 'h', title: h.text, day }, '', new Date().toISOString());
+  assert.equal(one.points, 7); assert.equal(two.points, 0); assert.equal(C.quote(h, day).total, 0);
+  h.points = 99; A.undoCore(one.id); assert.equal(b.S.pointsTotal(), 0); assert.equal(h.days[day], 1); assert.equal(C.quote(h, day).total, 0);
+});
+test('enabling currency after a legacy punch does not grant a second daily bonus', async () => {
+  const b = browser(); await b.S.load(); const { C, M } = currencyHarness(b), day = M.userDay();
+  const h = { id: 'h', points: 5, target: 1, days: { [day]: 1 } }; b.S.data().checkins = [h];
+  C.enableCore(); assert(b.S.data().memoCurrency.claims[day]); assert.equal(C.quote(h, day).bonus, 0);
+});
+test('redemption revalidates price and balance, is idempotent, and keeps original prices', async () => {
+  const b = browser(); await b.S.load(); const { C } = currencyHarness(b);
+  b.S.settings().redeemTable = [{ item: '游戏', points: 30 }]; b.S.data().ledger = [{ id: 'income', points: 50 }];
+  C.redeemCore('游戏', 30, 'operation'); C.redeemCore('游戏', 30, 'operation'); assert.equal(b.S.pointsTotal(), 20);
+  assert.throws(() => C.redeemCore('游戏', 30, 'second')); b.S.settings().redeemTable[0].points = 10;
+  assert.throws(() => C.redeemCore('游戏', 30, 'stale-price')); assert.equal(b.S.data().ledger[1].itemSnapshot.price, 30);
+});
+test('clearing a plan end switches to a named point and midnight execution is not counted twice', async () => {
+  const b = browser(); await b.S.load(); const { P } = scheduleHarness(b); b.S.data().queue = [{ id: 'q', text: '时间点任务' }];
+  const start = Date.parse('2026-10-19T23:50:00+08:00');
+  const p = P.savePlan({ ref: { kind: 'queue', id: 'q' }, title: '时间点任务', day: '2026-10-19', type: 'span', start, end: start + 600000 });
+  P.savePlan({ ref: p.ref, title: p.title, day: p.day, type: 'point', start, end: null }, p.id); assert.equal(p.end, null);
+  const session = P.startRef(p.ref, start); P.stopRef(p.ref, start + 600000);
+  assert.equal(session.status, 'ended'); assert.equal(P.visibleRecords('2026-10-20').sessions.length, 0);
+});

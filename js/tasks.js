@@ -2688,6 +2688,7 @@
   }
 
   function settleExtDebts(done) {
+    if (window.__MEMO_MODE) { App.ui.toast('旧欠账记录保留；请在任务中完成或补记'); return; }
     const items = pendingExtDebts();
     if (!items.length) { done(); return; }
     const rate = extDebtRate();
@@ -2794,6 +2795,7 @@
    *   返回：{fixEarn, moved, cut, rolled}
    * ============================================================ */
   function settleDayCore(day, dayKey, o) {
+    if (window.__MEMO_MODE) throw new Error('请在任务页勾选或补记，统一更新笔记、积分与时间轴');
     o = o || {};
     const settings = S().settings();
     const extPointsOf = function (t) { return t.points != null ? t.points : (settings.extPoints || 0); };

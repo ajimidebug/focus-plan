@@ -28,11 +28,11 @@
     S().data().ledger.push(entry); event.ledgerIds.push(entry.id); event.points += points;
   }
   function taskLists(day) {
-    return ['required', 'ideal', 'extra'].map(k => (day.tasks[k] || []).filter(t => !t.fromQueue && !t.fromDaily));
+    return ['required', 'ideal', 'extra'].map(k => (day.tasks[k] || []).filter(t => !t.fromQueue && !t.fromDaily && !t.memoProjectId));
   }
   function eligible(day, kind) {
     const lists = taskLists(day), done = a => a.length > 0 && a.every(t => t.done);
-    return kind === 'base' ? done(lists[0]) : lists.every(done);
+    return kind === 'base' ? done(lists[0]) : lists.some(a => a.length) && lists.every(a => !a.length || a.every(t => t.done));
   }
   function rewardChoices(spec) {
     if (spec.kind !== 'task') return [];
@@ -62,14 +62,16 @@
   }
   function completeCore(spec, text, at = new Date().toISOString(), choices = []) {
     if (S().status().readOnly) throw new Error('记录保护中，暂不能勾选');
-    if (spec.kind === 'task' && App.memoSchedule) { const found = App.memoSchedule.resolve({ kind: 'task', id: spec.id, day: spec.day, list: spec.list }); if (found?.ref.kind === 'task') spec = Object.assign({}, spec, { list: found.ref.list }); }
+    if (spec.kind === 'task' && App.memoSchedule) { const found = App.memoSchedule.resolve({ kind: 'task', id: spec.id, day: spec.day, list: spec.list }); if (found?.ref.kind === 'project') spec = Object.assign({}, spec, { kind: 'project', id: found.ref.id, day: found.ref.day }); else if (found?.ref.kind === 'task') spec = Object.assign({}, spec, { list: found.ref.list }); }
     const d = S().data(), event = { id: S().uid(), kind: spec.kind, sourceId: spec.id, sourceDay: spec.day || M().userDay(at), sourceList: spec.list || '', noteDay: M().userDay(at), at, active: true, ledgerIds: [], points: 0, title: spec.title };
     events(d); // Validate before making any changes.
     noteBlocks(event.noteDay);
     if (spec.kind === 'queue') {
       const idx = d.queue.findIndex(x => x.id === spec.id); if (idx < 0) throw new Error('这条任务已经移动或完成，请重新打开');
-      const it = d.queue[idx]; event.queuePosition = idx; event.beforeId = d.queue[idx - 1]?.id || ''; event.afterId = d.queue[idx + 1]?.id || '';
-      d.queue.splice(idx, 1); it.doneDay = event.sourceDay; it.doneAt = at; it.memoCompletionId = event.id;
+      App.memoWorkspace?.orderQueue();
+      const actualIndex = d.queue.findIndex(x => x.id === spec.id);
+      const it = d.queue[actualIndex]; event.queuePosition = actualIndex; event.beforeId = d.queue[idx - 1]?.id || ''; event.afterId = d.queue[idx + 1]?.id || '';
+      d.queue.splice(actualIndex, 1); it.doneDay = event.sourceDay; it.doneAt = at; it.memoCompletionId = event.id;
       (d.queueDone = d.queueDone || []).unshift(it);
       // Retire old materialized copies. The queue item itself remains the source of its configuration.
       Object.values(d.days).forEach(day => Object.values(day.tasks || {}).forEach(list => { for (let i = list.length - 1; i >= 0; i--) if (list[i].fromQueue === it.id && !list[i].done) list.splice(i, 1); }));
@@ -82,17 +84,25 @@
       const pts = task.points == null ? (spec.list === 'ideal' ? (settings.idealPoints ?? 10) : spec.list === 'extra' ? (settings.extPoints ?? 5) : 0) : task.points;
       // Required tasks keep the original group-reward rule rather than earning per-task points.
       if (spec.list === 'ideal' || spec.list === 'extra') ledger(event, 'earn-' + spec.list, pts, '任务完成：' + task.text);
+    } else if (spec.kind === 'project') {
+      const it = (d.memoProjects || []).find(x => x.id === spec.id);
+      if (!it || it.archived || it.days?.[event.sourceDay]) throw new Error('项目已停用或当天已完成');
+      (it.days || (it.days = {}))[event.sourceDay] = Date.parse(at);
+      ledger(event, 'earn-project', Math.max(0, Number(it.points) || 0), '每日推进：' + it.text);
     } else if (spec.kind === 'checkin' || spec.kind === 'daily') {
       const it = (spec.kind === 'checkin' ? d.checkins : d.daily).find(x => x.id === spec.id);
       if (!it) throw new Error('这条记录已不存在');
       it.days = it.days || {}; const n = Number(it.days[event.sourceDay]) || 0;
       const target = spec.kind === 'daily' ? 1 : Math.max(1, Number(it.target) || 1);
       if (spec.kind === 'daily' && n >= target) throw new Error('这一天已经勾选完成');
+      const award = spec.kind === 'checkin' ? App.memoCurrency?.quote(it, event.sourceDay) : null;
       const amount = spec.kind === 'checkin' ? App.checkin.memoPoints(it, event.sourceDay) : Math.max(0, Number(it.points ?? S().settings().dailyPoints ?? 2));
+      if (award) App.memoCurrency.claim(event, award);
       it.days[event.sourceDay] = spec.kind === 'daily' ? Date.parse(at) : n + 1;
       ledger(event, spec.kind === 'checkin' ? 'earn-checkin' : 'earn-daily', amount, (spec.kind === 'checkin' ? '打卡：' : '今日基础任务：') + it.text);
     } else throw new Error('无法识别勾选来源');
-    App.memoSchedule?.stopRef({ kind: spec.kind, id: spec.id, day: (spec.kind === 'task' || spec.kind === 'daily') ? spec.day : undefined, list: spec.kind === 'task' ? spec.list : undefined }, Date.parse(at));
+    event.ruleVersion = d.memoCurrency?.version || 1;
+    App.memoSchedule?.stopRef({ kind: spec.kind, id: spec.id, day: (spec.kind === 'task' || spec.kind === 'daily' || spec.kind === 'project') ? spec.day : undefined, list: spec.kind === 'task' ? spec.list : undefined }, Date.parse(at));
     events(d).push(event); append(event, text); grantRewards(event, choices); return event;
   }
   function undoCore(id, reason = '', at = new Date().toISOString()) {
@@ -106,16 +116,16 @@
       const it = d.queueDone.splice(idx, 1)[0]; delete it.doneDay; delete it.doneAt; delete it.memoCompletionId;
       let pos = d.queue.findIndex(x => x.id === event.afterId);
       if (pos < 0) { const prev = d.queue.findIndex(x => x.id === event.beforeId); pos = prev >= 0 ? prev + 1 : Math.min(event.queuePosition || 0, d.queue.length); }
-      d.queue.splice(pos, 0, it);
+      d.queue.splice(pos, 0, it); App.memoWorkspace?.orderQueue();
     } else if (event.kind === 'task') {
       const task = locateTask({ kind: 'task', id: event.sourceId, day: event.sourceDay, list: event.sourceList });
       if (!task) throw new Error('原任务已移动，暂不能自动取消');
       if (task.memoCompletionId !== event.id) throw new Error('任务已有其他完成记录，暂不能取消这一笔');
       task.done = false; delete task.memoCompletionId; if (task.summary) task.summary.done = false;
     } else {
-      const it = (event.kind === 'checkin' ? d.checkins : d.daily).find(x => x.id === event.sourceId);
+      const it = (event.kind === 'project' ? d.memoProjects : event.kind === 'checkin' ? d.checkins : d.daily).find(x => x.id === event.sourceId);
       if (!it || !it.days?.[event.sourceDay]) throw new Error('原打卡状态已改变，请重新打开');
-      if (event.kind === 'daily' || it.days[event.sourceDay] <= 1) delete it.days[event.sourceDay];
+      if (event.kind === 'daily' || event.kind === 'project' || it.days[event.sourceDay] <= 1) delete it.days[event.sourceDay];
       else it.days[event.sourceDay]--;
     }
     d.ledger = d.ledger.filter(l => !event.ledgerIds.includes(l.id));
@@ -174,8 +184,10 @@
     if (spec.kind === 'queue') { const it = S().data().queue.find(x => x.id === spec.id); previewPoints = Number(it?.points ?? settings.queuePoints ?? 5); }
     if (spec.kind === 'checkin') { const it = S().data().checkins.find(x => x.id === spec.id); previewPoints = App.checkin.memoPoints(it, spec.day); }
     if (spec.kind === 'daily') { const it = S().data().daily.find(x => x.id === spec.id); previewPoints = Number(it?.points ?? settings.dailyPoints ?? 2); }
+    if (spec.kind === 'project') previewPoints = Number((S().data().memoProjects || []).find(x => x.id === spec.id)?.points || 0);
     if (spec.kind === 'task') { const it = S().getDay(spec.day).tasks[spec.list].find(x => x.id === spec.id); previewPoints = ['ideal', 'extra'].includes(spec.list) ? Number(it.points ?? (spec.list === 'ideal' ? settings.idealPoints : settings.extPoints)) : 0; }
     m.querySelector('#memo-action-info').textContent = '本次任务积分 +' + Math.max(0, previewPoints || 0) + '；写入 ' + day + ' 的笔记（04:00分日）。';
+    if (S().data().memoCurrency?.version === 2) m.querySelector('#memo-action-info').textContent += '（新积分规则）';
     bindCommit(m, () => completeCore(spec, m.querySelector('#memo-action-text').value, at,
       [...m.querySelectorAll('[data-reward]:checked')].map(x => ({ kind: x.dataset.reward, points: m.querySelector('[data-reward-points="' + x.dataset.reward + '"]').value }))));
   }
@@ -183,7 +195,7 @@
     if (committing || unsettled) return;
     const text = passage(event), points = S().data().ledger.filter(l => event.ledgerIds.includes(l.id)).reduce((n, l) => n + l.points, 0);
     const m = App.ui.openModal('取消' + (event.kind === 'checkin' ? '这次打卡' : '完成'),
-      '<p>将撤回本次积分 ' + points + '，删除以下生成文段及段内补充。其他笔记保留。</p>' +
+      '<p>' + (event.award?.bonus ? '本日连续奖励机会不重新发放。' : '') + '将撤回本次积分 ' + points + '，删除以下生成文段及段内补充。其他笔记保留。</p>' +
       '<pre class="memo-delete-preview">' + E(text || '没有关联文段，或文段已被你删除。') + '</pre>' +
       '<label for="memo-action-text">取消原因（选填）</label><textarea id="memo-action-text" class="memo-action-text" placeholder="留空确认，不新增取消文字"></textarea><p id="memo-action-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">保留完成</button><button class="btn btn-danger" data-act="commit">确认取消</button>', { lock: true });
@@ -218,10 +230,16 @@
     const day = sourceDay || S().todayKey();
     const location = Object.entries(S().getDay(day).tasks).find(([_, items]) => items.some(t => t.id === id)); if (!location) return; list = location[0]; const t = location[1].find(t => t.id === id);
     if ([App.tasks?.getTimer?.(), App.tasks?.getCdTimer?.()].some(timer => timer?.taskId === id)) { App.ui.toast('原有计时尚未结束，请先结束后再勾选'); return; }
+    if (t.memoProjectId) return project(t.memoProjectId, day);
     if (t.fromQueue) return queue(t.fromQueue);
     if (t.fromDaily) return daily(t.fromDaily, day);
     const spec = { kind: 'task', id, day, list, title: t.text };
     if (!t.done) complete(spec); else { const e = latest('task', id, day); e ? cancelEvent(e) : legacyCancel(spec); }
+  }
+  function project(id, day = M().userDay()) {
+    const it = (S().data().memoProjects || []).find(x => x.id === id); if (!it) return;
+    const event = latest('project', id, day);
+    if (it.days?.[day] && event) cancelEvent(event); else complete({ kind: 'project', id, day, title: it.text });
   }
   function queue(id) {
     const it = S().data().queue.find(x => x.id === id);
@@ -417,5 +435,5 @@
     });
   }
 
-  App.memoActions = { deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, completeCore, undoCore, latest, passage, commit: transaction };
+  App.memoActions = { deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, completeCore, undoCore, latest, passage, commit: transaction };
 })();

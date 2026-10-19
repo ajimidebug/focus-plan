@@ -340,6 +340,8 @@
   /* ---------- 视图切换 ---------- */
   function switchView(v) {
     if (!v) return;
+    if (window.__MEMO_MODE && currentView === 'tasks') App.memoWorkspace?.leave();
+    const unifiedQueue = window.__MEMO_MODE && v === 'queue';
     const unifiedTimeline = window.__MEMO_MODE && v === 'timeline';
     if (unifiedTimeline) v = 'tasks';
     if (window.__MEMO_MODE && v === 'queue') v = 'tasks';
@@ -365,10 +367,11 @@
       if (App.sport.renderPlan) App.sport.renderPlan();
     }
     if (v === 'tasks' && window.__MEMO_MODE) {
-      document.querySelector('#view-tasks [data-tab="today"]').click();
+
       App.tasks.renderAll();
       if (App.memoSchedule) { App.memoSchedule.render(); if (unifiedTimeline) App.memoSchedule.open({ legacy: true }); }
       if (App.queue) App.queue.render();
+      App.memoWorkspace?.enter(unifiedTimeline ? 'timeline' : unifiedQueue ? 'queue' : null);
     } else if (v === 'queue' && App.queue) App.queue.render();
     if (v === 'cards' && App.memcards) App.memcards.renderPage();   // 🃏 v93：卡片页
     if (v === 'mistakes' && App.mistakes) App.mistakes.render();  // 📕 v129：错题本
@@ -452,6 +455,8 @@
     // 初始化各视图（🧲 v83：队列优先模式下直接落在队列页）
     App.memo.init();
     if (App.memoSchedule) App.memoSchedule.init();
+    App.memoWorkspace?.init();
+    App.memoCurrency?.init();
     switchView('memo');
     App.tasks.renderAll();
     App.timeline.init();
