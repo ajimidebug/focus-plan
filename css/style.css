@@ -1775,3 +1775,14 @@ body[data-theme="dark"] .hour-card.active, body[data-theme="purple"] .hour-card.
 }
 
 .memo-layout #view-settings .set-group:has(#set-auto-end), .memo-layout [data-mact="demo"] { display:none !important; }
+
+/* Hide legacy study scheduling and timer builders in the memo interface. */
+.memo-layout #modal-root .field:has(#add-mode),
+.memo-layout #modal-root .field:has(#edit-mode),
+.memo-layout #modal-root .field:has(#rep-chips),
+.memo-layout #modal-root .field:has([id$="-lec-on"]),
+.memo-layout [data-act="sub-add"], .memo-layout [data-act="group-new"],
+.memo-layout [data-act="g-sub-add"], .memo-layout [data-act="lecture"],
+.memo-layout [data-act="sr-plan"], .memo-layout #btn-link { display:none !important; }
+
+.memo-layout #view-settings .set-group:has(#set-hour-min), .memo-layout #view-settings .set-group:has(#set-mode) { display:none !important; }
