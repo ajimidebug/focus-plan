@@ -553,7 +553,7 @@ test('a year of sessions and hundreds of task plans preserve references without 
   schedule.items = d.queue.map((task, i) => ({ id: 'plan-' + i, ref: { kind: 'queue', id: task.id }, title: task.text, day: '2026-10-19', type: 'point', start: start + i * 60000, end: null }));
   schedule.sessions = Array.from({ length: 1460 }, (_, i) => ({ id: 'session-' + i, ref: { kind: 'queue', id: 'large-' + i % n }, title: '历史执行', status: 'ended', chunks: [{ start: start - i * 6 * 3600000, end: start - i * 6 * 3600000 + 1800000 }] }));
   const from = Date.now(); const rows = d.queue.map(task => P.rowControls({ kind: 'queue', id: task.id })); const records = P.visibleRecords('2026-10-19', start);
-  assert.equal(rows.length, n); assert(rows.every(row => row.includes('修改／追加时间'))); assert.equal(records.plans.length, n); assert.equal(d.queue.length, n);
+  assert.equal(rows.length, n); assert(rows.every(row => row.includes('data-schedule-command="plan"'))); assert.equal(records.plans.length, n); assert.equal(d.queue.length, n);
   t.diagnostic('500 task rows plus selected-day lookup with 1460 stored sessions: ' + (Date.now() - from) + ' ms in the test runtime');
 });
 
@@ -632,4 +632,66 @@ test('clearing a plan end switches to a named point and midnight execution is no
   P.savePlan({ ref: p.ref, title: p.title, day: p.day, type: 'point', start, end: null }, p.id); assert.equal(p.end, null);
   const session = P.startRef(p.ref, start); P.stopRef(p.ref, start + 600000);
   assert.equal(session.status, 'ended'); assert.equal(P.visibleRecords('2026-10-20').sessions.length, 0);
+});
+
+test('optional habit zero is preserved, has independent reward limit and stays out of target totals', async () => {
+  const b = browser(); await b.S.load(); memoHarness(b); b.ctx.__MEMO_MODE = true;
+  vm.runInContext(source('js/checkin.js'), b.ctx);
+  const h = b.S.habitRules;
+  assert.deepEqual(copy(h({ target: 0, rewardLimit: 0 })), { target: 0, optional: true, rewardLimit: 0 });
+  assert.deepEqual(copy(h({ target: 0 })), { target: 0, optional: true, rewardLimit: 1 });
+  assert.equal(h({}).target, 1); assert.equal(h({ target: '' }).target, 1); assert.equal(h({ target: 3 }).rewardLimit, 3);
+  const day = b.ctx.App.memoCore.userDay();
+  b.S.data().checkins = [{ id: 'optional', target: 0, days: { [day]: 4 } }, { id: 'required', target: 2, days: { [day]: 1 } }, { id: 'old', archived: true, target: 1, days: { [day]: 1 } }];
+  assert.equal(b.ctx.App.checkin.countAll(), 1); assert.equal(b.ctx.App.checkin.countDone(), 0);
+  assert.equal(b.ctx.App.checkin.doneToday(b.S.data().checkins[0]), false);
+  b.S.data().checkins[1].days[day] = 2; assert.equal(b.ctx.App.checkin.countDone(), 1);
+  await b.S.save(); const again = browser({ shared: b }); await again.S.load(); assert.equal(again.S.data().checkins[0].target, 0);
+});
+test('fixed habit awards respect zero reward limit and exact undo after target or price changes', async () => {
+  const b = browser(); await b.S.load(); const { A, M, C } = currencyHarness(b), day = M.userDay();
+  const habit = { id: 'optional', text: '选做', target: 0, rewardLimit: 1, points: 3, days: {} }; b.S.data().checkins = [habit];
+  C.enableFixedCore(); assert.equal(C.ruleLabel(), '固定基础分');
+  const one = A.completeCore({ kind: 'checkin', id: habit.id, day, title: habit.text }, '一次', new Date().toISOString());
+  const two = A.completeCore({ kind: 'checkin', id: habit.id, day, title: habit.text }, '超额', new Date().toISOString());
+  assert.equal(one.points, 3); assert.equal(two.points, 0); assert.equal(one.award.version, 3); assert.equal(one.award.bonus, 0);
+  habit.points = 100; habit.target = 4; habit.rewardLimit = 0;
+  assert.equal(C.quote(habit, day).total, 0); A.undoCore(one.id); assert.equal(b.S.pointsTotal(), 0); assert.equal(habit.days[day], 1);
+  assert(!M.read(day).text.includes('一次')); assert(M.read(day).text.includes('超额'));
+});
+test('switch to fixed habit rules retains ledger, task rules and original versioned awards', async () => {
+  const b = browser(); await b.S.load(); const { A, M, C } = currencyHarness(b), day = M.userDay();
+  b.S.data().memoCurrency = { version: 2, claims: {}, extraPaidCount: 0 };
+  const habit = { id: 'h', text: '已有习惯', target: 1, rewardLimit: 2, points: 5, days: {} }; b.S.data().checkins = [habit];
+  const old = A.completeCore({ kind: 'checkin', id: 'h', day, title: habit.text }, '', new Date().toISOString());
+  assert.equal(old.points, 7); const ledgerBefore = JSON.stringify(b.S.data().ledger), settingsBefore = JSON.stringify(b.S.settings());
+  C.enableFixedCore(); assert.equal(JSON.stringify(b.S.data().ledger), ledgerBefore); assert.equal(JSON.stringify(b.S.settings()), settingsBefore);
+  assert.equal(C.quote(habit, day).bonus, 0); assert.equal(C.quote(habit, day).total, 5);
+  A.completeCore({ kind: 'checkin', id: 'h', day, title: habit.text }, '', new Date().toISOString());
+  A.undoCore(old.id); assert.equal(b.S.pointsTotal(), 5); assert.equal(b.S.data().memoCurrency.version, 3);
+});
+test('failed optional habit creation retries persistence without creating a second habit', async () => {
+  const b = browser(); await b.S.load(); const { A } = actionHarness(b); b.ctx.App.memo.flush = async () => true; b.S.data().checkins = [];
+  b.options.localFails = b.options.idbFails = true; let attempts = 0;
+  const mutate = () => { attempts++; b.S.data().checkins.push({ id: 'new', text: '新增选做', target: 0, rewardLimit: 0, days: {} }); };
+  await assert.rejects(A.commit(mutate)); assert.equal(A.busy(), true); assert.equal(attempts, 1);
+  b.options.localFails = b.options.idbFails = false; assert.equal(await A.commit(mutate), true);
+  assert.equal(attempts, 1); assert.equal(b.S.data().checkins.filter(h => h.id === 'new').length, 1); assert.equal(A.busy(), false);
+});
+test('time-axis details group completed task occurrences, retain graph records and separate habit punches', async () => {
+  const b = browser(); await b.S.load(); const { P, A } = scheduleHarness(b), day = '2026-10-19', start = Date.parse(actionAt);
+  const q = { id: 'q', text: '任务', points: 3 }; b.S.data().queue = [q, { id: 'live', text: '进行中' }, { id: 'todo', text: '待做' }];
+  const ref = { kind: 'queue', id: q.id };
+  for (let i = 0; i < 2; i++) P.savePlan({ ref, title: q.text, day, type: 'point', start: start + i * 60000, end: null });
+  P.startRef(ref, start); P.stopRef(ref, start + 30000);
+  const completion = A.completeCore({ ...ref, title: q.text }, '', actionAt);
+  P.startRef({ kind: 'queue', id: 'live' }, start + 60000);
+  P.savePlan({ ref: { kind: 'queue', id: 'todo' }, title: '待做', day, type: 'point', start, end: null });
+  b.S.data().memoEvents.push({ id: 'punch', kind: 'checkin', sourceId: 'h', sourceDay: day, active: true, title: '打卡', at: actionAt });
+  const records = P.visibleRecords(day, start + 120000), grouped = P.detailGroups(records);
+  assert.equal(grouped.completed.length, 1); assert.equal(grouped.completed[0].ids.length, 4); assert.equal(grouped.checkins.length, 1);
+  assert.equal(grouped.pending[0].ref.id, 'live'); assert.equal(records.plans.length, 3); assert.equal(records.sessions.length, 2);
+  A.undoCore(completion.id, '', actionAt);
+  assert.equal(P.detailGroups(P.visibleRecords(day, start + 120000)).completed.length, 0);
+  assert.equal(P.visibleRecords(day, start + 120000).sessions.length, 2);
 });
