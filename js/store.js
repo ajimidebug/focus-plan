@@ -418,7 +418,14 @@
     save();
   }
 
+  // Explicit zero means optional. Missing legacy fields retain their old meaning.
+  function habitRules(it = {}) {
+    const integer = (v, fallback) => v == null || v === '' || !Number.isFinite(Number(v)) ? fallback : Math.min(10000, Math.max(0, Math.floor(Number(v))));
+    const target = integer(it.target, 1);
+    return { target, optional: target === 0, rewardLimit: integer(it.rewardLimit, Math.max(1, target)) };
+  }
   App.store = {
+    habitRules: habitRules,
     load: load, save: save, flush: flush,
     status: function () { return Object.assign({}, state); },
     exportRecovery: exportRecovery,

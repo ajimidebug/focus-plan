@@ -39,8 +39,8 @@
     return keyOf(d);
   }
   function timesToday(it) { return (it && it.days && it.days[today()]) || 0; }
-  function targetOf(it) { return Math.max(1, +it.target || 1); }
-  function doneToday(it) { return timesToday(it) >= targetOf(it); }
+  function targetOf(it) { return S().habitRules(it).target; }
+  function doneToday(it) { return targetOf(it) > 0 && timesToday(it) >= targetOf(it); }
   /** 连续多少天（今天还没打就从昨天数起，不然一早就显示 0 很打击人） */
   function streakOf(it) {
     if (!it || !it.days) return 0;
@@ -177,12 +177,12 @@
       '<div class="ck-ystats">' +
       '<span>这一年打卡 <b>' + st.days + '</b> 天</span>' +
       '<span>共 <b>' + st.times + '</b> 次</span>' +
-      '<span>最长连续 <b>' + st.maxStreak + '</b> 天</span>' +
-      '<span>当前连续 <b>' + streakAll() + '</b> 天</span>' +
+      '<span>最长连续有记录 <b>' + st.maxStreak + '</b> 天</span>' +
+      '<span>当前连续有记录 <b>' + streakAll() + '</b> 天</span>' +
       '</div>' +
       '<p class="hint" style="margin-top:-2px">所有打卡项合起来算：<b>那天只要打过任意一项，就算一天</b>。' +
       '格子颜色越深 = 那天打得越多（超过 2 次就到顶）。<b>以后的日子留白</b>，还没到不算。' +
-      (S().data().memoCurrency?.version === 2 ? '<br>连续奖励：7／30／60／90天每天一次固定加1／2／3／5分。' : hint ? '<br>🔥 连击：再连续 <b>' + hint.need + '</b> 天，每天第一次打卡就是 <b>×' + hint.mult + '</b>。' :
+      (S().data().memoCurrency?.version === 3 ? '<br>固定基础分模式：连续记录不改变所得积分。' : S().data().memoCurrency?.version === 2 ? '<br>连续奖励：7／30／60／90天每天一次固定加1／2／3／5分。' : hint ? '<br>🔥 连击：再连续 <b>' + hint.need + '</b> 天，每天第一次打卡就是 <b>×' + hint.mult + '</b>。' :
         '<br>🔥 连击已经到顶（×' + multOf(streakWithToday()) + '）—— 保持住！') +
       '</p>' +
       rows +
@@ -280,6 +280,7 @@
 
   /* ---------- 弹窗：加 / 改 ---------- */
   function editModal(id) {
+    if (window.__MEMO_MODE && App.memoActions?.busy()) return App.ui.toast('请先重试保存当前操作');
     const it = id ? find(id) : null;
     const isNew = !it;
     const v = it || { text: '', points: 5, target: 1, note: '' };
@@ -309,28 +310,46 @@
       '<div class="field-row">' +
       '<div class="field"><label>打卡一次得多少分</label>' +
       '<input id="ck-points" type="number" min="0" value="' + (v.points == null ? 5 : v.points) + '" /></div>' +
-      '<div class="field"><label>一天要打几次（默认 1）</label>' +
-      '<input id="ck-target" type="number" min="1" value="' + (v.target || 1) + '" /></div>' +
+      '<div class="field"><label>每日目标（0＝选做）</label>' +
+      '<input id="ck-target" type="number" min="0" step="1" value="' + targetOf(v) + '" /></div>' +
       '</div>' +
+      '<div class="field"><label>每日奖励次数上限（0＝只记录）</label><input id="ck-reward-limit" type="number" min="0" max="10000" step="1" value="' + S().habitRules(v).rewardLimit + '"><p class="hint">选做不要求每日完成；奖励上限与目标独立。达到上限仍可记录。此上限适用于固定基础分模式。</p></div>' +
       '<div class="field"><label>备注（选填，写给自己）</label>' +
-      '<input id="ck-note" type="text" value="' + esc(v.note || '') + '" placeholder="比如：分 4 次喝，每次 500ml" /></div>' + mkHTML,
+      '<input id="ck-note" type="text" value="' + esc(v.note || '') + '" placeholder="比如：分 4 次喝，每次 500ml" /></div>' + mkHTML + '<p id="ck-save-error" role="alert"></p>',
       '<button class="btn btn-primary" data-act="ok">' + (isNew ? '加好' : '保存') + '</button>' +
-      '<button class="btn" data-act="cancel">取消</button>');
+      '<button class="btn" data-act="cancel">取消</button>', { lock: !!window.__MEMO_MODE });
+    let rewardLimitEdited = !isNew || v.rewardLimit != null;
+    modal.querySelector('#ck-reward-limit').addEventListener('input', () => { rewardLimitEdited = true; });
+    modal.querySelector('#ck-target').addEventListener('input', () => { if (!rewardLimitEdited) modal.querySelector('#ck-reward-limit').value = S().habitRules({ target: modal.querySelector('#ck-target').value }).rewardLimit; });
     App.ui.bindActions({
-      ok: function () {
+      ok: async function (button) {
         const t = (modal.querySelector('#ck-text').value || '').trim();
         if (!t) { App.ui.toast('先写个名字'); return; }
         const pts = Math.max(0, +modal.querySelector('#ck-points').value || 0);
-        const tg = Math.max(1, +modal.querySelector('#ck-target').value || 1);
+        const tg = S().habitRules({ target: modal.querySelector('#ck-target').value }).target;
+        const rewardLimit = S().habitRules({ target: tg, rewardLimit: modal.querySelector('#ck-reward-limit').value }).rewardLimit;
         const nt = (modal.querySelector('#ck-note').value || '').trim();
+        const idForNew = isNew ? S().uid() : id;
+        const mutate = () => {
         if (isNew) {
           D().push({
-            id: S().uid(), text: t, points: pts, target: tg, note: nt,
+            id: idForNew, text: t, points: pts, target: tg, rewardLimit, note: nt,
             days: {}, createdAt: new Date().toISOString()
           });
         } else {
-          it.text = t; it.points = pts; it.target = tg; it.note = nt;
+          it.text = t; it.points = pts; it.target = tg; it.rewardLimit = rewardLimit; it.note = nt;
         }
+        };
+        if (window.__MEMO_MODE && App.memoActions) {
+          button.disabled = true;
+          try {
+            if (!await App.memoActions.commit(mutate)) return;
+            render(); App.ui.closeModal(); App.ui.toast('已保存');
+          } catch (error) { modal.querySelector('#ck-save-error').textContent = error.message; button.textContent = App.memoActions.busy() ? '重试保存' : '保存'; }
+          finally { button.disabled = false; }
+          return;
+        }
+        mutate();
         // 🔁 v119：勾了的补卡一起落账（积分照发记在那天 · 永远 ×1）
         const mks = [];
         modal.querySelectorAll('.ck-mk:checked:not(:disabled)').forEach(function (c) {
@@ -344,7 +363,7 @@
           (mks.length ? ' · 补卡 ' + (mks.length - mkBad.length) + '/' + mks.length + ' 张' +
           (mkBad.length ? '（' + mkBad[0] + '）' : '') : ''), 4200);
       },
-      cancel: function () { App.ui.closeModal(); }
+      cancel: function () { if (!window.__MEMO_MODE || !App.memoActions?.busy()) App.ui.closeModal(); }
     });
   }
 
@@ -354,26 +373,26 @@
     const n = timesToday(it), tg = targetOf(it), done = doneToday(it), st = streakOf(it);
     // 🔥 v108：这是今天第一次打卡时，按钮上直接写明"连击后到手多少分"
     const firstToday = timesTodayAll() === 0;
-    const mult = S().data().memoCurrency?.version === 2 ? 1 : firstToday ? multOf(streakWithToday()) : 1;
+    const mult = [2, 3].includes(S().data().memoCurrency?.version) ? 1 : firstToday ? multOf(streakWithToday()) : 1;
     const gain = window.__MEMO_MODE ? memoPoints(it, today()) : Math.max(0, +it.points || 0) * mult;
     const kToday = today();
     const wk = weekOf(it).map(function (w) {
       const on = w.times > 0;
-      const full = w.times >= tg;
+      const full = tg > 0 && w.times >= tg;
       // 🔁 v119：过去且没打满的圆点 → 直接点就是补卡（今天/未来不在其列）
       if (w.k < kToday && (!full || window.__MEMO_MODE)) {
         return '<span class="ck-dot makeup" data-act="ck-makeup" data-id="' + it.id + '" data-day="' + w.k +
           '" title="' + w.k + '：' + (w.times ? w.times + ' 次，点一下再补一次' : '没打，点一下补这张卡') +
           '（按目标和当日次数计算积分，不补发连续奖励）"></span>';
       }
-      return '<span class="ck-dot' + (full ? ' on' : (on ? ' half' : '')) + '" title="' + w.k + '：' +
+      return '<span class="ck-dot' + (full || (tg === 0 && on) ? ' on' : (on ? ' half' : '')) + '" title="' + w.k + '：' +
         (w.times ? w.times + ' 次' : '没打') + '"></span>';
     }).join('');
     return '<div class="ck-row' + (done ? ' done' : '') + '" data-id="' + it.id + '">' +
       '<div class="ck-main">' +
       '<div class="ck-name">' + esc(it.text) +
-      ((tg > 1 || window.__MEMO_MODE) ? ' <span class="ck-cnt">今日 ' + n + '/' + tg + ' 次' + (n > tg ? ' · 超额 ' + (n - tg) + ' 次' : '') + '</span>' : '') +
-      (st > 1 ? '<span class="ck-streak">🔥 这项连续 ' + st + ' 天</span>' : '') +
+      ((tg !== 1 || window.__MEMO_MODE) ? ' <span class="ck-cnt">' + (tg === 0 ? '选做 · 今日已做 ' + n + ' 次' : '今日 ' + n + '/' + tg + ' 次' + (n > tg ? ' · 超额 ' + (n - tg) + ' 次' : '')) + '</span>' : '') +
+      (st > 1 ? '<span class="ck-streak">连续有记录 ' + st + ' 天</span>' : '') +
       (yearDaysOf(it) > 0 ? '<span class="ck-year">今年 ' + yearDaysOf(it) + ' 天</span>' : '') + '</div>' +
       (it.note ? '<div class="ck-note">' + esc(it.note) + '</div>' : '') +
       '<div class="ck-week">' + wk + '</div>' +
@@ -427,8 +446,12 @@
       '<button class="btn btn-small" data-act="ck-add">＋ 加一个打卡项</button>' +
       '</div>';
 
-    if (window.__MEMO_MODE) h = '<div class="card"><h2>积分打卡</h2><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续记录；本次可得积分显示在按钮上，积分规则与额外得分次数在设置中查看。</p><button class="btn btn-small" data-act="ck-add">＋ 添加打卡项</button>';
+    if (window.__MEMO_MODE) h = '<div class="card"><h2>积分打卡</h2><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续记录；本次可得积分显示在按钮上，积分规则与额外得分次数在设置中查看。</p><button class="btn btn-primary ck-add-main" data-act="ck-add">＋ 添加打卡项</button>';
 
+    if (window.__MEMO_MODE) {
+      const goals = list.filter(it => !it.archived && targetOf(it) > 0), active = list.filter(it => !it.archived);
+      h += '<p class="ck-goal-status">' + (goals.length ? '今日目标达标 ' + goals.filter(doneToday).length + '/' + goals.length + ' 项' : '无每日目标') + ' · 选做 ' + (active.length - goals.length) + ' 项 · 连续有记录 ' + streakAll() + ' 天</p><p class="hint">目标0表示选做，不计入目标达标比例；有记录天数不等于全勤。当前积分：' + (App.memoCurrency?.ruleLabel?.() || '旧连续倍率') + '。</p>';
+    }
     if (!list.length) {
       h += '<div class="q-empty">还没有。<br>想坚持什么事？加一条，每天来点一下 —— 比如「喝水 2000ml」「23:30 前躺下」。</div>';
     } else {
@@ -481,6 +504,7 @@
   function memoPoints(it, day) {
     if (!it) return 0;
     const award = App.memoCurrency?.quote(it, day); if (award) return award.total;
+    const h = S().habitRules(it); if (h.optional && (Number(it.days?.[day]) || 0) >= h.rewardLimit) return 0;
     const mult = day === today() && timesTodayAll() === 0 ? multOf(streakWithToday()) : 1;
     return Math.max(0, Number(it.points) || 0) * mult;
   }
@@ -498,7 +522,7 @@
     // 🔥 v108：连击与年度统计（也给测试/别处用）
     multOf: multOf, streakAll: streakAll, streakWithToday: streakWithToday,
     nextMult: nextMult, dayMap: dayMap, yearStats: yearStats, yearsWithData: yearsWithData,
-    countDone: function () { return D().filter(doneToday).length; },
-    countAll: function () { return D().length; }
+    countDone: function () { return D().filter(it => !it.archived && doneToday(it)).length; },
+    countAll: function () { return D().filter(it => !it.archived && targetOf(it) > 0).length; }
   };
 })();

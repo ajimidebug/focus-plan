@@ -70,7 +70,7 @@
       const idx = d.queue.findIndex(x => x.id === spec.id); if (idx < 0) throw new Error('这条任务已经移动或完成，请重新打开');
       App.memoWorkspace?.orderQueue();
       const actualIndex = d.queue.findIndex(x => x.id === spec.id);
-      const it = d.queue[actualIndex]; event.queuePosition = actualIndex; event.beforeId = d.queue[idx - 1]?.id || ''; event.afterId = d.queue[idx + 1]?.id || '';
+      const it = d.queue[actualIndex]; event.queuePosition = actualIndex; event.beforeId = d.queue[actualIndex - 1]?.id || ''; event.afterId = d.queue[actualIndex + 1]?.id || '';
       d.queue.splice(actualIndex, 1); it.doneDay = event.sourceDay; it.doneAt = at; it.memoCompletionId = event.id;
       (d.queueDone = d.queueDone || []).unshift(it);
       // Retire old materialized copies. The queue item itself remains the source of its configuration.
@@ -93,7 +93,7 @@
       const it = (spec.kind === 'checkin' ? d.checkins : d.daily).find(x => x.id === spec.id);
       if (!it) throw new Error('这条记录已不存在');
       it.days = it.days || {}; const n = Number(it.days[event.sourceDay]) || 0;
-      const target = spec.kind === 'daily' ? 1 : Math.max(1, Number(it.target) || 1);
+      const target = spec.kind === 'daily' ? 1 : S().habitRules(it).target;
       if (spec.kind === 'daily' && n >= target) throw new Error('这一天已经勾选完成');
       const award = spec.kind === 'checkin' ? App.memoCurrency?.quote(it, event.sourceDay) : null;
       const amount = spec.kind === 'checkin' ? App.checkin.memoPoints(it, event.sourceDay) : Math.max(0, Number(it.points ?? S().settings().dailyPoints ?? 2));
@@ -187,7 +187,7 @@
     if (spec.kind === 'project') previewPoints = Number((S().data().memoProjects || []).find(x => x.id === spec.id)?.points || 0);
     if (spec.kind === 'task') { const it = S().getDay(spec.day).tasks[spec.list].find(x => x.id === spec.id); previewPoints = ['ideal', 'extra'].includes(spec.list) ? Number(it.points ?? (spec.list === 'ideal' ? settings.idealPoints : settings.extPoints)) : 0; }
     m.querySelector('#memo-action-info').textContent = '本次任务积分 +' + Math.max(0, previewPoints || 0) + '；写入 ' + day + ' 的笔记（04:00分日）。';
-    if (S().data().memoCurrency?.version === 2) m.querySelector('#memo-action-info').textContent += '（新积分规则）';
+    if (spec.kind === 'checkin') m.querySelector('#memo-action-info').textContent += '（' + (App.memoCurrency?.ruleLabel?.() || '旧连续倍率') + '）';
     bindCommit(m, () => completeCore(spec, m.querySelector('#memo-action-text').value, at,
       [...m.querySelectorAll('[data-reward]:checked')].map(x => ({ kind: x.dataset.reward, points: m.querySelector('[data-reward-points="' + x.dataset.reward + '"]').value }))));
   }
