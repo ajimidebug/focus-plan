@@ -28,7 +28,7 @@ async function run() {
       await page.goto(origin); await page.waitForFunction(() => window.App?.memoWorkspace && document.querySelector('#mw-today'));
       if (process.env.FOCUS_TEST_FONT_DIR) { await page.addStyleTag({ content: '@import url("/__test-font/400.css"); @import url("/__test-font/600.css"); body,button,input,select,textarea { font-family:"Noto Sans SC",sans-serif!important; }' }); await page.evaluate(() => document.fonts.ready); }
       await page.evaluate(async () => {
-        const S = App.store, d = S.data(), day = App.memoCore.naturalDay();
+        const S = App.store, d = S.data(), day = App.memoCore.userDay();
         S.getDay(day).tasks.required = [{ id: 'short', text: '完成五道线性代数错题' }, { id: 'long', text: '这是一条四十字左右的任务名称，用来检查手机上长标题能否读清楚并且不会覆盖编辑按钮', note: '较长备注。'.repeat(20) }];
         S.getDay(day).tasks.ideal = [{ id: 'ideal', text: '复习英语单词', points: 10 }];
         d.queue = ['a', 'b', 'c', 'd'].map(id => ({ id, text: '队列任务 ' + id, points: 3 }));
@@ -62,12 +62,12 @@ async function run() {
       await queueC.locator('summary').click(); await queueC.getByRole('button', { name: '置顶', exact: true }).click();
       await page.waitForFunction(() => document.querySelector('#mw-queue [data-mw-card]')?.textContent.includes('队列任务 c'));
       check((await page.locator('#mw-queue [data-mw-card]').first().innerText()).includes('队列任务 c'), 'one-click pin orders queue');
-      await page.locator('[data-mw-pane="today"]').click();
+      await page.evaluate(() => App.app.switchView('tasks')); await page.locator('[data-mw-pane="today"]').click();
       await task.locator('[data-mw="complete"]').click(); await page.locator('#modal-root [data-act="commit"]').click();
       await page.waitForFunction(() => document.querySelector('#mw-today .mw-completed'));
       check(!await page.locator('#mw-today .mw-completed').first().evaluate(el => el.open), 'completed task starts collapsed');
-      await page.evaluate(async () => { const day = App.memoCore.naturalDay(), start = Date.parse(day + 'T12:00:00+08:00'); App.memoSchedule.savePlan({ ref: { kind: 'task', id: 'short', day, list: 'required' }, title: '完成五道线性代数错题', day, type: 'point', start, end: null }); await App.store.save(); });
-      await page.locator('[data-mw-pane="timeline"]').click(); await noOverflow('timeline');
+      await page.evaluate(async () => { const day = App.memoCore.userDay(), start = Date.parse(day + 'T12:00:00+08:00'); App.memoSchedule.savePlan({ ref: { kind: 'task', id: 'short', day, list: 'required' }, title: '完成五道线性代数错题', day, type: 'point', start, end: null }); await App.store.save(); });
+      await page.evaluate(() => App.app.switchView('timeline')); await noOverflow('timeline');
       check(await page.locator('[data-schedule-done]').count() === 1 && !await page.locator('[data-schedule-done]').evaluate(el => el.open), 'timeline completion starts folded');
       check(await page.locator('.schedule-cards > :last-child').getAttribute('data-schedule-done') !== null, 'completed details after unfinished details');
       check(await page.locator('.schedule-waiting').evaluate(el => !!(el.compareDocumentPosition(document.querySelector('[data-schedule-done]')) & Node.DOCUMENT_POSITION_FOLLOWING)), 'unscheduled unfinished tasks remain before completed details');
@@ -78,13 +78,13 @@ async function run() {
       await page.locator('[data-schedule-done] [data-sc="complete"]').click(); await page.locator('#modal-root [data-act="commit"]').click();
       await page.waitForFunction(() => document.querySelectorAll('[data-schedule-done]').length === 0);
       check(await page.locator('.schedule-cards [id^="schedule-card-s-"]').count() > 0, 'undo keeps execution history');
-      await page.locator('[data-mw-pane="today"]').click();
+      await page.evaluate(() => App.app.switchView('tasks')); await page.locator('[data-mw-pane="today"]').click();
       await page.locator('.mw-toolbar [data-mw="add-required"]').click();
       await page.locator('#mw-list').selectOption('ideal'); await page.locator('#mw-title').fill('新建带时间点的理想任务'); await page.locator('#mw-start').fill('21:40');
       await page.locator('#modal-root [data-act="save"]').click(); await page.locator('#modal-root .modal').waitFor({ state: 'detached' });
-      check(await page.evaluate(() => { const day = App.memoCore.naturalDay(), task = App.store.getDay(day).tasks.ideal.find(t => t.text === '新建带时间点的理想任务'); return !!task && App.memoSchedule.state().items.some(p => p.ref.id === task.id && p.type === 'point' && p.end == null); }), 'ideal task creation saves task and point plan together');
+      check(await page.evaluate(() => { const day = App.memoCore.userDay(), task = App.store.getDay(day).tasks.ideal.find(t => t.text === '新建带时间点的理想任务'); return !!task && App.memoSchedule.state().items.some(p => p.ref.id === task.id && p.type === 'point' && p.end == null); }), 'ideal task creation saves task and point plan together');
       // A selected title must not trigger whole-card editing.
-      await page.locator('[data-mw-pane="today"]').click();
+      await page.evaluate(() => App.app.switchView('tasks')); await page.locator('[data-mw-pane="today"]').click();
       await task.locator('.mw-task-title').evaluate(el => { const range = document.createRange(); range.selectNodeContents(el); const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range); });
       await task.locator('.mw-task-title').click(); check(await page.locator('#modal-root .modal').count() === 0, 'selected text does not open edit'); await page.evaluate(() => window.getSelection().removeAllRanges());
       // Optional target form, award preview and failed-save retry use actual UI controls.
@@ -118,8 +118,65 @@ async function run() {
       await page.locator('#currency-fixed').click(); await page.waitForFunction(() => document.querySelector('#memo-currency-panel')?.textContent.includes('当前习惯规则：固定基础分'));
       check(await page.evaluate(() => App.store.data().memoCurrency.version === 3), 'explicit rule switch uses saved fixed mode');
 
+      // New assignment UI shares a queue identity with today's required group.
       await page.evaluate(() => App.app.switchView('tasks'));
-      await page.locator('[data-mw-pane="today"]').click(); await page.evaluate(() => { window.__realSave = App.store.save; App.store.save = async () => false; });
+      await page.locator('[data-mw-pane="queue"]').click();
+      const assignQueue=page.locator('#mw-queue [data-mw-card]').filter({hasText:'队列任务 a'});
+      await assignQueue.locator('[data-mw="assign"]').click(); await page.locator('#ma-list').selectOption('required');
+      await page.locator('#modal-root [data-act="save"]').click(); await page.locator('#modal-root .modal').waitFor({state:'detached'});
+      check(await page.locator('.mw-assigned').count()===1,'scheduled queue folds into assigned group');
+      await page.locator('[data-mw-pane="today"]').click();
+      const assigned=page.locator('#mw-today [data-mw-card]').filter({hasText:'队列任务 a'});
+      check(await assigned.isVisible(),'assigned queue task appears in daily category');
+      check(!(await assigned.innerText()).includes('undefined') && !(await assigned.innerText()).includes('＋3分'),'required alias shows no duplicate queue reward');
+      check(await assigned.locator('[data-schedule-command="start"]').isVisible(),'assigned required task has visible timer');
+      await assigned.locator('[data-mw="complete"]').click(); await page.locator('#modal-root [data-act="commit"]').click();
+      check(await page.evaluate(()=>App.store.data().queueDone.filter(t=>t.id==='a').length===1 && !App.store.data().ledger.some(e=>e.taskId==='a' && e.type==='earn-queue')),'single completion and required reward rule');
+      // Find a past ideal task without More, reschedule through the visible form.
+      await page.evaluate(async()=>{const day=App.memoCore.shiftDay(App.memoCore.userDay(),-1);App.store.getDay(day).tasks.ideal.push({id:'past-ideal',text:'昨天未完成的理想任务',points:4});await App.store.save();App.memoWorkspace.render();});
+      await page.locator('.mw-backlog > summary').click();
+      await page.locator('.mw-backlog .mw-history-row').filter({hasText:'昨天未完成的理想任务'}).getByRole('button',{name:'重新安排'}).click();
+      await page.locator('#modal-root [data-act="save"]').click();await page.locator('#modal-root .modal').waitFor({state:'detached'});
+      check(await page.locator('#mw-today [data-mw-card]').filter({hasText:'昨天未完成的理想任务'}).isVisible(),'overdue ideal rescheduled without More');
+      await page.locator('[data-mw-pane="history"]').click();await noOverflow('task-history');
+      await page.locator('#mh-status').selectOption('moved');check((await page.locator('#mw-history').innerText()).includes('已重新安排'),'history preserves rescheduling source');
+      // Planned and estimated time is copied into the completion preview.
+      await page.locator('[data-mw-pane="today"]').click();
+      const ideal=page.locator('#mw-today [data-mw-card]').filter({hasText:'新建带时间点的理想任务'});
+      await ideal.locator('[data-mw="edit"]').click();await page.locator('#mw-estimate').fill('30');await page.locator('#modal-root [data-act="save"]').click();
+      await ideal.locator('[data-mw="complete"]').click();const passage=await page.locator('#memo-action-text').inputValue();
+      check(passage.includes('21:40') && passage.includes('预计用时：30分钟') && passage.includes('实际用时：未记录'),'completion preview distinguishes plan estimate and actual');
+      await page.locator('#modal-root [data-act="cancel"]').click();
+      // Independent navigation, full-width combined lane, and optional comparison.
+      await page.locator('#mobile-nav [data-view="timeline"]').click();await noOverflow('independent timeline');
+      check(await page.locator('#view-memo-timeaxis').evaluate(el=>el.classList.contains('active')),'timeline has independent active view');
+      check(await page.locator('.schedule-chart').getAttribute('data-mode')==='combined','full-width combined timeline is default');
+      check(await page.locator('.schedule-is-plan').count()>0,'combined timeline includes labelled plans');
+      check((await page.locator('.schedule-is-plan').allTextContents()).some(t=>t.includes('12:00')),'chart labels use the same actual clock as the user-day axis');
+      await page.locator('#schedule-view').selectOption('compare');check(await page.locator('.schedule-plan-lane').isVisible(),'comparison retains separate expected lane');
+      await page.locator('#schedule-view').selectOption('combined');
+      if(process.env.FOCUS_SCREENSHOT_DIR){await page.evaluate(()=>window.scrollTo(0,0));await page.addStyleTag({content:'.toast {visibility:hidden!important}'});} if(process.env.FOCUS_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.FOCUS_SCREENSHOT_DIR,'timeline-'+width+'x'+height+'.png')});
+      // Custom expenditure without a preset and exact one-time refund.
+      await page.evaluate(async()=>{App.store.data().ledger.push({id:'spend-seed',points:100});await App.store.save();App.app.switchView('checkin');});
+      await page.locator('#flow-shop').click();await page.locator('#modal-root [data-act="custom"]').click();
+      await page.locator('#spend-purpose').fill('买小说');await page.locator('#spend-value').fill('5');await page.locator('#spend-note').fill('阅读奖励');
+      check((await page.locator('#spend-preview').innerText()).includes('10 分'),'money quote shown before debit');
+      await page.locator('#modal-root [data-act="save"]').click();await page.locator('#modal-root [data-act="custom"]').waitFor();
+      const spendId=await page.evaluate(()=>App.store.data().ledger.find(e=>e.note==='自定义支出：买小说').id);
+      check(await page.evaluate(id=>App.store.data().ledger.find(e=>e.id===id).points===-10,spendId),'custom purpose persisted with debit');
+      await page.locator('#modal-root summary').click();await page.locator('#modal-root [data-act="refund"]').click();await page.locator('#modal-root [data-act="save"]').click();
+      check(await page.evaluate(id=>App.store.data().ledger.filter(e=>e.refundOf===id).length===1,spendId),'refund recorded once');await page.locator('#modal-root [data-act="cancel"]').click();
+      // Successful full-copy checkpoints carry yesterday's later append.
+      await page.evaluate(async()=>{const M=App.memoCore,day=M.shiftDay(M.userDay(),-1);M.write(day,'昨天首次复制');await App.store.save();App.memo.show(day);App.app.switchView('memo');Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__copied=text;}}});});
+      await page.locator('#memo-copy-full').click();await page.waitForFunction(()=>!!App.store.data().memoFlow.lastCopy);
+      await page.evaluate(async()=>{const M=App.memoCore,day=M.shiftDay(M.userDay(),-1);M.write(day,'昨天首次复制\n昨天复制之后补写');M.write(M.userDay(),'今天正文');await App.store.save();App.memo.show(M.userDay());});
+      await page.locator('#memo-copy-full').click();await page.waitForFunction(()=>window.__copied?.includes('今天正文'));
+      check(await page.evaluate(()=>window.__copied.includes('昨天复制之后补写') && window.__copied.includes('上次复制后的补记')),'full copy automatically carries late previous-day text');
+      const copied=await page.evaluate(()=>window.__copied);await page.locator('#memo-copy-again').click();check(await page.evaluate(()=>window.__copied)===copied,'repeat previous copy preserves exact package');
+      await noOverflow('memo copy');
+
+      await page.evaluate(() => App.app.switchView('tasks'));
+      await page.evaluate(() => App.app.switchView('tasks')); await page.locator('[data-mw-pane="today"]').click(); await page.evaluate(() => { window.__realSave = App.store.save; App.store.save = async () => false; });
       await task.locator('[data-schedule-command="start"]').click();
       await task.locator('.mw-timing-error').waitFor(); check((await task.innerText()).includes('重试保存'), 'timer failure has local retry');
       await page.evaluate(() => { App.store.save = window.__realSave; }); await task.locator('[data-schedule-command="retry"]').click();

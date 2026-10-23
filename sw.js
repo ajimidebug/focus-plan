@@ -3,7 +3,7 @@ const RELEASE = '170.2.0';
 const ASSETS = [
   {
     "url": "./index.html?v=170.2.0",
-    "sha256": "a51f80ed951863a801eb44993d340213ecd71438782f13489996284105445d8f"
+    "sha256": "770a88725969eb61850ed88cfb095e0d2f409d31eb4bef7f06536ee2c4fad1c1"
   },
   {
     "url": "./version.html?v=170.2.0",
@@ -11,7 +11,7 @@ const ASSETS = [
   },
   {
     "url": "./css/style.css?v=170.2.0",
-    "sha256": "187f76636d426566fa2dc94c993c47b37ce8411246f3fcc8135d673f907ce0d4"
+    "sha256": "8040ca44f49314152e4adfca44c0ede4e731477e5cb2fe22eabbe33794d624e9"
   },
   {
     "url": "./css/katex.css?v=170.2.0",
@@ -19,7 +19,7 @@ const ASSETS = [
   },
   {
     "url": "./js/app.js?v=170.2.0",
-    "sha256": "a102edf1ca01e451ef856b6739f7bdb27a0cb28a0556ad70344a62104b9de873"
+    "sha256": "5e80ce4e342994b30d06c1b894a70535cd3037700ab60b61652bfbf6b9643668"
   },
   {
     "url": "./js/backup.js?v=170.2.0",
@@ -35,7 +35,7 @@ const ASSETS = [
   },
   {
     "url": "./js/checkin.js?v=170.2.0",
-    "sha256": "90c03e3146a891142a6bb4d52caaaae4264e63acb5c62ff1ddf83aaf967b9b8a"
+    "sha256": "71819c564ef99ce5c0d3c7d7069c8aac9608a50bf2962566a0ca8ae38ff6c6f6"
   },
   {
     "url": "./js/demo.js?v=170.2.0",
@@ -67,11 +67,11 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-actions.js?v=170.2.0",
-    "sha256": "5528443095d1c5f32e02957d5a1150f2e516b8e337a741801e94dda03c44a0a4"
+    "sha256": "cf85e5a5e1a14685057efb82ec8a7c78d7a37fa65099f40b56aadc9fa3834cf2"
   },
   {
     "url": "./js/memo-currency.js?v=170.2.0",
-    "sha256": "a977d72f4e4c7956bc4922250e888248b6a2fdf9709535ac4ff2494b86dcd02f"
+    "sha256": "8214ad08c15a142afa0fb7ffcecc7dcd908b5d7b919174443c5a0671237114a6"
   },
   {
     "url": "./js/memo-editor.js?v=170.2.0",
@@ -79,19 +79,19 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-flow.js?v=170.2.0",
-    "sha256": "06c067ecb396a27b20346fc41641e026956f5296195721ec2e72fd26259d4149"
+    "sha256": "7a90e415c0a223c3e9fb7bdf96d16031f0388debe02b1afe0f342a769c4a6ab6"
   },
   {
     "url": "./js/memo-schedule.js?v=170.2.0",
-    "sha256": "9c872ef4378c8b8b523605a9e9261d6af1963621db3a8dffb3072ed25c319c0f"
+    "sha256": "bd2371e73e8437f644d7a2c56a81a10bebd536a3eb61bb416f6b886c4c594665"
   },
   {
     "url": "./js/memo-workspace.js?v=170.2.0",
-    "sha256": "5c0e1917f8eb9fdb10aced0bd2503e6c21b7ec8761fd84e0becb12dd36fe22e7"
+    "sha256": "5fbf5d816abc69a19d05a2926ccd14a59ca2c59393ee374c6895396ab1db2797"
   },
   {
     "url": "./js/memo.js?v=170.2.0",
-    "sha256": "51d5e27d51d116592436966829dcc12ae4609163afb83b9da6ad9fa7680344b2"
+    "sha256": "595d24432099f3b12a5778e67ef54afba57a5557d3cde8d73dfba5de5615203d"
   },
   {
     "url": "./js/mhchem.min.js?v=170.2.0",

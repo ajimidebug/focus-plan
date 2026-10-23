@@ -5,7 +5,7 @@
   const clone = x => JSON.parse(JSON.stringify(x));
   function state() {
     const f = S().data().memoFlow;
-    if (!f || f.version !== 1 || !M().validDate(f.startedDay) || !Array.isArray(f.settlements) || !f.copies || typeof f.copies !== 'object') throw new Error('新流程记录异常，请先下载备份');
+    if (!f || f.version !== 1 || !M().validDate(f.startedDay) || !Array.isArray(f.settlements) || !f.copies || typeof f.copies !== 'object' || Array.isArray(f.copies) || !Number.isFinite(f.rate) || f.rate<=0 || !Number.isFinite(f.penalty) || f.penalty<0 || !Number.isFinite(f.dailyCap) || f.dailyCap<0) throw new Error('新流程记录异常，请先下载备份');
     return f;
   }
   function enableCore(now = Date.now()) {
@@ -14,7 +14,7 @@
   }
   function queues() { const d = S().data(); return (d.queue || []).concat(d.queueDone || []); }
   function assignment(id) { return queues().find(t => t.id === id)?.assignment; }
-  function assigned(day, list) { return queues().filter(t => t.assignment?.day === day && (!list || t.assignment.list === list)); }
+  function assigned(day, list) { return queues().filter(t => !t.memoDismissed && t.assignment?.day === day && (!list || t.assignment.list === list)); }
   function moveCore(ref, day, list, target = 'task') {
     if (!M().validDate(day) || !['required', 'ideal', 'extra'].includes(list)) throw new Error('请选择有效日期和任务栏目');
     const found = A.memoSchedule.resolve(ref); if (!found) throw new Error('任务已移动或删除');
@@ -39,6 +39,7 @@
     const next = Object.assign({}, t, { originalDay: t.originalDay || r.day }); delete next.memoMovedTo;
     if (r.day === day) S().getDay(r.day).tasks[r.list] = S().getDay(r.day).tasks[r.list].filter(x => x.id !== t.id);
     else t.memoMovedTo = { kind: 'task', id: t.id, day, list };
+    Object.values(S().getDay(day).tasks).forEach(items => { for(let i=items.length-1;i>=0;i--)if(items[i].id===t.id && items[i].memoMovedTo)items.splice(i,1); });
     destination.push(next);
   }
   function overdue(now = Date.now()) {
@@ -98,7 +99,7 @@
   }
   let settling = false;
   async function settle() {
-    if (settling || A.memoActions.busy() || S().status().readOnly) return;
+    if (settling || A.memoEditor?.busy() || A.memoActions.busy() || S().status().readOnly) return;
     if (S().data().memoFlow && !overdue().length) return;
     settling = true;
     try { if (await A.memoActions.commit(() => { enableCore(); settleCore(); })) { A.memoWorkspace?.render(); A.app?.refreshStats(); } }

@@ -174,7 +174,7 @@
     const task = spec.kind === 'checkin' ? (S().data().checkins || []).find(t => t.id === spec.id) : P?.find(ref);
     const schedule = S().data().memoSchedule, plans = P && schedule ? schedule.items.filter(p => !p.deleted && P.key(p.ref) === P.key(ref) && (!spec.day || p.day === spec.day)).map(p => ({ id:p.id, day:p.day, start:p.start, end:p.end, title:p.title })) : [];
     const sessions = P && schedule ? schedule.sessions.filter(s => P.key(s.ref) === P.key(ref)) : [];
-    const bounds = spec.day ? [Date.parse(spec.day+'T04:00:00+08:00'),Date.parse(M().shiftDay(spec.day,1)+'T04:00:00+08:00')] : [-Infinity,now];
+    const bounds = spec.day && ['project','daily','checkin'].includes(spec.kind) ? [Date.parse(spec.day+'T04:00:00+08:00'),Date.parse(M().shiftDay(spec.day,1)+'T04:00:00+08:00')] : [-Infinity,now];
     const actualMs = sessions.reduce((sum,s)=>sum+s.chunks.reduce((n,c)=>n+Math.max(0,Math.min(c.end ?? now,bounds[1],now)-Math.max(c.start,bounds[0])),0),0);
     const lines = [];
     if(plans.length) lines.push('计划：'+plans.map(p=>M().naturalDay(p.start)+' '+M().clock(p.start)+(p.end?'—'+(M().naturalDay(p.end)!==M().naturalDay(p.start)?M().naturalDay(p.end)+' ':'')+M().clock(p.end):'（时间点）')).join('；'));
@@ -261,7 +261,7 @@
   }
   function queue(id) {
     const it = S().data().queue.find(x => x.id === id);
-    if (it) return complete({ kind: 'queue', id, title: it.text, day: M().userDay() });
+    if (it) return complete({ kind: 'queue', id, title: it.text, day: it.assignment?.day || M().userDay() });
     const done = (S().data().queueDone || []).find(x => x.id === id); if (!done) return;
     const e = latest('queue', id); e ? cancelEvent(e) : legacyCancel({ kind: 'queue', id, title: done.text, day: done.doneDay });
   }

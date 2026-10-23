@@ -163,7 +163,7 @@
   }
   async function copyFull() {
     if(copying)return;
-    if(App.memoActions?.busy())return App.ui.toast('请先重试保存当前操作');
+    if(App.memoActions?.busy())return await copyText(currentText());
     copying=true;
     try {
       if (!await flush()) return await copyText(currentText());

@@ -2057,3 +2057,7 @@ body.memo-layout[data-view="tasks"] .release-panel:has(#storage-status:is([data-
   .memo-layout #mobile-nav { grid-template-columns:repeat(5,minmax(0,1fr)); }
   .memo-layout #mobile-nav .mn-btn { flex:1 1 0; font-size:12px; padding-left:2px; padding-right:2px; }
 }
+body.memo-layout[data-view="memo-timeaxis"] #app-header { position:static; }
+body.memo-layout[data-view="memo-timeaxis"] .brand p { display:none; }
+body.memo-layout[data-view="memo-timeaxis"] .release-panel:has(#storage-status:is([data-state="saved"],[data-state="saving"])):not(:has(#apply-update:not([hidden]))) { display:none; }
+#view-memo-timeaxis .schedule-explanation { font-size:12px; margin:6px 0; }

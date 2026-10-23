@@ -695,3 +695,91 @@ test('time-axis details group completed task occurrences, retain graph records a
   assert.equal(P.detailGroups(P.visibleRecords(day, start + 120000)).completed.length, 0);
   assert.equal(P.visibleRecords(day, start + 120000).sessions.length, 2);
 });
+
+function flowHarness(b, day = '2026-10-20') {
+  const h = currencyHarness(b); vm.runInContext(source('js/memo-flow.js'), b.ctx);
+  const F=b.ctx.App.memoFlow; F.enableCore(Date.parse(day+'T08:00:00+08:00'));
+  return {...h,F,C:b.ctx.App.memoCurrency};
+}
+test('prospective overdue settlement caps each due day, keeps one live identity and never compounds', async()=>{
+  const b=browser();await b.S.load();const {F,P}=flowHarness(b),d=b.S.data();
+  const tasks=b.S.getDay('2026-10-20').tasks.required;
+  for(let i=0;i<7;i++)tasks.push({id:'late-'+i,text:'同名任务'});
+  b.S.getDay('2026-10-19').tasks.required.push({id:'old',text:'启用前'});
+  F.settleCore(Date.parse('2026-10-21T04:00:00+08:00'));
+  assert.equal(d.ledger.filter(x=>x.type==='penalty-required').reduce((n,e)=>n-e.points,0),10);
+  assert.equal(b.S.getDay('2026-10-21').tasks.required.length,7);
+  assert.equal(b.S.getDay('2026-10-19').tasks.required[0].memoMovedTo,undefined);
+  F.settleCore(Date.parse('2026-10-23T05:00:00+08:00'));
+  assert.equal(d.memoFlow.settlements.length,7);assert.equal(b.S.getDay('2026-10-23').tasks.required.length,7);
+  assert.equal(P.resolve({kind:'task',id:'late-0',day:'2026-10-20',list:'required'}).ref.day,'2026-10-23');
+  F.settleCore(Date.parse('2026-10-23T06:00:00+08:00'));assert.equal(d.memoFlow.settlements.length,7);
+  await b.S.save(); const next=browser({shared:b});await next.S.load();const n=flowHarness(next);n.F.settleCore(Date.parse('2026-10-23T06:00:00+08:00'));assert.equal(next.S.data().memoFlow.settlements.length,7);
+});
+test('overdue begins at 04:00, skips repeated habits and correction refunds the original amount once',async()=>{
+  const b=browser();await b.S.load();const {F}=flowHarness(b),day=b.S.getDay('2026-10-20');
+  day.tasks.required.push({id:'r',text:'必做'},{id:'repeat',text:'每日',fromDaily:'daily-id'});
+  F.settleCore(Date.parse('2026-10-21T03:59:59+08:00'));assert.equal(b.S.data().memoFlow.settlements.length,0);
+  F.settleCore(Date.parse('2026-10-21T04:00:00+08:00'));assert.equal(b.S.data().memoFlow.settlements.length,1);
+  const ref={kind:'task',id:'r',day:'2026-10-21',list:'required'};
+  assert.throws(()=>F.forgiveCore(ref,''),/原因/);F.forgiveCore(ref,'实际按时完成，忘记勾选');F.state().penalty=99;F.forgiveCore(ref,'重复');
+  assert.equal(b.S.data().ledger.filter(e=>e.type==='refund-penalty').length,1);assert.equal(b.S.pointsTotal(),0);
+});
+test('queue assignment keeps running session and required completion uses one group reward only',async()=>{
+  const b=browser();await b.S.load();const {F,P,A}=flowHarness(b),d=b.S.data();d.queue=[{id:'q',text:'提交材料',points:9}];
+  const ref={kind:'queue',id:'q'},at=Date.parse('2026-10-20T12:00:00+08:00');const run=P.startRef(ref,at);
+  F.moveCore(ref,'2026-10-20','required');F.moveCore(ref,'2026-10-20','required');assert.equal(d.queue.length,1);assert.equal(P.state().sessions.length,1);assert.equal(run.status,'running');
+  const e=A.completeCore({kind:'queue',id:'q',title:'提交材料'},'',new Date(at+60000).toISOString(),[{kind:'base',points:10}]);
+  assert.equal(e.points,0);assert.equal(e.sourceDay,'2026-10-20');assert.equal(d.ledger.filter(x=>x.type==='reward-base').length,1);assert.equal(run.status,'ended');
+  assert.throws(()=>A.completeCore({kind:'queue',id:'q',title:'提交材料'},''),/移动或完成/);
+  A.undoCore(e.id);assert.equal(d.queue[0].assignment.list,'required');assert.equal(b.S.pointsTotal(),0);
+});
+test('moving dated task preserves timing identity, records original date and can return to queue',async()=>{
+  const b=browser();await b.S.load();const {F,P}=flowHarness(b),d=b.S.data();b.S.getDay('2026-10-20').tasks.ideal.push({id:'x',text:'错题',points:4});
+  const ref={kind:'task',id:'x',day:'2026-10-20',list:'ideal'},session=P.startRef(ref,Date.parse('2026-10-20T11:00:00+08:00'));
+  F.moveCore(ref,'2026-10-21','ideal');assert.equal(P.key(ref),P.key({kind:'task',id:'x',day:'2026-10-21',list:'ideal'}));assert.equal(session.status,'running');
+  F.moveCore(ref,'2026-10-21','ideal','queue');assert.equal(P.resolve(ref).ref.kind,'queue');assert.equal(d.queue.filter(t=>t.id==='x').length,1);
+});
+test('copy checkpoints carry append, old edits, deletion and multiple missed days without mutating notes',async()=>{
+  const b=browser();await b.S.load();const {F,M}=flowHarness(b);M.write('2026-10-20','原始笔记');
+  let q=F.copyQuote('2026-10-20');assert.equal(F.state().lastCopy,undefined);F.markCopyCore(q);
+  M.write('2026-10-20','原始笔记\n后来补写');M.write('2026-10-21','第二天');M.write('2026-10-22','第三天');
+  q=F.copyQuote('2026-10-22');assert.match(q.text,/上次复制后的补记/);assert.match(q.text,/后来补写/);assert.match(q.text,/第二天/);F.markCopyCore(q);
+  M.write('2026-10-20','修订原文');q=F.copyQuote('2026-10-23');assert.match(q.text,/修订后的全文/);assert.match(q.text,/修订原文/);assert.equal(M.read('2026-10-20').text,'修订原文');F.markCopyCore(q);
+  M.write('2026-10-20','');q=F.copyQuote('2026-10-23');assert.match(q.text,/修订后的全文/);F.markCopyCore(q);
+  assert.doesNotMatch(F.copyQuote('2026-10-23').text,/用户日 2026-10-20/);
+});
+test('custom money spending rounds up, refunds exact original value and rejects invalid amounts',async()=>{
+  const b=browser();await b.S.load();const {F,C}=flowHarness(b);b.S.data().ledger.push({id:'seed',points:1000});
+  const quote=C.spendQuote('money','30.01','买小说');assert.equal(quote.points,61);C.spendCore(quote,'op-1');C.spendCore(quote,'op-1');assert.equal(b.S.pointsTotal(),939);
+  const spend=b.S.data().ledger.find(e=>e.operationId==='op-1');F.state().rate=4;C.refundCore(spend.id);C.refundCore(spend.id);assert.equal(b.S.pointsTotal(),1000);assert.equal(spend.itemSnapshot.rate,2);
+  assert.throws(()=>C.spendQuote('money','1.001','用途'));assert.throws(()=>C.spendQuote('points','1.5','用途'));assert.throws(()=>C.spendQuote('money','2',''));assert.throws(()=>C.spendCore(quote,'op-2'),/比例/);
+  assert.throws(()=>C.spendCore(C.spendQuote('points','1001','用途'),'op-3'),/不足/);
+});
+test('workflow backup retains copy checkpoints, assignment, prospective rules and expenditure metadata',async()=>{
+  const b=browser();await b.S.load();const {F,M,C}=flowHarness(b);M.write('2026-10-20','正文');F.markCopyCore(F.copyQuote('2026-10-20'));b.S.data().queue=[{id:'q',text:'任务'}];F.moveCore({kind:'queue',id:'q'},'2026-10-20','ideal');b.S.data().ledger.push({id:'seed',points:20});C.spendCore(C.spendQuote('money','2','目的'),'spend');await b.S.save();
+  const next=browser({shared:b});await next.S.load();const n=flowHarness(next);assert.equal(n.F.state().copies['2026-10-20'].text,'正文');assert.equal(next.S.data().queue[0].assignment.list,'ideal');assert.equal(next.S.data().ledger.find(e=>e.operationId==='spend').itemSnapshot.amountCents,200);
+});
+test('moving back to a prior date replaces the inactive placeholder and retains one live identity',async()=>{
+ const b=browser();await b.S.load();const {F,P}=flowHarness(b);b.S.getDay('2026-10-20').tasks.ideal.push({id:'return',text:'返回任务'});
+ const ref={kind:'task',id:'return',day:'2026-10-20',list:'ideal'};F.moveCore(ref,'2026-10-21','ideal');F.moveCore(ref,'2026-10-20','required');
+ assert.equal(P.resolve(ref).ref.list,'required');assert.equal(Object.values(b.S.getDay('2026-10-20').tasks).flat().filter(t=>t.id==='return').length,1);
+ F.moveCore(ref,'2026-10-21','extra');assert.equal(P.resolve(ref).ref.list,'extra');
+});
+test('user-day timeline contains next-morning execution and does not shift old natural-day records',async()=>{
+ const b=browser();await b.S.load();const {F,P}=flowHarness(b);const d=b.S.data();d.queue=[{id:'night',text:'夜间任务'}];
+ const now=Date.parse('2026-10-21T02:00:00+08:00');P.startRef({kind:'queue',id:'night'},now);P.stopRef({kind:'queue',id:'night'},now+60000);
+ b.S.getDay('2026-10-20').timeline=[{id:'daytime',start:720,end:750,content:'中午'}];b.S.getDay('2026-10-21').timeline=[{id:'early',start:60,end:90,content:'次日凌晨'},{id:'later',start:600,end:630,content:'下一用户日'}];
+ const records=P.visibleRecords('2026-10-20',now+60000);assert.equal(records.sessions.length,1);
+ assert.equal(records.legacy.length,2);assert.equal(records.legacy.find(x=>x.id==='early').startMs,Date.parse('2026-10-21T01:00:00+08:00'));
+ assert.equal(records.legacy.find(x=>x.id==='daytime').startMs,Date.parse('2026-10-20T12:00:00+08:00'));
+ assert.equal(P.frame('2026-10-20',now).dayMs,Date.parse('2026-10-20T04:00:00+08:00'));
+});
+test('failed custom debit and copy checkpoint retry persist original operation without executing twice',async()=>{
+ const b=browser();await b.S.load();const {F,C,A,M}=flowHarness(b);b.S.data().ledger.push({id:'seed',points:100});M.write('2026-10-20','待复制正文');
+ const quote=F.copyQuote('2026-10-20');let calls=0;b.options.localFails=b.options.idbFails=true;
+ await assert.rejects(A.commit(()=>{calls++;C.spendCore(C.spendQuote('money','3','阅读奖励'),'once');F.markCopyCore(quote);}),/尚未保存/);
+ assert.equal(A.busy(),true);b.options.localFails=b.options.idbFails=false;await A.commit(()=>{calls++;});
+ assert.equal(calls,1);assert.equal(b.S.pointsTotal(),94);
+ const next=browser({shared:b});await next.S.load();const n=flowHarness(next);assert.equal(next.S.data().ledger.filter(e=>e.operationId==='once').length,1);assert.equal(n.F.state().lastCopy.text,quote.text);
+});
