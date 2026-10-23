@@ -2032,3 +2032,28 @@ body.memo-layout[data-view="tasks"] .release-panel:has(#storage-status:is([data-
   .mw-task-title > strong { font-size:16px; }
   .mw-timer-control { max-width:145px; }
 }
+
+/* 170.2: independent timeline, dated backlog and explicit spending. */
+#mw-history[hidden] { display:none!important; }
+.mw-backlog,.mw-history-row { border:1px solid var(--line); border-radius:10px; padding:10px; margin:10px 0; }
+.mw-history-row p { margin:5px 0; font-size:13px; color:var(--muted); }
+.mw-late { color:#965011; background:#fff3df; padding:4px 6px; border-radius:5px; }
+.mw-task-extras { flex-wrap:wrap; }
+.mw-task .mw-timer-control { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; max-width:100%; }
+.mw-session-menu { display:contents; }
+.mw-session-menu > summary { display:none; }
+#view-memo-timeaxis { min-width:0; }
+.schedule-chart[data-mode="combined"] .schedule-legend,
+.schedule-chart[data-mode="combined"] .schedule-axis { grid-template-columns:46px minmax(0,1fr); }
+.schedule-chart[data-mode="combined"] .schedule-plan-lane,
+.schedule-chart[data-mode="combined"] .schedule-legend > :last-child { display:none; }
+.schedule-chart[data-mode="combined"] .schedule-legend > :nth-child(2) { font-size:0; }
+.schedule-chart[data-mode="combined"] .schedule-legend > :nth-child(2)::after { content:'计划与实际'; font-size:13px; }
+.schedule-block.schedule-is-plan { background:#e4eefb; border-color:#7c9fc3; color:#244d73; }
+#flow-shop { margin:10px 0; }
+#memo-copy-status { cursor:pointer; }
+.memo-layout #mobile-nav .mn-btn { min-width:0; }
+@media(max-width:700px),(max-height:500px) and (max-width:1000px) {
+  .memo-layout #mobile-nav { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  .memo-layout #mobile-nav .mn-btn { flex:1 1 0; font-size:12px; padding-left:2px; padding-right:2px; }
+}

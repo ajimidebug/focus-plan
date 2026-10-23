@@ -109,7 +109,7 @@
       $('memo-heading').textContent = key === userDay() ? '今天的笔记' : key + ' 的笔记';
       $('memo-day-hint').textContent = '北京时间 · ' + key + ' 04:00 至 ' + shiftDay(key, 1) + ' 03:59';
       $('memo-editor').dataset.day = key;
-      statusText();
+      statusText(); copyStatus();
     } catch (e) { $('memo-editor').contentEditable = 'false'; state(e.message, true); }
   }
   async function openDay(key) {
@@ -124,16 +124,16 @@
     const a = pos ? pos.start : App.memoEditor.text().length;
     App.memoEditor.insert((a > 0 && App.memoEditor.text()[a - 1] !== '\n' ? '\n' : '') + stamp.replace(':', '') + ' ');
   }
-  async function copyText(text) {
+  async function copyText(text, onCopied) {
     let copied = false;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       try { await navigator.clipboard.writeText(text); copied = true; } catch (e) { /* 使用可见文本回退 */ }
     }
     if (!copied) {
-      App.ui.openModal('复制文字', '<p class="hint">自动复制未完成，请长按下方文字全选复制。</p><textarea id="memo-copy-fallback" readonly></textarea>', '<button class="btn" data-act="close">关闭</button>');
+      App.ui.openModal('复制文字', '<p class="hint">自动复制未完成，请长按下方文字全选复制。</p><textarea id="memo-copy-fallback" readonly></textarea>', (onCopied ? '<button class="btn btn-primary" data-act="copied">我已手动复制</button>' : '') + '<button class="btn" data-act="close">关闭</button>');
       $('memo-copy-fallback').value = text; $('memo-copy-fallback').select();
-      App.ui.bindActions({ close: App.ui.closeModal });
-    } else App.ui.toast('已复制；请自行粘贴发送');
+      App.ui.bindActions({ close: App.ui.closeModal, copied: async b => { b.disabled = true; if (onCopied) await onCopied(); App.ui.closeModal(); } });
+    } else { App.ui.toast('已复制；请自行粘贴发送'); if (onCopied) await onCopied(); }
     return copied;
   }
   function download(name, text) {
@@ -150,11 +150,27 @@
     const selection = App.memoEditor.selection();
     if (selection && selection.start !== selection.end) return copyText(App.memoEditor.text().slice(selection.start, selection.end));
     if (!await flush()) return copyText(currentText());
-    return copyText(read(selected) ? exportText([selected]) : currentText());
+    return copyFull();
+  }
+  let copying = false;
+  function copyStatus() {
+    const el = $('memo-copy-status'); if (!el) return;
+    const last = S().data().memoFlow?.lastCopy; el.textContent = last ? '上次完整复制：' + naturalDay(last.at) + ' ' + clock(last.at) + ' · 复制不代表已发送' : '完整复制会补带遗漏内容；选区复制不更新记录';
+  }
+  async function markCopied(quote) {
+    try { if (await App.memoActions.commit(() => App.memoFlow.markCopyCore(quote))) copyStatus(); }
+    catch(e) { const el=$('memo-copy-status'); el.textContent='文字已复制，但复制记录尚未保存；点此重试'; el.onclick=async()=>{try{if(await App.memoActions.commit(()=>{})){el.onclick=null;copyStatus();}}catch(err){App.ui.toast(err.message);}}; App.ui.toast(e.message); }
   }
   async function copyFull() {
-    if (!await flush()) return copyText(currentText());
-    return copyText(read(selected) ? exportText([selected]) : currentText());
+    if(copying)return;
+    if(App.memoActions?.busy())return App.ui.toast('请先重试保存当前操作');
+    copying=true;
+    try {
+      if (!await flush()) return await copyText(currentText());
+      if (!S().data().memoFlow) return await copyText(read(selected) ? exportText([selected]) : currentText());
+      const quote=App.memoFlow.copyQuote(selected);
+      return await copyText(quote.text,()=>markCopied(quote));
+    } catch(e){App.ui.toast(e.message);} finally{copying=false;}
   }
   function history() {
     const root = $('memo-history-results'); if (!root) return;
@@ -194,6 +210,8 @@
     $('memo-next').onclick = () => openDay(shiftDay(selected, 1));
     $('memo-copy').onclick = copyCurrent;
     $('memo-copy-full').onclick = copyFull;
+    $('memo-copy-again').onclick = () => { const last=S().data().memoFlow?.lastCopy; last ? copyText(last.text) : App.ui.toast('还没有完整复制记录'); };
+    copyStatus();
     $('memo-search').oninput = history;
     $('memo-from').value = shiftDay(userDay(), -6); $('memo-to').value = userDay();
     $('memo-export').onclick = exportRange;

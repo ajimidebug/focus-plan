@@ -313,6 +313,7 @@
       '<div class="field"><label>每日目标（0＝选做）</label>' +
       '<input id="ck-target" type="number" min="0" step="1" value="' + targetOf(v) + '" /></div>' +
       '</div>' +
+      '<div class="field"><label>预计用时（分钟，选填）</label><input id="ck-estimate" type="number" min="0" max="1440" value="' + (v.estimatedMinutes || '') + '"></div>' +
       '<div class="field"><label>每日奖励次数上限（0＝只记录）</label><input id="ck-reward-limit" type="number" min="0" max="10000" step="1" value="' + S().habitRules(v).rewardLimit + '"><p class="hint">选做不要求每日完成；奖励上限与目标独立。达到上限仍可记录。此上限适用于固定基础分模式。</p></div>' +
       '<div class="field"><label>备注（选填，写给自己）</label>' +
       '<input id="ck-note" type="text" value="' + esc(v.note || '') + '" placeholder="比如：分 4 次喝，每次 500ml" /></div>' + mkHTML + '<p id="ck-save-error" role="alert"></p>',
@@ -327,17 +328,18 @@
         if (!t) { App.ui.toast('先写个名字'); return; }
         const pts = Math.max(0, +modal.querySelector('#ck-points').value || 0);
         const tg = S().habitRules({ target: modal.querySelector('#ck-target').value }).target;
+        const estimatedMinutes = Math.min(1440, Math.max(0, Number(modal.querySelector('#ck-estimate').value) || 0));
         const rewardLimit = S().habitRules({ target: tg, rewardLimit: modal.querySelector('#ck-reward-limit').value }).rewardLimit;
         const nt = (modal.querySelector('#ck-note').value || '').trim();
         const idForNew = isNew ? S().uid() : id;
         const mutate = () => {
         if (isNew) {
           D().push({
-            id: idForNew, text: t, points: pts, target: tg, rewardLimit, note: nt,
+            id: idForNew, text: t, points: pts, target: tg, rewardLimit, estimatedMinutes, note: nt,
             days: {}, createdAt: new Date().toISOString()
           });
         } else {
-          it.text = t; it.points = pts; it.target = tg; it.rewardLimit = rewardLimit; it.note = nt;
+          it.text = t; it.points = pts; it.target = tg; it.estimatedMinutes = estimatedMinutes; it.rewardLimit = rewardLimit; it.note = nt;
         }
         };
         if (window.__MEMO_MODE && App.memoActions) {

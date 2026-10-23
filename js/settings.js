@@ -361,6 +361,7 @@
   }
 
   function redeemModal() {
+    if (window.__MEMO_MODE && App.memoCurrency?.shop) return App.memoCurrency.shop();
     const s = S().settings();
     const balance = S().pointsTotal();
     const table = s.redeemTable.filter(function (r) { return r.points > 0; })

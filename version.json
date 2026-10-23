@@ -1,150 +1,154 @@
 {
-  "id": "170.1.0",
+  "id": "170.2.0",
   "dataVersion": 1,
-  "releasedAt": "2026-10-22T08:50:01.628Z",
+  "releasedAt": "2026-10-23T12:31:48.193Z",
   "assets": [
     {
-      "url": "./index.html?v=170.1.0",
-      "sha256": "c0df4d628be5cec90e1913581f902594f10f06e945b09b201f1529c57dfbeb9e"
+      "url": "./index.html?v=170.2.0",
+      "sha256": "a51f80ed951863a801eb44993d340213ecd71438782f13489996284105445d8f"
     },
     {
-      "url": "./version.html?v=170.1.0",
+      "url": "./version.html?v=170.2.0",
       "sha256": "7a82aef2612c437f0d584e526bf1d11947d0620fc3de4fec1170342308f83b57"
     },
     {
-      "url": "./css/style.css?v=170.1.0",
-      "sha256": "62678b267a8c6c97b026c03222b2abcd5b33e2520691b45b04170e39979122a4"
+      "url": "./css/style.css?v=170.2.0",
+      "sha256": "187f76636d426566fa2dc94c993c47b37ce8411246f3fcc8135d673f907ce0d4"
     },
     {
-      "url": "./css/katex.css?v=170.1.0",
+      "url": "./css/katex.css?v=170.2.0",
       "sha256": "c596bf225b14e4e817fb4f1b801f6f85682e8b92fa457d12af2c0b891eb96bcc"
     },
     {
-      "url": "./js/app.js?v=170.1.0",
-      "sha256": "fffeca34b686b074de27b825a25e0f2c244f3a3eec514044bed09ef2d33e1898"
+      "url": "./js/app.js?v=170.2.0",
+      "sha256": "a102edf1ca01e451ef856b6739f7bdb27a0cb28a0556ad70344a62104b9de873"
     },
     {
-      "url": "./js/backup.js?v=170.1.0",
+      "url": "./js/backup.js?v=170.2.0",
       "sha256": "979264c92e4434fd175cc420aff0ab06de623a11f175f8fbaf673855601c48a3"
     },
     {
-      "url": "./js/badges.js?v=170.1.0",
+      "url": "./js/badges.js?v=170.2.0",
       "sha256": "8a5cb3be5508cbd504040b26ffed48b236d4d16c1f05a709e52a809611fc2929"
     },
     {
-      "url": "./js/calendar.js?v=170.1.0",
+      "url": "./js/calendar.js?v=170.2.0",
       "sha256": "cff68efd8857a8892b930fcf269d7d82d77065ccd02e4101342339eb5fa7c71b"
     },
     {
-      "url": "./js/checkin.js?v=170.1.0",
-      "sha256": "198694704f0398021b5cad202d1dbdef671de933759a641a5c922997ec688daf"
+      "url": "./js/checkin.js?v=170.2.0",
+      "sha256": "90c03e3146a891142a6bb4d52caaaae4264e63acb5c62ff1ddf83aaf967b9b8a"
     },
     {
-      "url": "./js/demo.js?v=170.1.0",
+      "url": "./js/demo.js?v=170.2.0",
       "sha256": "a2a5f017e3ac0ebd8cbfd508c7bb95d361dafd4946a744fd0e4b025f93b28bb9"
     },
     {
-      "url": "./js/exams.js?v=170.1.0",
+      "url": "./js/exams.js?v=170.2.0",
       "sha256": "99da6d693304cd5483f71894978693f8b7cdd11bb2e7c9698b78ac722be36f20"
     },
     {
-      "url": "./js/katex.min.js?v=170.1.0",
+      "url": "./js/katex.min.js?v=170.2.0",
       "sha256": "2ec26e326d3b141856db1c4d46c07ac3618923c7032d4fcf65f66718ea5cda00"
     },
     {
-      "url": "./js/lecture.js?v=170.1.0",
+      "url": "./js/lecture.js?v=170.2.0",
       "sha256": "b25bacaee1d24924b3d4ac6ecb967a1ae2e732d853a7532ced268bf18235efee"
     },
     {
-      "url": "./js/link.js?v=170.1.0",
+      "url": "./js/link.js?v=170.2.0",
       "sha256": "bdbe316d78091867df2f186e8d190092e0bfca1934ac9062a4f897d915e87914"
     },
     {
-      "url": "./js/marked.min.js?v=170.1.0",
+      "url": "./js/marked.min.js?v=170.2.0",
       "sha256": "2b5f392ea73cf6f79ab6529e8e0d3bdce7f36c320aa29153a0d4949775344baf"
     },
     {
-      "url": "./js/memcards.js?v=170.1.0",
-      "sha256": "fd8e5ac5c5edc831fdcf2b1c4672741eb1cc1b4a5a4e307dc3d58ec011172f87"
+      "url": "./js/memcards.js?v=170.2.0",
+      "sha256": "b71e0416d9bc7cf6b081b53a4002261fa3a13a31225bfe381f92bf41d3456e9a"
     },
     {
-      "url": "./js/memo-actions.js?v=170.1.0",
-      "sha256": "f14e89e3211da63386222ebc289158c0f112fb18364a874d0ecf097b34929e0a"
+      "url": "./js/memo-actions.js?v=170.2.0",
+      "sha256": "5528443095d1c5f32e02957d5a1150f2e516b8e337a741801e94dda03c44a0a4"
     },
     {
-      "url": "./js/memo-currency.js?v=170.1.0",
-      "sha256": "2fa7713b29aa9b0b53a16126daee42db567c9b450b1f7310dd241b0a776e064f"
+      "url": "./js/memo-currency.js?v=170.2.0",
+      "sha256": "a977d72f4e4c7956bc4922250e888248b6a2fdf9709535ac4ff2494b86dcd02f"
     },
     {
-      "url": "./js/memo-editor.js?v=170.1.0",
+      "url": "./js/memo-editor.js?v=170.2.0",
       "sha256": "910414b53d8be52e1866513d37d4afbe9d8395598377736d10f823c0d199315b"
     },
     {
-      "url": "./js/memo-schedule.js?v=170.1.0",
-      "sha256": "2639470c3ff7ed219920ed66de8c38bff1ef89b3f46c4287406240f37960fb50"
+      "url": "./js/memo-flow.js?v=170.2.0",
+      "sha256": "06c067ecb396a27b20346fc41641e026956f5296195721ec2e72fd26259d4149"
     },
     {
-      "url": "./js/memo-workspace.js?v=170.1.0",
-      "sha256": "ee7febb1e21b0c8ad9cc49fecc5c75fb36ce9e316550ae89366ccb2e0ef94ebe"
+      "url": "./js/memo-schedule.js?v=170.2.0",
+      "sha256": "9c872ef4378c8b8b523605a9e9261d6af1963621db3a8dffb3072ed25c319c0f"
     },
     {
-      "url": "./js/memo.js?v=170.1.0",
-      "sha256": "723fe73d992d0730dd689a6af3f9eca53147dfa18c3eeaf5d7df246fb1096703"
+      "url": "./js/memo-workspace.js?v=170.2.0",
+      "sha256": "5c0e1917f8eb9fdb10aced0bd2503e6c21b7ec8761fd84e0becb12dd36fe22e7"
     },
     {
-      "url": "./js/mhchem.min.js?v=170.1.0",
+      "url": "./js/memo.js?v=170.2.0",
+      "sha256": "51d5e27d51d116592436966829dcc12ae4609163afb83b9da6ad9fa7680344b2"
+    },
+    {
+      "url": "./js/mhchem.min.js?v=170.2.0",
       "sha256": "cdf8174ee9a8113fcecc79cf24209754554e080efe19b767940c9aec5864a834"
     },
     {
-      "url": "./js/milestones.js?v=170.1.0",
+      "url": "./js/milestones.js?v=170.2.0",
       "sha256": "f0834aaaf137c3de2a6ac250b8ad75102885bf414c190a1a0ee56801ab24da17"
     },
     {
-      "url": "./js/mistakes.js?v=170.1.0",
+      "url": "./js/mistakes.js?v=170.2.0",
       "sha256": "a0df83f6fc839461703366364c2487c88adc2932e6fb671edba11fa5b587be90"
     },
     {
-      "url": "./js/queue.js?v=170.1.0",
+      "url": "./js/queue.js?v=170.2.0",
       "sha256": "afead75511ab2371e265273f7350613c20291bee40ecc271d79f4ed92cf373e8"
     },
     {
-      "url": "./js/settings.js?v=170.1.0",
-      "sha256": "3c7341c1a9a098017e2f5d9fafe5c7a9774125b663e8f64b1982fe55139fe4e4"
+      "url": "./js/settings.js?v=170.2.0",
+      "sha256": "90873bbd9f9a86e895f13b29a7dc2e21ae38fd532c85ab1c1048ac5b215a01af"
     },
     {
-      "url": "./js/sport.js?v=170.1.0",
+      "url": "./js/sport.js?v=170.2.0",
       "sha256": "fbd6e64d9c02a42dfd1f606dd399451a1a9eb885fbe1c666b3318004c124bc54"
     },
     {
-      "url": "./js/stats.js?v=170.1.0",
+      "url": "./js/stats.js?v=170.2.0",
       "sha256": "5849ec142ff8aff4796bdb907d5e34c65fe56fc99506fa0c96efe8440ee62c9c"
     },
     {
-      "url": "./js/store.js?v=170.1.0",
+      "url": "./js/store.js?v=170.2.0",
       "sha256": "384c389e68d9cba4572cb84c8f34c3452eab660164eee3d01bb115d5c1ac7fa0"
     },
     {
-      "url": "./js/tasks.js?v=170.1.0",
+      "url": "./js/tasks.js?v=170.2.0",
       "sha256": "3726515a2061d7c74f86f21c4929f3ce3a15fc93cfd15b30af3b45a78564f1ce"
     },
     {
-      "url": "./js/timeline.js?v=170.1.0",
+      "url": "./js/timeline.js?v=170.2.0",
       "sha256": "01a162b92306b5e4e70a15e47c093a2d1c4dd43d444b001195dc385763e57b3b"
     },
     {
-      "url": "./js/ui.js?v=170.1.0",
+      "url": "./js/ui.js?v=170.2.0",
       "sha256": "a2bb33f11407494983cf89d04b1c3a8f903120cb290ba4c260d052eed7c2817c"
     },
     {
-      "url": "./js/updates.js?v=170.1.0",
+      "url": "./js/updates.js?v=170.2.0",
       "sha256": "7f91e6e7db9a34d5d8b08282decde753a2576058cef7e4e764b130b92906bcc5"
     },
     {
-      "url": "./manifest.webmanifest?v=170.1.0",
+      "url": "./manifest.webmanifest?v=170.2.0",
       "sha256": "6db6c99f8f9693b54fa0066ae609bf824216e47094fd01b28487a9bd059a9402"
     },
     {
-      "url": "./icon.svg?v=170.1.0",
+      "url": "./icon.svg?v=170.2.0",
       "sha256": "57cc2f36576a189060fe6d592a51bdf7c7f4adea9d489418e44f2d79afa6f74a"
     }
   ]

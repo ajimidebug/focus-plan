@@ -12,10 +12,11 @@
 
   /* ---------- 顶部统计条 ---------- */
   function refreshStats() {
-    const day = S().getDay(S().todayKey());
+    const dayKey = window.__MEMO_MODE && App.memoCore ? App.memoCore.userDay() : S().todayKey();
+    const day = S().getDay(dayKey);
     // 📋 v82：队列实体化的副本不进统计 —— 不给队列制造「0/1」这种分母
     // 🧲 v105：来自「今天的基础任务」的副本也不算 —— 它跟队列当前条一个待遇（住在自己那一页）
-    const cnt = function (k, f) { return day.tasks[k].filter(function (t) { return !t.fromQueue && !t.fromDaily && f(t); }).length; };
+    const cnt = function (k, f) { return day.tasks[k].filter(function (t) { return !t.fromQueue && !t.fromDaily && !t.memoMovedTo && !t.memoDismissed && f(t); }).length; };
     document.getElementById('stat-req').textContent = cnt('required', function (t) { return t.done; }) + '/' + cnt('required', function () { return true; });
     document.getElementById('stat-ideal').textContent = cnt('ideal', function (t) { return t.done; }) + '/' + cnt('ideal', function () { return true; });
     document.getElementById('stat-extra').textContent = cnt('extra', function (t) { return t.done; }) + '/' + cnt('extra', function () { return true; });
@@ -48,7 +49,7 @@
   /* ---------- 公告 / 使用指南 ---------- */
   function aboutModal() {
     if (window.__MEMO_MODE) {
-      App.ui.openModal('随手记 · 使用说明', '<p>打开就写，输入自动保存。用「当前时间」插入时间，用「历史」搜索或按日期导出。笔记按北京时间凌晨04:00分日。</p><p>任务积分保留原版规则，由你手动结算；不提供计时、新知识时段或自动复习安排。旧记录仍可从更多页面查看。</p><p>内容保存在当前浏览器；请在设置下载完整备份。复制笔记后需自行粘贴发送，网站不会自动传给教练或Git。</p><p>原项目作者：Goko；此版本为个人备忘录定制版。</p>', '<button class="btn" data-act="close">关闭</button>');
+      App.ui.openModal('随手记 · 使用说明', '<p>打开就写，输入自动保存。用「当前时间」插入时间，用「历史」搜索或按日期导出。笔记按北京时间凌晨04:00分日。</p><p>任务支持计时、安排和历史查看；时间轴独立展示计划与实际。必做逾期按设置顺延并记录扣分，从新流程启用日生效。旧历史不追溯重算。</p><p>内容保存在当前浏览器；请在设置下载完整备份。复制笔记后需自行粘贴发送，网站不会自动传给教练或Git。</p><p>原项目作者：Goko；此版本为个人备忘录定制版。</p>', '<button class="btn" data-act="close">关闭</button>');
       App.ui.bindActions({ close: App.ui.closeModal }); return;
     }
     const bodyHTML = '' +
@@ -343,7 +344,7 @@
     if (window.__MEMO_MODE && currentView === 'tasks') App.memoWorkspace?.leave();
     const unifiedQueue = window.__MEMO_MODE && v === 'queue';
     const unifiedTimeline = window.__MEMO_MODE && v === 'timeline';
-    if (unifiedTimeline) v = 'tasks';
+    if (unifiedTimeline) v = 'memo-timeaxis';
     if (window.__MEMO_MODE && v === 'queue') v = 'tasks';
     currentView = v;
     document.body.dataset.view = v;
@@ -359,6 +360,8 @@
     });
     if (v === 'memo') requestAnimationFrame(function () { const editor = document.getElementById('memo-editor'); if (editor) editor.scrollTop = editor.scrollHeight; });
     if (v === 'timeline') App.timeline.render();
+    if (v === 'memo-timeaxis') App.memoSchedule.open({ workspace: true });
+    if (unifiedTimeline) document.querySelectorAll('[data-view="timeline"]').forEach(b => b.classList.add('active'));
     if (v === 'stats') App.stats.render();
     if (v === 'calendar' && App.calendar) App.calendar.render();
     // 运动页原来切过来不重渲染 → 改了数据切回来还是旧的（2026-09-15 修）
@@ -457,6 +460,7 @@
     if (App.memoSchedule) App.memoSchedule.init();
     App.memoWorkspace?.init();
     App.memoCurrency?.init();
+    await App.memoFlow?.init();
     switchView('memo');
     App.tasks.renderAll();
     App.timeline.init();

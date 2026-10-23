@@ -28,21 +28,22 @@
     S().data().ledger.push(entry); event.ledgerIds.push(entry.id); event.points += points;
   }
   function taskLists(day) {
-    return ['required', 'ideal', 'extra'].map(k => (day.tasks[k] || []).filter(t => !t.fromQueue && !t.fromDaily && !t.memoProjectId));
+    const key = Object.keys(S().data().days).find(k => S().data().days[k] === day);
+    return ['required', 'ideal', 'extra'].map(k => (day.tasks[k] || []).filter(t => !t.fromQueue && !t.fromDaily && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed).concat((App.memoFlow?.assigned(key, k) || []).map(t => Object.assign({}, t, { done: !!t.doneAt }))));
   }
+  function rewardSpec(spec) { const a = spec.kind === 'queue' && App.memoFlow?.assignment(spec.id); return a ? Object.assign({}, spec, { kind: 'task', day: a.day, list: a.list }) : spec; }
   function eligible(day, kind) {
     const lists = taskLists(day), done = a => a.length > 0 && a.every(t => t.done);
     return kind === 'base' ? done(lists[0]) : lists.some(a => a.length) && lists.every(a => !a.length || a.every(t => t.done));
   }
   function rewardChoices(spec) {
-    if (spec.kind !== 'task') return [];
-    const day = S().getDay(spec.day), draft = copy(day), t = draft.tasks[spec.list].find(x => x.id === spec.id);
-    if (!t) return [];
-    t.done = true;
-    return ['base', 'perfect'].filter(kind => eligible(draft, kind) && !(day.rewards || []).some(r => r.kind === kind));
+    spec = rewardSpec(spec); if (spec.kind !== 'task') return [];
+    const day = S().getDay(spec.day), lists = taskLists(day).map(items => items.map(t => Object.assign({}, t, { done: t.id === spec.id || t.done })));
+    const done = items => items.length > 0 && items.every(t => t.done);
+    return ['base', 'perfect'].filter(kind => (kind === 'base' ? done(lists[0]) : lists.some(a=>a.length) && lists.every(a=>!a.length || done(a))) && !(day.rewards || []).some(r=>r.kind===kind));
   }
   function grantRewards(event, choices) {
-    if (event.kind !== 'task') return;
+    if (event.kind !== 'task' && !(event.kind === 'queue' && event.sourceList)) return;
     const day = S().getDay(event.sourceDay); day.rewards = day.rewards || [];
     choices.forEach(choice => {
       if (!eligible(day, choice.kind) || day.rewards.some(r => r.kind === choice.kind)) return;
@@ -55,15 +56,17 @@
   }
   function withdrawRewards(dayKey) {
     const day = S().data().days[dayKey]; if (!day) return;
-    const lost = (day.rewards || []).filter(r => { if (!r.memoLedgerId) return false; if (!r.dependencies) return !eligible(day, r.kind); const all = Object.values(day.tasks || {}).flat(); return r.dependencies.some(id => !all.some(t => t.id === id && t.done)); });
+    const lost = (day.rewards || []).filter(r => { if (!r.memoLedgerId) return false; if (!r.dependencies) return !eligible(day, r.kind); const all = taskLists(day).flat(); return r.dependencies.some(id => !all.some(t => t.id === id && t.done)); });
     const ids = lost.map(r => r.memoLedgerId);
     S().data().ledger = S().data().ledger.filter(l => !ids.includes(l.id));
     day.rewards = (day.rewards || []).filter(r => !ids.includes(r.memoLedgerId));
   }
   function completeCore(spec, text, at = new Date().toISOString(), choices = []) {
     if (S().status().readOnly) throw new Error('记录保护中，暂不能勾选');
-    if (spec.kind === 'task' && App.memoSchedule) { const found = App.memoSchedule.resolve({ kind: 'task', id: spec.id, day: spec.day, list: spec.list }); if (found?.ref.kind === 'project') spec = Object.assign({}, spec, { kind: 'project', id: found.ref.id, day: found.ref.day }); else if (found?.ref.kind === 'task') spec = Object.assign({}, spec, { list: found.ref.list }); }
+    if (spec.kind === 'task' && App.memoSchedule) { const found = App.memoSchedule.resolve({ kind: 'task', id: spec.id, day: spec.day, list: spec.list }); if (found?.ref.kind === 'project') spec = Object.assign({}, spec, { kind: 'project', id: found.ref.id, day: found.ref.day }); else if (found?.ref.kind === 'task') spec = Object.assign({}, spec, found.ref); }
+    const assignment = spec.kind === 'queue' && App.memoFlow?.assignment(spec.id); if (assignment) spec = Object.assign({}, spec, { day: assignment.day, list: assignment.list });
     const d = S().data(), event = { id: S().uid(), kind: spec.kind, sourceId: spec.id, sourceDay: spec.day || M().userDay(at), sourceList: spec.list || '', noteDay: M().userDay(at), at, active: true, ledgerIds: [], points: 0, title: spec.title };
+    event.timing = timingSnapshot(spec, Date.parse(at));
     events(d); // Validate before making any changes.
     noteBlocks(event.noteDay);
     if (spec.kind === 'queue') {
@@ -75,7 +78,7 @@
       (d.queueDone = d.queueDone || []).unshift(it);
       // Retire old materialized copies. The queue item itself remains the source of its configuration.
       Object.values(d.days).forEach(day => Object.values(day.tasks || {}).forEach(list => { for (let i = list.length - 1; i >= 0; i--) if (list[i].fromQueue === it.id && !list[i].done) list.splice(i, 1); }));
-      ledger(event, 'earn-queue', it.points == null ? (S().settings().queuePoints ?? 5) : it.points, '队列完成：' + it.text);
+      ledger(event, 'earn-queue', assignment?.list === 'required' ? 0 : it.points == null ? (S().settings().queuePoints ?? 5) : it.points, '队列完成：' + it.text);
     } else if (spec.kind === 'task') {
       const task = S().getDay(event.sourceDay).tasks[spec.list].find(t => t.id === spec.id);
       if (!task || task.done) throw new Error('任务状态已改变，请重新打开');
@@ -138,7 +141,7 @@
     });
     M().write(event.noteDay, kept.map(b => b.text).join(''), at, kept);
     event.active = false; event.undoneAt = at; event.reason = reason;
-    if (event.kind === 'task') withdrawRewards(event.sourceDay);
+    if (event.kind === 'task' || (event.kind === 'queue' && event.sourceList)) withdrawRewards(event.sourceDay);
     if (reason.trim()) {
       const noteEvent = { id: S().uid(), kind: 'cancellation', noteDay: M().userDay(at), at };
       append(noteEvent, stamp(at, noteEvent.noteDay) + '【取消勾选】' + event.title + '：' + reason);
@@ -166,6 +169,21 @@
       return true;
     } finally { committing = false; }
   }
+  function timingSnapshot(spec, now = Date.now()) {
+    const ref = { kind: spec.kind, id: spec.id, day: spec.day, list: spec.list }, P = App.memoSchedule;
+    const task = spec.kind === 'checkin' ? (S().data().checkins || []).find(t => t.id === spec.id) : P?.find(ref);
+    const schedule = S().data().memoSchedule, plans = P && schedule ? schedule.items.filter(p => !p.deleted && P.key(p.ref) === P.key(ref) && (!spec.day || p.day === spec.day)).map(p => ({ id:p.id, day:p.day, start:p.start, end:p.end, title:p.title })) : [];
+    const sessions = P && schedule ? schedule.sessions.filter(s => P.key(s.ref) === P.key(ref)) : [];
+    const bounds = spec.day ? [Date.parse(spec.day+'T04:00:00+08:00'),Date.parse(M().shiftDay(spec.day,1)+'T04:00:00+08:00')] : [-Infinity,now];
+    const actualMs = sessions.reduce((sum,s)=>sum+s.chunks.reduce((n,c)=>n+Math.max(0,Math.min(c.end ?? now,bounds[1],now)-Math.max(c.start,bounds[0])),0),0);
+    const lines = [];
+    if(plans.length) lines.push('计划：'+plans.map(p=>M().naturalDay(p.start)+' '+M().clock(p.start)+(p.end?'—'+(M().naturalDay(p.end)!==M().naturalDay(p.start)?M().naturalDay(p.end)+' ':'')+M().clock(p.end):'（时间点）')).join('；'));
+    const estimatedMinutes = Number(task?.estimatedMinutes) || (plans.length && plans.every(p=>p.end) ? plans.reduce((n,p)=>n+(p.end-p.start)/60000,0) : 0);
+    if(estimatedMinutes)lines.push('预计用时：'+estimatedMinutes+'分钟');
+    if(actualMs)lines.push('实际有效计时：'+Math.floor(actualMs/60000)+'分'+Math.floor(actualMs/1000)%60+'秒');
+    else if(spec.kind!=='checkin')lines.push('实际用时：未记录');
+    return { plans, estimatedMinutes, actualMs, text: lines.length ? lines.join('\n')+'\n' : '' };
+  }
   function complete(spec) {
     if (committing || unsettled) { App.ui.toast('请先完成当前操作或重试保存'); return; }
     const at = new Date().toISOString(), day = M().userDay(at), label = spec.kind === 'checkin' ? '积分打卡' : '任务勾选';
@@ -174,14 +192,14 @@
     const m = App.ui.openModal('确认' + (spec.kind === 'checkin' ? '打卡' : '完成'),
       '<p class="hint">时间只表示本次勾选时刻。可补充、改写或清空；清空后仍完成并记积分。</p>' +
       '<label for="memo-action-text">写入笔记的文段</label><textarea id="memo-action-text" class="memo-action-text"></textarea>' +
-      options.map(kind => '<div class="field"><label><input type="checkbox" data-reward="' + kind + '" checked> 同时领取' + (kind === 'base' ? '保底' : '全部完成') + '奖励</label><input type="number" min="0" data-reward-points="' + kind + '" value="' + Number(kind === 'base' ? settings.baseRewardPoints : settings.perfectRewardPoints) + '"></div>').join('') +
+      options.map(kind => '<div class="field"><label><input type="checkbox" data-reward="' + kind + '" checked> 同时领取' + (kind === 'base' ? '保底' : '额外全部完成（含选做，非全勤）') + '奖励</label><input type="number" min="0" data-reward-points="' + kind + '" value="' + Number(kind === 'base' ? settings.baseRewardPoints : settings.perfectRewardPoints) + '"></div>').join('') +
       '<p class="hint" id="memo-action-info"></p><p id="memo-action-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="commit">确认完成</button>', { lock: true });
     const textarea = m.querySelector('#memo-action-text');
-    textarea.value = stamp(at, day) + '【' + label + '】' + spec.title + suffix + '\n';
+    textarea.value = stamp(at, day) + '【' + label + '】' + spec.title + suffix + '\n' + timingSnapshot(spec, Date.parse(at)).text;
     textarea.focus(); textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     let previewPoints = 0;
-    if (spec.kind === 'queue') { const it = S().data().queue.find(x => x.id === spec.id); previewPoints = Number(it?.points ?? settings.queuePoints ?? 5); }
+    if (spec.kind === 'queue') { const it = S().data().queue.find(x => x.id === spec.id); previewPoints = it?.assignment?.list === 'required' ? 0 : Number(it?.points ?? settings.queuePoints ?? 5); }
     if (spec.kind === 'checkin') { const it = S().data().checkins.find(x => x.id === spec.id); previewPoints = App.checkin.memoPoints(it, spec.day); }
     if (spec.kind === 'daily') { const it = S().data().daily.find(x => x.id === spec.id); previewPoints = Number(it?.points ?? settings.dailyPoints ?? 2); }
     if (spec.kind === 'project') previewPoints = Number((S().data().memoProjects || []).find(x => x.id === spec.id)?.points || 0);
@@ -227,7 +245,7 @@
     });
   }
   function task(list, id, sourceDay) {
-    const day = sourceDay || S().todayKey();
+    const day = sourceDay || M().userDay();
     const location = Object.entries(S().getDay(day).tasks).find(([_, items]) => items.some(t => t.id === id)); if (!location) return; list = location[0]; const t = location[1].find(t => t.id === id);
     if ([App.tasks?.getTimer?.(), App.tasks?.getCdTimer?.()].some(timer => timer?.taskId === id)) { App.ui.toast('原有计时尚未结束，请先结束后再勾选'); return; }
     if (t.memoProjectId) return project(t.memoProjectId, day);
