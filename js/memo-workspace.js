@@ -29,13 +29,26 @@
     const open = items.filter(x => !doneFor(x.task, x.ref)), done = items.filter(x => doneFor(x.task, x.ref));
     return open.map(x => card(x.task, x.ref)).join('') + (!open.length ? '<p class="hint mw-empty">暂无未完成任务</p>' : '') + (done.length ? '<details class="mw-completed"><summary>已完成（' + done.length + '）</summary>' + done.map(x => card(x.task, x.ref)).join('') + '</details>' : '');
   }
+  function taskItems(day,list){
+    const items=(S().getDay(day).tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed).map(task=>({task,ref:{kind:'task',id:task.id,day,list}}));
+    A.memoFlow?.assigned(day,list).forEach(task=>items.push({task,ref:{kind:'queue',id:task.id}}));
+    if(list==='extra')projects().filter(p=>!p.archived&&(!p.createdDay||p.createdDay<=day)).forEach(task=>items.push({task,ref:{kind:'project',id:task.id,day}}));
+    const seen=new Set();return items.filter(x=>{const found=A.memoSchedule.resolve(x.ref);if(!found)return false;const ref=found.ref,key=A.memoSchedule.key(ref);x.task=found.task;if(seen.has(key))return false;seen.add(key);x.ref=ref;return true;});
+  }
+  function overviewHTML(day){return '<section class="card mw-overview"><h3>'+esc(day)+' · 任务总览</h3><div class="cal-cols">'+['required','ideal','extra'].map(list=>{
+    const items=taskItems(day,list);return '<div class="cal-col"><div class="cal-col-head">'+names[list]+' <small>'+items.filter(x=>doneFor(x.task,x.ref)).length+'/'+items.length+'</small></div>'+items.map(({task:t,ref})=>'<div class="cal-task'+(doneFor(t,ref)?' done':'')+'"><button class="mw-mini-title" data-mw="locate" '+refAttrs(ref)+' title="'+esc(t.text)+'">'+esc(t.text)+(doneFor(t,ref)?' ✓':'')+'</button><div class="t-btns">'+button('complete',doneFor(t,ref)?'取消完成':'完成',refAttrs(ref))+button('edit','编辑',refAttrs(ref))+'</div></div>').join('')+(!items.length?'<small>暂无任务</small>':'')+'</div>';
+  }).join('')+'</div></section>';}
+  function locate(ref){
+    const key=A.memoSchedule.key(ref),card=[...$('mw-today').querySelectorAll('[data-mw-card]')].find(el=>A.memoSchedule.key(JSON.parse(el.dataset.ref))===key);if(!card)return;
+    const folded=card.closest('details');if(folded)folded.open=true;
+    card.scrollIntoView({block:'center',behavior:'smooth'});card.querySelector('[data-mw="edit"]')?.focus({preventScroll:true});
+  }
+  function overviewAction(day,ref,action){taskDay=day;A.app.switchView('tasks');showPane('today',false);render();if(action==='complete')complete(ref);else if(action==='edit')editor(ref);else requestAnimationFrame(()=>locate(ref));}
   function renderTasks() {
     taskDay = taskDay || M().userDay(); const day = S().getDay(taskDay), occurrenceDay = taskDay === M().userDay() ? M().userDay() : taskDay;
     const root = $('mw-today');
-    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + button('today', '今天') + button('tomorrow', '明天') + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + button('ddl', '截止日期', 'id="mw-ddl"') + '</div><div class="mw-column-tabs">' + ['required','ideal','extra'].map(k=>button('column',names[k],'data-column="'+k+'"')).join('') + '</div><div class="mw-board">' + ['required', 'ideal', 'extra'].map(list => {
-      const items = (day.tasks[list] || []).filter(t => !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed).map(task => ({ task, ref: { kind: 'task', id: task.id, day: taskDay, list } }));
-      A.memoFlow?.assigned(taskDay, list).forEach(task => items.push({ task, ref: { kind: 'queue', id: task.id } }));
-      if (list === 'extra') projects().filter(p => !p.archived && (!p.createdDay || p.createdDay <= occurrenceDay)).forEach(task => items.push({ task, ref: { kind: 'project', id: task.id, day: occurrenceDay } }));
+    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + button('today', '今天') + button('tomorrow', '明天') + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + button('ddl', '截止日期', 'id="mw-ddl"') + '</div>' + overviewHTML(taskDay) + '<div class="mw-full-list">' + ['required', 'ideal', 'extra'].map(list => {
+      const items = taskItems(taskDay,list);
       return '<section class="mw-group" id="mw-column-'+list+'"><div class="mw-group-head"><h2>' + names[list] + '<small> · 待做 ' + items.filter(x => !doneFor(x.task, x.ref)).length + '</small></h2>' + button('add-' + list, '＋ 添加', 'aria-label="添加' + names[list] + '"') + '</div>' + taskSection(items) + (list === 'extra' ? '<details class="mw-project-help"><summary>项目说明与已停用项目</summary><p class="hint">一次性任务按日期保留；每日推进项目持续显示，可在编辑中停用。</p>' + (S().data().daily || []).filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-daily', '恢复基础任务', refAttrs({ kind: 'daily', id: p.id })) + '</p>').join('') + projects().filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-project', '恢复项目', refAttrs({ kind: 'project', id: p.id })) + '</p>').join('') + '</details>' : '') + '</section>';
     }).join('') + '</div>' + backlog() + ((S().data().daily || []).some(t => !t.archived) ? '<section class="mw-group"><h2>原有基础任务</h2>' + taskSection(S().data().daily.filter(t => !t.archived).map(task => ({ task, ref: { kind: 'daily', id: task.id, day: occurrenceDay } }))) + '</section>' : '');
     A.ms?.refresh();
@@ -180,6 +193,7 @@
     root.addEventListener('click', e => {
       const b = e.target.closest('[data-mw]'), cardEl = e.target.closest('[data-mw-card]');
       if (b) { e.preventDefault(); e.stopImmediatePropagation(); const act = b.dataset.mw, ref = b.dataset.ref ? JSON.parse(b.dataset.ref) : null;
+        if(act==='locate')return locate(ref);
         if(act==='ddl')return A.ms.open();
         if(act==='column'){const col=$('mw-column-'+b.dataset.column);$('mw-today').querySelector('.mw-board').scrollTo({left:col.offsetLeft-col.parentElement.offsetLeft,behavior:'smooth'});return;}
         if (act.startsWith('add-')) return editor(null, act.slice(4));
@@ -201,5 +215,5 @@
     setInterval(() => { const now = M().userDay(); if (now !== lastDay) { if (taskDay === lastDay) taskDay = now; lastDay = now; render(); } }, 30000);
     render();
   }
-  A.memoWorkspace = { init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
+  A.memoWorkspace = { overviewHTML, overviewAction, init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
 })();

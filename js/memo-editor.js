@@ -70,6 +70,7 @@
       followFrame = false;
       const selected = window.getSelection();
       if (!selected || !selected.rangeCount || !root.contains(selected.focusNode)) return;
+      root.querySelectorAll('.memo-generated').forEach(el=>el.classList.toggle('memo-active',el.contains(selected.focusNode)));
       const viewport = window.visualViewport;
       const visibleTop = viewport ? viewport.offsetTop : 0;
       const visibleBottom = visibleTop + (viewport ? viewport.height : window.innerHeight);
@@ -98,16 +99,16 @@
   }
   function paint(caret) {
     const frag = document.createDocumentFragment();
-    blocks.forEach(x => {
+    blocks.forEach((x,index) => {
       const span = document.createElement('span'); span.dataset.block = x.id;
-      if (x.eventId) { span.className = 'memo-generated'; span.dataset.event = x.eventId; span.dataset.label = x.label || '打卡生成'; span.title = '此文段由勾选生成；取消对应勾选时删除，段内补充也会删除'; }
+      if (x.eventId) { span.className = 'memo-generated'; span.dataset.event = x.eventId; span.dataset.inlineSource=String(/【(?:积分打卡|任务勾选|补记完成)】/.test(x.text)); span.dataset.label = x.label || '打卡生成'; span.title = '此文段由勾选生成；取消对应勾选时删除，段内补充也会删除'; }
       if (x.eventId && x.text.startsWith('\n')) { frag.appendChild(document.createTextNode('\n')); span.textContent = x.text.slice(1); }
       else span.textContent = x.text;
       frag.appendChild(span);
       if (x.eventId) {
         // Empty button: its visible caption is CSS, so selection/text offsets stay plain-text only.
         const next = document.createElement('button'); next.type = 'button'; next.contentEditable = 'false';
-        next.className = 'memo-continue'; next.setAttribute('aria-label', '在这段后继续写笔记');
+        next.className = 'memo-continue'+(!blocks.slice(index+1).some(b=>b.eventId)?' memo-continue-latest':''); next.setAttribute('aria-label', '在这段后继续写笔记');
         next.onmousedown = e => e.preventDefault(); next.onclick = () => continueAfter(x.id);
         next.disabled = root.contentEditable === 'false'; frag.appendChild(next);
       }

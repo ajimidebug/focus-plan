@@ -814,3 +814,12 @@ test('DDL counts Shanghai civil days independently of study user-day and preserv
  assert.equal(ms.daysLeft({due:'2026-02-30'}),null);
  b.S.data().milestones={unknown:true};assert.throws(()=>ms.list(),/数据异常/);assert.equal(b.S.data().milestones.unknown,true);
 });
+test('task overview resolves queue identities and includes daily projects without duplicating assignment',async()=>{
+ const b=browser();await b.S.load();const {F,M,A}=flowHarness(b),d=b.S.data(),day=M.userDay();
+ d.queue=[{id:'ovq',text:'队列总览',assignment:{day,list:'ideal'},points:3}];
+ b.S.getDay(day).tasks.required.push({id:'proxy',fromQueue:'ovq',text:'旧副本'});
+ d.memoProjects=[{id:'ovp',text:'每日推进总览',days:{},points:2}];
+ vm.runInContext(source('js/memo-workspace.js'),b.ctx);
+ let html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.equal((html.match(/title="队列总览"/g)||[]).length,1);assert.match(html,/每日推进总览/);assert.doesNotMatch(html,/旧副本/);
+ A.completeCore({kind:'queue',id:'ovq',title:'队列总览'},'');html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.match(html,/队列总览 ✓/);assert.equal(d.ledger.filter(e=>e.type==='earn-queue').length,1);
+});

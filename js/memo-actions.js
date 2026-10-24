@@ -202,7 +202,7 @@
       '<p class="hint" id="memo-action-info"></p><p id="memo-action-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="commit">确认完成</button>', { lock: true });
     const textarea = m.querySelector('#memo-action-text');
-    textarea.value = stamp(at, day) + '【' + label + '】' + spec.title + suffix + '\n' + timingSnapshot(spec, Date.parse(at)).text;
+    textarea.value = stamp(at, day) + '【' + label + '】' + spec.title + suffix + (timingSnapshot(spec, Date.parse(at)).text ? '\n' + timingSnapshot(spec, Date.parse(at)).text.replace(/\n$/, '') : '');
     textarea.focus(); textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     let previewPoints = 0;
     if (spec.kind === 'queue') { const it = S().data().queue.find(x => x.id === spec.id); previewPoints = it?.assignment?.list === 'required' ? 0 : Number(it?.points ?? settings.queuePoints ?? 5); }
