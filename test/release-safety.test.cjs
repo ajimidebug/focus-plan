@@ -793,3 +793,15 @@ test('dismissed required queue assignments cannot block overdue processing',asyn
  const b=browser();await b.S.load();const {F}=flowHarness(b);b.S.data().queue=[{id:'dismissed',text:'取消安排',memoDismissed:'yes',assignment:{day:'2026-10-20',list:'required'}}];
  F.settleCore(Date.parse('2026-10-21T05:00:00+08:00'));assert.equal(F.state().settlements.length,0);
 });
+test('backfill completes canonical overdue task, refunds original penalty once and undo restores it',async()=>{
+ const b=browser();await b.S.load();const {F,M,P,A}=flowHarness(b),d=b.S.data();
+ b.S.getDay('2026-10-20').tasks.required.push({id:'bf',text:'已按时完成'});
+ F.settleCore(Date.parse('2026-10-21T05:00:00+08:00'));
+ const moved={kind:'task',id:'bf',day:'2026-10-21',list:'required'};assert.equal(b.S.pointsTotal(),-2);
+ let handlers;const values={'#bf-day':{value:'2026-10-20'},'#bf-note':{value:'忘记勾选'},'#bf-preview':{},'[role="alert"]':{}};
+ b.ctx.App.ui={openModal:()=>({querySelector:s=>values[s]}),bindActions:h=>{handlers=h;},closeModal:()=>{}};
+ b.ctx.App.memoWorkspace={render:()=>{}};b.ctx.App.app={refreshStats:()=>{}};P.render=()=>{};
+ F.backfill(moved);await handlers.save({disabled:false});assert.equal(values['[role="alert"]'].textContent,undefined);
+ assert.equal(P.find(moved).done,true);assert.equal(b.S.pointsTotal(),0);const event=d.memoEvents.find(e=>e.sourceId==='bf');assert.equal(event.sourceDay,'2026-10-20');assert.equal(event.noteDay,M.userDay());assert.equal(event.backfillDay,'2026-10-20');
+ A.undoCore(event.id);assert.equal(b.S.pointsTotal(),-2);assert.equal(P.find(moved).done,false);assert.equal(F.state().settlements[0].forgivenAt,undefined);
+});

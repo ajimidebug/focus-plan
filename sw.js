@@ -83,7 +83,7 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-refinements.js?v=170.3.0",
-    "sha256": "d2a2cdfcea23da9073a0d46497e0b3b69886fbb97e8793073b749bd728f2aa99"
+    "sha256": "868c3f4634125ff9abc6f67e8ea5aa025d1f5639208f4da2dd1915a756affd09"
   },
   {
     "url": "./js/memo-schedule.js?v=170.3.0",
