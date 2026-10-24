@@ -823,3 +823,11 @@ test('task overview resolves queue identities and includes daily projects withou
  let html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.equal((html.match(/title="队列总览"/g)||[]).length,1);assert.match(html,/每日推进总览/);assert.doesNotMatch(html,/旧副本/);assert.doesNotMatch(html,/<button|data-mw=|mw-mini-title/);assert.match(html,/✅ 必须/);assert.match(html,/class="tag"/);
  A.completeCore({kind:'queue',id:'ovq',title:'队列总览'},'');html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.match(html,/队列总览 ✓/);assert.equal(d.ledger.filter(e=>e.type==='earn-queue').length,1);
 });
+test('rest pauses, survives save, excludes rest from task time and resumes original session',async()=>{
+ const b=browser();await b.S.load();const {P,M}=flowHarness(b);vm.runInContext(source('js/memo-rest.js'),b.ctx);const R=b.ctx.App.memoRest,now=Date.parse('2026-10-24T03:55:00+08:00');
+ b.S.data().queue=[{id:'restq',text:'计时任务'}];const run=P.startRef({kind:'queue',id:'restq'},now-60000);R.startCore(now);R.startCore(now+1000);assert.equal(run.status,'paused');assert.equal(R.state().intervals.length,1);assert.equal(P.elapsed(run,now+600000),60000);await b.S.save();
+ const done=R.finishCore(now+600000);assert.equal(run.status,'running');assert.equal(done.resumedTitle,'计时任务');assert.equal(P.elapsed(run,now+660000),120000);assert.equal(R.active(),undefined);assert.match(M.read('2026-10-23').text,/开始休息/);assert.match(M.read('2026-10-24').text,/结束休息，共10分0秒/);
+});
+test('starting another task ends rest without resuming original task',async()=>{
+ const b=browser();await b.S.load();const {P}=flowHarness(b);vm.runInContext(source('js/memo-rest.js'),b.ctx);const R=b.ctx.App.memoRest,now=Date.now();b.S.data().queue=[{id:'r1',text:'原任务'},{id:'r2',text:'新任务'}];const first=P.startRef({kind:'queue',id:'r1'},now);R.startCore(now+60000);const next=P.startRef({kind:'queue',id:'r2'},now+120000);assert.equal(R.active(),undefined);assert.equal(first.status,'paused');assert.equal(next.status,'running');assert.equal(R.state().intervals[0].resumedTitle,undefined);
+});

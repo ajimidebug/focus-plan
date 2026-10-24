@@ -203,6 +203,8 @@
       '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="commit">确认完成</button>', { lock: true });
     const textarea = m.querySelector('#memo-action-text');
     textarea.value = stamp(at, day) + '【' + label + '】' + spec.title + suffix + (timingSnapshot(spec, Date.parse(at)).text ? '\n' + timingSnapshot(spec, Date.parse(at)).text.replace(/\n$/, '') : '');
+    const initialText=textarea.value;
+    const editButton=document.createElement('button');editButton.type='button';editButton.className='btn';editButton.textContent='编辑任务';editButton.onclick=()=>{if(textarea.value!==initialText)return App.ui.toast('请先完成本次记录，再编辑任务');App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list});};if(spec.kind!=='checkin')m.querySelector('.modal-actions').prepend(editButton);
     textarea.focus(); textarea.setSelectionRange(textarea.value.length, textarea.value.length);
     let previewPoints = 0;
     if (spec.kind === 'queue') { const it = S().data().queue.find(x => x.id === spec.id); previewPoints = it?.assignment?.list === 'required' ? 0 : Number(it?.points ?? settings.queuePoints ?? 5); }

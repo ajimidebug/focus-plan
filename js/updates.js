@@ -18,6 +18,7 @@
     if (App.store.status().readOnly) return '记录处于保护状态';
     if (App.memo && App.memo.busy()) return '笔记尚未安全保存';
     if (App.memoSchedule && App.memoSchedule.busy()) return '执行计时尚未结束，请结束后更新';
+    if(App.memoRest?.active())return '正在休息，请结束后更新';
     const T = App.tasks;
     if (T && ((T.getTimer && T.getTimer()) || (T.getCdTimer && T.getCdTimer()))) return '正在计时，请结束本段后更新';
     const day = App.store.getDay(App.store.todayKey());

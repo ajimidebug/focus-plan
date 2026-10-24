@@ -457,6 +457,7 @@
 
     // 初始化各视图（🧲 v83：队列优先模式下直接落在队列页）
     App.memo.init();
+    App.memoRest?.init();
     if (App.memoSchedule) App.memoSchedule.init();
     App.memoWorkspace?.init();
     App.memoCurrency?.init();

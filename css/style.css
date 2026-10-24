@@ -2104,3 +2104,15 @@ body.memo-layout[data-view="memo-timeaxis"] .release-panel:has(#storage-status:i
 .memo-generated::before{margin-bottom:2px;}
 .memo-continue{display:none;min-height:44px;padding:4px 8px;margin-bottom:4px;}
 .memo-continue-latest,.memo-generated.memo-active+.memo-continue,.memo-generated:focus-within+.memo-continue{display:block;}
+/* Default-white overview: color marks category, restrained borders mark tasks. */
+body:is(:not([data-theme]),[data-theme=""]) .mw-overview [data-overview-list],body[data-theme="default"] .mw-overview [data-overview-list]{--ov-accent:#3274b5;--ov-tint:#eff6fc;background:#fafcfe;cursor:pointer;}
+body:is(:not([data-theme]),[data-theme=""]) .mw-overview [data-overview-list="ideal"],body[data-theme="default"] .mw-overview [data-overview-list="ideal"]{--ov-accent:#886016;--ov-tint:#fcf6e8;}
+body:is(:not([data-theme]),[data-theme=""]) .mw-overview [data-overview-list="extra"],body[data-theme="default"] .mw-overview [data-overview-list="extra"]{--ov-accent:#35704d;--ov-tint:#eef7f0;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) .mw-overview [data-overview-list] .cal-col-head{background:var(--ov-tint,transparent);color:var(--ov-accent,inherit);padding:6px;border-radius:5px;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) .mw-overview [data-overview-list] .tag{color:var(--ov-accent,inherit);}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) .mw-overview [data-overview-ref]{background:white;border:1px solid #dce3e9!important;border-left:2px solid var(--ov-accent,#dce3e9)!important;border-radius:6px;margin:6px 0;padding:7px!important;min-height:44px;box-sizing:border-box;cursor:pointer;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) .mw-overview [data-overview-ref]:active{background:var(--ov-tint,#f1f5f9);}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) .mw-overview [data-overview-ref]:focus-visible,.mw-overview [data-overview-list]:focus-visible{outline:2px solid var(--ov-accent,#3274b5);outline-offset:2px;}
+#memo-rest{min-height:44px;}#memo-rest[aria-pressed="true"]{background:#edf5fb;color:#245b83;}
+
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) .ov-late{display:inline-block;margin-top:4px;padding:1px 5px;border-radius:4px;background:#fff3d8;color:#855713;font-size:11px;}
