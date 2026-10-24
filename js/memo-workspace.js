@@ -23,7 +23,7 @@
     const done = doneFor(t, ref), attrs = refAttrs(ref);
     const points = (ref.kind === 'task' && ref.list === 'required') || (ref.kind === 'queue' && t.assignment?.list === 'required') ? null : t.points ?? (ref.kind === 'project' ? 5 : ref.kind === 'daily' ? 2 : ref.kind === 'queue' ? S().settings().queuePoints ?? 5 : ref.list === 'ideal' ? S().settings().idealPoints ?? 10 : S().settings().extPoints ?? 5);
     return '<article class="mw-task' + (done ? ' mw-done' : '') + '" data-mw-card ' + attrs + '><div class="mw-task-heading">' + button('complete', done ? '✓' : '○', attrs + ' aria-label="' + (done ? '取消完成：' : '完成：') + esc(t.text) + '" aria-pressed="' + done + '"') + '<div class="mw-task-title"><strong>' + esc(t.text) + '</strong><div class="mw-task-meta">' + (ref.kind === 'queue' ? '<span>' + (t.pinned ? '置顶 · ' : '') + (options.number ? '第' + options.number + '项' : '已安排') + '</span>' : ref.kind === 'project' ? '<span>每日推进 · ' + esc(ref.day) + '</span>' : '') + (points != null ? '<span>＋' + esc(points) + '分</span>' : '') + '</div></div>' + button('edit', '编辑', attrs + ' aria-label="编辑：' + esc(t.text) + '"') + '</div><div class="mw-task-timing">' + A.memoSchedule.rowControls(ref) + '</div>' +
-      (true ? '<div class="mw-task-extras">' + (['task','queue'].includes(ref.kind) && (!done || t.overdueEventId) ? button('assign', done ? '安排与扣分记录' : ref.kind === 'queue' ? (t.assignment ? '调整今日安排' : '安排到今天') : '调整安排', attrs) : '') + (t.originalDay ? '<small class="mw-late">' + esc(A.memoFlow.lateLabel(t)) + '</small>' : '') + (t.assignment ? '<small>' + esc(t.assignment.day + ' · ' + names[t.assignment.list]) + '</small>' : '') + (t.note ? '<details class="mw-note"><summary>备注</summary><p>' + esc(t.note) + '</p></details>' : '') + (options.reorder ? '<details class="mw-manage"><summary>更多操作</summary><div>' + button('pin', t.pinned ? '取消置顶' : '置顶', attrs) + button('up', '上移', attrs) + button('down', '下移', attrs) + '</div></details>' : '') + '</div>' : '') + '</article>';
+      (true ? '<div class="mw-task-extras">' + (['task','queue'].includes(ref.kind) && (!done || t.overdueEventId) ? button('assign', done ? '安排与扣分记录' : ref.kind === 'queue' ? (t.assignment ? '调整今日安排' : '安排到今天') : '调整安排', attrs) : '') + (!done && ['task','queue'].includes(ref.kind) && (t.originalDay || (t.assignment?.day || ref.day) < M().userDay()) ? button('backfill', '补记完成', attrs) : '') + (t.originalDay ? '<small class="mw-late">' + esc(A.memoFlow.lateLabel(t)) + '</small>' : '') + (t.assignment ? '<small>' + esc(t.assignment.day + ' · ' + names[t.assignment.list]) + '</small>' : '') + (t.note ? '<details class="mw-note"><summary>备注</summary><p>' + esc(t.note) + '</p></details>' : '') + (options.reorder ? '<details class="mw-manage"><summary>更多操作</summary><div>' + button('pin', t.pinned ? '取消置顶' : '置顶', attrs) + button('up', '上移', attrs) + button('down', '下移', attrs) + '</div></details>' : '') + '</div>' : '') + '</article>';
   }
   function taskSection(items) {
     const open = items.filter(x => !doneFor(x.task, x.ref)), done = items.filter(x => doneFor(x.task, x.ref));
@@ -32,12 +32,12 @@
   function renderTasks() {
     taskDay = taskDay || M().userDay(); const day = S().getDay(taskDay), occurrenceDay = taskDay === M().userDay() ? M().userDay() : taskDay;
     const root = $('mw-today');
-    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + button('today', '今天') + button('tomorrow', '明天') + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + '</div>' + backlog() + ['required', 'ideal', 'extra'].map(list => {
+    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + button('today', '今天') + button('tomorrow', '明天') + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + '</div>' + ['required', 'ideal', 'extra'].map(list => {
       const items = (day.tasks[list] || []).filter(t => !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed).map(task => ({ task, ref: { kind: 'task', id: task.id, day: taskDay, list } }));
       A.memoFlow?.assigned(taskDay, list).forEach(task => items.push({ task, ref: { kind: 'queue', id: task.id } }));
       if (list === 'extra') projects().filter(p => !p.archived && (!p.createdDay || p.createdDay <= occurrenceDay)).forEach(task => items.push({ task, ref: { kind: 'project', id: task.id, day: occurrenceDay } }));
       return '<section class="mw-group"><div class="mw-group-head"><h2>' + names[list] + '<small> · 待做 ' + items.filter(x => !doneFor(x.task, x.ref)).length + '</small></h2>' + button('add-' + list, '＋ 添加', 'aria-label="添加' + names[list] + '"') + '</div>' + taskSection(items) + (list === 'extra' ? '<details class="mw-project-help"><summary>项目说明与已停用项目</summary><p class="hint">一次性任务按日期保留；每日推进项目持续显示，可在编辑中停用。</p>' + (S().data().daily || []).filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-daily', '恢复基础任务', refAttrs({ kind: 'daily', id: p.id })) + '</p>').join('') + projects().filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-project', '恢复项目', refAttrs({ kind: 'project', id: p.id })) + '</p>').join('') + '</details>' : '') + '</section>';
-    }).join('') + ((S().data().daily || []).some(t => !t.archived) ? '<section class="mw-group"><h2>原有基础任务</h2>' + taskSection(S().data().daily.filter(t => !t.archived).map(task => ({ task, ref: { kind: 'daily', id: task.id, day: occurrenceDay } }))) + '</section>' : '');
+    }).join('') + backlog() + ((S().data().daily || []).some(t => !t.archived) ? '<section class="mw-group"><h2>原有基础任务</h2>' + taskSection(S().data().daily.filter(t => !t.archived).map(task => ({ task, ref: { kind: 'daily', id: task.id, day: occurrenceDay } }))) + '</section>' : '');
     $('mw-day').onchange = e => { if (M().validDate(e.target.value)) { taskDay = e.target.value; renderTasks(); } };
   }
   function renderQueue() {
@@ -80,7 +80,7 @@
     if (A.memoActions.busy()) return A.ui.toast('请先重试保存当前操作');
     const existing = ref && A.memoSchedule.find(ref), day = ref?.day || taskDay || M().userDay(), kind = ref?.kind || (list === 'queue' ? 'queue' : 'task');
     const m = A.ui.openModal(existing ? '编辑任务' : '添加' + (names[list] || '队列任务'), (!existing && kind === 'task' ? '<label>任务栏目<select id="mw-list">' + Object.keys(names).map(k => '<option value="' + k + '"' + (k === list ? ' selected' : '') + '>' + names[k] + '</option>').join('') + '</select></label>' : '') + '<label for="mw-title">任务名称</label><textarea id="mw-title" rows="2"></textarea><label for="mw-note-edit">备注（选填）</label><textarea id="mw-note-edit" rows="2"></textarea>' +
-      (existing && kind === 'task' && ref?.list === 'required' ? '' : '<label for="mw-points">完成积分</label><input type="number" id="mw-points" min="0">') + (!existing && kind === 'task' ? '<label id="mw-repeat-wrap">长期拓展完成方式<select id="mw-repeat"><option value="daily">每日推进（04:00分日）</option><option value="once">一次性完成</option></select></label>' : '') +
+      (existing && kind === 'task' && ref?.list === 'required' ? '' : '<label for="mw-points">完成积分</label><input type="number" id="mw-points" min="0">') + (!existing && kind === 'task' ? '<fieldset id="mw-repeat-wrap"><legend>长期拓展完成方式</legend><label><input type="radio" name="mw-repeat" value="once">一次性完成</label><label><input type="radio" name="mw-repeat" value="daily" checked>每日推进</label></fieldset>' : '') +
       '<label>预计用时（分钟，选填）<input id="mw-estimate" type="number" min="0" max="1440"></label>' + timingFields() + (existing ? '<p class="hint">这里可追加一段安排；修改已有时间请点卡片上的“修改／追加时间”。</p>' : '') + '<p id="mw-form-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">取消</button>' + (existing ? '<button class="btn btn-danger" data-act="delete">' + (kind === 'project' || kind === 'daily' ? '停用' : '删除') + '</button>' + (kind === 'task' && ref.list === 'extra' ? '<button class="btn" data-act="convert">转为每日推进</button>' : '') : '') + '<button class="btn btn-primary" data-act="save">保存</button>', { lock: true });
     const q = s => m.querySelector(s); q('#mw-title').value = existing?.text || ''; q('#mw-note-edit').value = existing?.note || ''; if (q('#mw-points')) q('#mw-points').value = existing?.points ?? (kind === 'queue' ? S().settings().queuePoints ?? 5 : list === 'ideal' || ref?.list === 'ideal' ? S().settings().idealPoints ?? 10 : S().settings().extPoints ?? 5);
@@ -94,7 +94,7 @@
       try { if (await A.memoActions.commit(() => {
         const text = q('#mw-title').value.trim(); if (!text) throw new Error('请填写任务名称'); if (!existing && text.includes('\n')) throw new Error('一次添加一个任务，正文说明可写在备注中');
         const selectedList = q('#mw-list')?.value || list;
-        const d = S().data(), isProject = kind === 'project' || convert || (selectedList === 'extra' && q('#mw-repeat')?.value === 'daily');
+        const d = S().data(), isProject = kind === 'project' || convert || (selectedList === 'extra' && q('[name="mw-repeat"]:checked')?.value === 'daily');
         let t = existing, targetRef = ref;
         if (isProject && kind !== 'project') {
           if (existing?.memoProjectId) throw new Error('此任务已转换，请编辑对应每日项目');
@@ -130,8 +130,8 @@
   }
   function historyRow(x) {
     const t = x.task, day = x.day || x.ref.day, list = x.list || x.ref.list;
-    const status = t.memoMovedTo ? '已重新安排' : t.memoDismissed ? '未完成 · 不再安排' : t.done || t.doneAt ? (t.originalDay ? '延期完成' : '已完成') : '未完成';
-    return '<article class="mw-history-row"><strong>' + esc(t.text) + '</strong><p>' + esc(day + ' · ' + names[list] + ' · ' + status) + '</p>' + (!t.memoMovedTo && !t.memoDismissed ? (t.done || t.doneAt ? button('open-day', '查看当天', refAttrs(Object.assign({}, x.ref, {day}))) : button('assign', '重新安排', refAttrs(x.ref)) + button('dismiss', '不再安排', refAttrs(x.ref))) : t.memoDismissed ? button('restore-pending', '恢复待安排', refAttrs(x.ref)) : '') + '</article>';
+    const status = t.memoMovedTo ? '已重新安排' : t.memoDismissed ? '未完成 · 不再安排' : t.done || t.doneAt ? (t.backfillDay ? (t.backfillDay <= t.originalDay ? '补记按时完成' : '补记延期完成') : t.originalDay ? '延期完成' : '已完成') : '未完成';
+    return '<article class="mw-history-row"><strong>' + esc(t.text) + '</strong><p>' + esc(day + ' · ' + names[list] + ' · ' + status + (status === '未完成' ? (day < S().data().memoFlow?.startedDay ? ' · 旧任务，待安排' : list !== 'required' ? ' · 待重新安排' : '') : '')) + '</p>' + (!t.memoMovedTo && !t.memoDismissed ? (t.done || t.doneAt ? button('open-day', '查看当天', refAttrs(Object.assign({}, x.ref, {day}))) : button('backfill', '补记完成', refAttrs(x.ref)) + button('assign', '重新安排', refAttrs(x.ref)) + button('dismiss', '不再安排', refAttrs(x.ref))) : t.memoDismissed ? button('restore-pending', '恢复待安排', refAttrs(x.ref)) : '') + '</article>';
   }
   function backlog() {
     const rows = datedTasks().filter(x => (x.day || x.ref.day) < M().userDay() && !x.task.done && !x.task.doneAt && !x.task.memoMovedTo && !x.task.memoDismissed);
@@ -182,6 +182,7 @@
         if (act.startsWith('add-')) return editor(null, act.slice(4));
         if (act === 'edit') return editor(ref);
         if (act === 'open-day') { taskDay = ref.day; showPane('today'); return render(); }
+        if (act === 'backfill') return A.memoFlow.backfill(ref);
         if (act === 'assign') return assignmentEditor(ref);
         if (act === 'restore-pending') return commit(() => { const t = ref.kind==='queue' ? A.memoFlow.queues().find(t=>t.id===ref.id) : S().data().days[ref.day]?.tasks[ref.list]?.find(t=>t.id===ref.id); if(t)delete t.memoDismissed; });
         if (act === 'dismiss') return commit(() => { const t = A.memoSchedule.find(ref); if (t) { A.memoSchedule.stopRef(ref); t.memoDismissed = new Date().toISOString(); } });

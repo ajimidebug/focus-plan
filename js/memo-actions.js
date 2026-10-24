@@ -131,6 +131,12 @@
       if (event.kind === 'daily' || event.kind === 'project' || it.days[event.sourceDay] <= 1) delete it.days[event.sourceDay];
       else it.days[event.sourceDay]--;
     }
+    if(event.penaltyCorrection){
+      const f=d.memoFlow, e=f.settlements.find(x=>x.id===event.penaltyCorrection);
+      if(e){d.ledger=d.ledger.filter(x=>x.operationId!=='forgive:'+e.id);delete e.forgivenAt;delete e.reason;}
+    }
+    const backfilled=event.kind==='task'?locateTask({kind:'task',id:event.sourceId,day:event.sourceDay,list:event.sourceList}):(d.queue||[]).find(t=>t.id===event.sourceId);
+    if(backfilled)delete backfilled.backfillDay;
     d.ledger = d.ledger.filter(l => !event.ledgerIds.includes(l.id));
     const kept = []; let removedLine = false;
     blocks.forEach(block => {

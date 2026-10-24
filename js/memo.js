@@ -149,8 +149,7 @@
     const el = $('memo-editor');
     const selection = App.memoEditor.selection();
     if (selection && selection.start !== selection.end) return copyText(App.memoEditor.text().slice(selection.start, selection.end));
-    if (!await flush()) return copyText(currentText());
-    return copyFull();
+    return App.ui.toast('请先选中要复制的文字');
   }
   let copying = false;
   function copyStatus() {
@@ -208,7 +207,11 @@
     $('memo-date').onchange = () => openDay($('memo-date').value);
     $('memo-prev').onclick = () => openDay(shiftDay(selected, -1));
     $('memo-next').onclick = () => openDay(shiftDay(selected, 1));
-    $('memo-copy').onclick = copyCurrent;
+    let savedSelection;
+    $('memo-copy-menu').addEventListener('pointerdown',()=>{ const p=App.memoEditor.selection(); if(p && p.start!==p.end)savedSelection=p; });
+    $('memo-copy').onclick = () => { const p=savedSelection || App.memoEditor.selection(); savedSelection=null; return p && p.start!==p.end ? copyText(App.memoEditor.text().slice(p.start,p.end)) : App.ui.toast('请先选中文字'); };
+    $('memo-copy-export').onclick=()=>App.app.switchView('memo-history');
+    const paper=$('memo-editor').parentElement; paper.querySelectorAll('.memo-help').forEach(el=>paper.before(el));
     $('memo-copy-full').onclick = copyFull;
     $('memo-copy-again').onclick = () => { const last=S().data().memoFlow?.lastCopy; last ? copyText(last.text) : App.ui.toast('还没有完整复制记录'); };
     copyStatus();

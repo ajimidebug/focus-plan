@@ -747,7 +747,7 @@ test('copy checkpoints carry append, old edits, deletion and multiple missed day
   q=F.copyQuote('2026-10-22');assert.match(q.text,/上次复制后的补记/);assert.match(q.text,/后来补写/);assert.match(q.text,/第二天/);F.markCopyCore(q);
   M.write('2026-10-20','修订原文');q=F.copyQuote('2026-10-23');assert.match(q.text,/修订后的全文/);assert.match(q.text,/修订原文/);assert.equal(M.read('2026-10-20').text,'修订原文');F.markCopyCore(q);
   M.write('2026-10-20','');q=F.copyQuote('2026-10-23');assert.match(q.text,/修订后的全文/);F.markCopyCore(q);
-  assert.doesNotMatch(F.copyQuote('2026-10-23').text,/用户日 2026-10-20/);
+  assert.match(F.copyQuote('2026-10-23').text,/用户日 2026-10-20/); // Same-day repeated copies retain corrections.
 });
 test('custom money spending rounds up, refunds exact original value and rejects invalid amounts',async()=>{
   const b=browser();await b.S.load();const {F,C}=flowHarness(b);b.S.data().ledger.push({id:'seed',points:1000});
@@ -782,4 +782,14 @@ test('failed custom debit and copy checkpoint retry persist original operation w
  assert.equal(A.busy(),true);b.options.localFails=b.options.idbFails=false;await A.commit(()=>{calls++;});
  assert.equal(calls,1);assert.equal(b.S.pointsTotal(),94);
  const next=browser({shared:b});await next.S.load();const n=flowHarness(next);assert.equal(next.S.data().ledger.filter(e=>e.operationId==='once').length,1);assert.equal(n.F.state().lastCopy.text,quote.text);
+});
+test('same-day full copies retain yesterday additions across repeat and reload',async()=>{
+ const b=browser();await b.S.load();const {F,M}=flowHarness(b),today=M.userDay(),yesterday=M.shiftDay(today,-1);
+ M.write(yesterday,'原文');F.markCopyCore(F.copyQuote(yesterday));M.write(yesterday,'原文\n补记A');M.write(today,'今日正文');
+ let q=F.copyQuote(today);assert.match(q.text,/补记A/);F.markCopyCore(q);M.write(today,'今日正文\n新增B');
+ q=F.copyQuote(today);assert.match(q.text,/补记A/);assert.match(q.text,/新增B/);F.markCopyCore(q);await b.S.save();assert.match(F.copyQuote(today).text,/补记A/);
+});
+test('dismissed required queue assignments cannot block overdue processing',async()=>{
+ const b=browser();await b.S.load();const {F}=flowHarness(b);b.S.data().queue=[{id:'dismissed',text:'取消安排',memoDismissed:'yes',assignment:{day:'2026-10-20',list:'required'}}];
+ F.settleCore(Date.parse('2026-10-21T05:00:00+08:00'));assert.equal(F.state().settlements.length,0);
 });

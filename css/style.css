@@ -2061,3 +2061,18 @@ body.memo-layout[data-view="memo-timeaxis"] #app-header { position:static; }
 body.memo-layout[data-view="memo-timeaxis"] .brand p { display:none; }
 body.memo-layout[data-view="memo-timeaxis"] .release-panel:has(#storage-status:is([data-state="saved"],[data-state="saving"])):not(:has(#apply-update:not([hidden]))) { display:none; }
 #view-memo-timeaxis .schedule-explanation { font-size:12px; margin:6px 0; }
+/* 170.3: primary actions and compact explanations */
+#mw-repeat-wrap {border:0;padding:8px 0;display:flex;gap:8px;flex-wrap:wrap;}
+#mw-repeat-wrap label {display:flex;align-items:center;gap:6px;padding:10px;border:1px solid var(--line);border-radius:8px;min-height:44px;}
+#mw-repeat-wrap label:has(input:checked) {border-color:var(--primary);background:rgba(59,130,246,.1);}
+.point-presets,.point-tabs {display:flex;gap:6px;margin:6px 0 12px;}
+.point-presets .btn,.memo-toolbar .btn {min-height:44px;}
+.point-record {display:grid;grid-template-columns:auto 1fr;gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--line);}
+.point-record small {grid-column:1/-1;color:var(--muted);}
+.memo-help {font-size:12px;color:var(--muted);margin:6px 0;}
+#memo-copy-menu {position:relative;}
+#memo-copy-menu[open] {padding:8px;border:1px solid var(--line);border-radius:8px;}
+#memo-copy-menu .btn {display:block;margin:6px 0;}
+#memo-copy-menu summary {list-style:none;}
+#memo-copy-status {max-width:240px;}
+#checkin-view>.card>p.hint {display:none;}

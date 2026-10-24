@@ -47,7 +47,7 @@
     Object.entries(S().data().days).filter(([day]) => day >= f.startedDay && day < today).sort(([a], [b]) => a.localeCompare(b)).forEach(([day, d]) => {
       (d.tasks.required || []).filter(t => !t.done && !t.fromDaily && !t.fromQueue && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed).forEach(t => out.push({ task: t, ref: { kind: 'task', id: t.id, day, list: 'required' } }));
     });
-    (S().data().queue || []).filter(t => t.assignment?.list === 'required' && t.assignment.day >= f.startedDay && t.assignment.day < today).forEach(task => out.push({ task, ref: { kind: 'queue', id: task.id }, day: task.assignment.day }));
+    (S().data().queue || []).filter(t => !t.memoDismissed && !t.archived && !t.doneAt && t.assignment?.list === 'required' && t.assignment.day >= f.startedDay && t.assignment.day < today).forEach(task => out.push({ task, ref: { kind: 'queue', id: task.id }, day: task.assignment.day }));
     return out;
   }
   function settleCore(now = Date.now()) {
@@ -74,6 +74,7 @@
     if (original) S().data().ledger.push({ id: S().uid(), operationId: 'forgive:' + e.id, date: M().userDay(), type: 'refund-penalty', points: -original.points, leisure: 0, at: e.forgivenAt, note: '撤销错误扣分：' + e.title + '；' + e.reason });
   }
   function lateLabel(t) {
+    if (t.backfillDay) return (t.backfillDay <= t.originalDay ? '已补记按时完成 · ' : '已补记延期完成 · ') + t.backfillDay;
     if (!t.originalDay) return '';
     const e = S().data().memoFlow?.settlements.find(x => x.id === t.overdueEventId);
     const days = Math.max(0, Math.round((Date.parse(M().userDay() + 'T00:00Z') - Date.parse(t.originalDay + 'T00:00Z')) / 86400000));
@@ -81,6 +82,10 @@
   }
   function copyQuote(day) {
     const f = state(), snapshots = {}, lines = [];
+    const carryDay = M().userDay();
+    const baseline = f.copyCarry?.day === carryDay && f.copyCarry.selectedDay === day ? f.copyCarry.baseline : clone(f.copies);
+    const prior = f.copies; f.copies = baseline;
+    try {
     Object.keys(S().data().memoNotes || {}).filter(k => M().validDate(k) && k <= day && (k === day || k >= f.startedDay || f.copies[k])).sort().forEach(k => {
       const note = M().read(k), old = f.copies[k], rendered = M().exportBlocks(M().segments(note));
       if (k !== day && old?.rendered === rendered) return;
@@ -91,11 +96,31 @@
       else lines.push('===== 用户日 ' + k + (old ? ' · 修订后的全文（替换此前版本）' : ' · 此前未复制') + ' =====\n' + M().exportText([k]));
     });
     if (!snapshots[day]) lines.push(M().exportText([day]));
-    return { id: S().uid(), day, text: lines.join('\n\n'), snapshots, at: new Date().toISOString() };
+    return { id: S().uid(), day, text: lines.join('\n\n'), snapshots, carryDay, baseline, at: new Date().toISOString() };
+    } finally { f.copies = prior; }
   }
   function markCopyCore(quote) {
-    const f = state(); Object.entries(quote.snapshots).forEach(([day, snapshot]) => { f.copies[day] = Object.assign({}, snapshot, { at: quote.at }); });
+    const f = state(); if(quote.baseline)f.copyCarry={day:quote.carryDay,selectedDay:quote.day,baseline:quote.baseline}; Object.entries(quote.snapshots).forEach(([day, snapshot]) => { f.copies[day] = Object.assign({}, snapshot, { at: quote.at }); });
     f.lastCopy = quote;
+  }
+  function backfill(ref) {
+    ref=A.memoSchedule.canonical(ref); const t=A.memoSchedule.find(ref); if(!t)return;
+    const due=t.originalDay || t.assignment?.day || ref.day, today=M().userDay();
+    const m=A.ui.openModal('补记完成', '<label>实际完成用户日<input id="bf-day" type="date" value="'+due+'" max="'+today+'"></label><label>完成说明<textarea id="bf-note"></textarea></label><p>按时完成会退回本任务实际逾期扣分；延期完成保留扣分。不追补历史整组奖励。记录写入今天笔记。</p><p id="bf-preview"></p><p role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">确认补记</button>', {lock:true});
+    const q=x=>m.querySelector(x), e=state().settlements.find(x=>x.id===t.overdueEventId);
+    const preview=()=>q('#bf-preview').textContent='完成日期：'+q('#bf-day').value+'；退回 '+(q('#bf-day').value<=due && !e?.forgivenAt ? e?.points||0:0)+' 分'; preview();q('#bf-day').oninput=preview;
+    A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},save:async b=>{b.disabled=true;try{if(await A.memoActions.commit(()=>{
+      const day=q('#bf-day').value; if(!M().validDate(day)||day>today)throw new Error('请选择有效的过去或今日用户日');
+      if(day < (t.createdDay || '0000-00-00'))throw new Error('完成日不能早于任务创建日');
+      const current=A.memoSchedule.find(ref); if(!current || current.done || current.doneAt)throw new Error('任务状态已改变');
+      const refund=day<=due && e && !e.forgivenAt;
+      if(refund)forgiveCore(ref,'补记实际完成日：'+day);
+      if(ref.kind==='task')moveCore(ref,day,ref.list); else if(current.assignment)moveCore(ref,day,current.assignment.list);
+      const target=ref.kind==='task'?{kind:'task',id:ref.id,day,list:ref.list}:ref;
+      const task=A.memoSchedule.find(target);task.originalDay=task.originalDay||due;task.backfillDay=day;
+      const event=A.memoActions.completeCore({kind:target.kind,id:target.id,day,list:target.list,title:task.text}, M().clock()+'【补记完成】'+task.text+'\n实际完成用户日：'+day+'\n'+q('#bf-note').value);
+      event.backfillDay=day;event.penaltyCorrection=refund?e.id:null;
+    })){A.ui.closeModal();A.memoWorkspace.render();A.memoSchedule.render();A.app.refreshStats();}}catch(err){q('[role="alert"]').textContent=err.message;}finally{b.disabled=false;}}});
   }
   let settling = false;
   async function settle() {
@@ -107,5 +132,5 @@
     finally { settling = false; }
   }
   async function init() { await settle(); setInterval(settle, 30000); document.addEventListener('visibilitychange', () => { if (!document.hidden) settle(); }); }
-  A.memoFlow = { state, enableCore, queues, assignment, assigned, moveCore, overdue, settleCore, settle, forgiveCore, lateLabel, copyQuote, markCopyCore, init };
+  A.memoFlow = { backfill, state, enableCore, queues, assignment, assigned, moveCore, overdue, settleCore, settle, forgiveCore, lateLabel, copyQuote, markCopyCore, init };
 })();

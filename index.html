@@ -10,12 +10,12 @@
        以前写在页尾，渲染时读到 undefined 就显示成 "v?"。 */
     window.__BUILD = 169;
     window.__MEMO_MODE = true;
-    window.__RELEASE = '170.2.0';
+    window.__RELEASE = '170.3.0';
   </script>
   <meta name="theme-color" content="#2d3a4a" />
   <title>随手记 · 个人备忘录</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="css/style.css?v=170.2.0" />
+  <link rel="stylesheet" href="css/style.css?v=170.3.0" />
   <style id="pip-style">
     /* ===== 🪟 只在小窗（Document Picture-in-Picture）里生效：让悬浮窗铺满整个小窗 ===== */
     html.pip, html.pip body { background: var(--bg, #f5f7fa); margin: 0; padding: 0; }
@@ -122,10 +122,10 @@
       <div class="memo-date-row"><button class="btn btn-small" id="memo-prev" aria-label="前一天">←</button><input type="date" id="memo-date" aria-label="笔记日期" data-transient="true"><button class="btn btn-small" id="memo-next" aria-label="后一天">→</button><button class="btn btn-small" id="memo-today">回到今天</button></div>
       <p id="memo-day-hint" class="hint"></p>
       <div class="memo-paper">
-        <p class="memo-footnote">原话自动保存，不自动分析、计时或安排复习。补记可直接写日期和时间。内容只在当前浏览器；请定期下载完整备份。</p>
+        <details class="memo-help"><summary>笔记说明</summary><p class="memo-footnote">原话自动保存，不自动分析、计时或安排复习。补记可直接写日期和时间。内容只在当前浏览器；请定期下载完整备份。</p></details>
         <div id="memo-editor" role="textbox" aria-label="当天笔记" aria-multiline="true" contenteditable="true" spellcheck="false" data-placeholder="直接写下时间线、想法和准备做的事…"></div>
-        <p class="memo-source-hint">浅蓝色框内为生成文段；段内补充随取消勾选删除。框后点“继续写笔记”写独立内容。完整复制和导出包含来源标记。</p>
-        <p id="memo-copy-status" class="hint" role="status"></p><div class="memo-toolbar"><button class="btn btn-small" id="memo-time">＋ 当前时间</button><button class="btn btn-small" id="memo-copy">复制笔记／选中文字</button><button class="btn btn-small" id="memo-copy-full">复制全文＋遗漏补记</button><button class="btn btn-small" id="memo-copy-again">重复制上次</button></div>
+        <details class="memo-help"><summary>生成文段说明</summary><p class="memo-source-hint">浅蓝色框内为生成文段；段内补充随取消勾选删除。框后点“继续写笔记”写独立内容。完整复制和导出包含来源标记。</p></details>
+        <div class="memo-toolbar"><button class="btn" id="memo-time">＋ 时间</button><button class="btn btn-primary" id="memo-copy-full">复制全文</button><details id="memo-copy-menu"><summary class="btn">更多 ⋯</summary><button class="btn" id="memo-copy">复制选中文字</button><button class="btn" id="memo-copy-again">重复制上次</button><button class="btn" id="memo-copy-export">按日期复制／导出</button><p id="memo-copy-status" class="hint" role="status"></p></details></div>
       </div>
     </section>
     <section id="view-memo-history" class="view">
@@ -357,34 +357,35 @@
     </div>
   </div>
 
-  <script src="js/store.js?v=170.2.0"></script>
-  <script src="js/ui.js?v=170.2.0"></script>
-  <script src="js/tasks.js?v=170.2.0"></script>
-  <script src="js/timeline.js?v=170.2.0"></script>
-  <script src="js/stats.js?v=170.2.0"></script>
-  <script src="js/settings.js?v=170.2.0"></script>
-  <script src="js/sport.js?v=170.2.0"></script>
-  <script src="js/lecture.js?v=170.2.0"></script>
-  <script src="js/calendar.js?v=170.2.0"></script>
-  <script src="js/link.js?v=170.2.0"></script>
-  <script src="js/demo.js?v=170.2.0"></script>
-  <script src="js/queue.js?v=170.2.0"></script>
-  <script src="js/milestones.js?v=170.2.0"></script>
-  <script src="js/memcards.js?v=170.2.0"></script>
-  <script src="js/checkin.js?v=170.2.0"></script>
-  <script src="js/backup.js?v=170.2.0"></script>
-  <script src="js/exams.js?v=170.2.0"></script>
-  <script src="js/mistakes.js?v=170.2.0"></script>
-  <script src="js/badges.js?v=170.2.0"></script>
-  <script src="js/memo-editor.js?v=170.2.0"></script>
-  <script src="js/memo-schedule.js?v=170.2.0"></script>
-  <script src="js/memo-actions.js?v=170.2.0"></script>
-  <script src="js/memo.js?v=170.2.0"></script>
-  <script src="js/memo-currency.js?v=170.2.0"></script>
-  <script src="js/memo-flow.js?v=170.2.0"></script>
-  <script src="js/memo-workspace.js?v=170.2.0"></script>
-  <script src="js/updates.js?v=170.2.0"></script>
-  <script src="js/app.js?v=170.2.0"></script>
+  <script src="js/store.js?v=170.3.0"></script>
+  <script src="js/ui.js?v=170.3.0"></script>
+  <script src="js/tasks.js?v=170.3.0"></script>
+  <script src="js/timeline.js?v=170.3.0"></script>
+  <script src="js/stats.js?v=170.3.0"></script>
+  <script src="js/settings.js?v=170.3.0"></script>
+  <script src="js/sport.js?v=170.3.0"></script>
+  <script src="js/lecture.js?v=170.3.0"></script>
+  <script src="js/calendar.js?v=170.3.0"></script>
+  <script src="js/link.js?v=170.3.0"></script>
+  <script src="js/demo.js?v=170.3.0"></script>
+  <script src="js/queue.js?v=170.3.0"></script>
+  <script src="js/milestones.js?v=170.3.0"></script>
+  <script src="js/memcards.js?v=170.3.0"></script>
+  <script src="js/checkin.js?v=170.3.0"></script>
+  <script src="js/backup.js?v=170.3.0"></script>
+  <script src="js/exams.js?v=170.3.0"></script>
+  <script src="js/mistakes.js?v=170.3.0"></script>
+  <script src="js/badges.js?v=170.3.0"></script>
+  <script src="js/memo-editor.js?v=170.3.0"></script>
+  <script src="js/memo-schedule.js?v=170.3.0"></script>
+  <script src="js/memo-actions.js?v=170.3.0"></script>
+  <script src="js/memo.js?v=170.3.0"></script>
+  <script src="js/memo-currency.js?v=170.3.0"></script>
+  <script src="js/memo-flow.js?v=170.3.0"></script>
+  <script src="js/memo-refinements.js?v=170.3.0"></script>
+  <script src="js/memo-workspace.js?v=170.3.0"></script>
+  <script src="js/updates.js?v=170.3.0"></script>
+  <script src="js/app.js?v=170.3.0"></script>
 
 
   <!-- ✨ 快速上手演示动画 -->
