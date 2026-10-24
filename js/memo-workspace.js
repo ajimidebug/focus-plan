@@ -35,15 +35,22 @@
     if(list==='extra')projects().filter(p=>!p.archived&&(!p.createdDay||p.createdDay<=day)).forEach(task=>items.push({task,ref:{kind:'project',id:task.id,day}}));
     const seen=new Set();return items.filter(x=>{const found=A.memoSchedule.resolve(x.ref);if(!found)return false;const ref=found.ref,key=A.memoSchedule.key(ref);x.task=found.task;if(seen.has(key))return false;seen.add(key);x.ref=ref;return true;});
   }
-  function overviewHTML(day){return '<section class="card mw-overview"><h3>'+esc(day)+' · 任务总览</h3><div class="cal-cols">'+['required','ideal','extra'].map(list=>{
-    const items=taskItems(day,list);return '<div class="cal-col"><div class="cal-col-head">'+names[list]+' <small>'+items.filter(x=>doneFor(x.task,x.ref)).length+'/'+items.length+'</small></div>'+items.map(({task:t,ref})=>'<div class="cal-task'+(doneFor(t,ref)?' done':'')+'"><button class="mw-mini-title" data-mw="locate" '+refAttrs(ref)+' title="'+esc(t.text)+'">'+esc(t.text)+(doneFor(t,ref)?' ✓':'')+'</button><div class="t-btns">'+button('complete',doneFor(t,ref)?'取消完成':'完成',refAttrs(ref))+button('edit','编辑',refAttrs(ref))+'</div></div>').join('')+(!items.length?'<small>暂无任务</small>':'')+'</div>';
-  }).join('')+'</div></section>';}
-  function locate(ref){
-    const key=A.memoSchedule.key(ref),card=[...$('mw-today').querySelectorAll('[data-mw-card]')].find(el=>A.memoSchedule.key(JSON.parse(el.dataset.ref))===key);if(!card)return;
-    const folded=card.closest('details');if(folded)folded.open=true;
-    card.scrollIntoView({block:'center',behavior:'smooth'});card.querySelector('[data-mw="edit"]')?.focus({preventScroll:true});
+  // Calendar's original compact columns and row markup, without mutation controls.
+  function overviewHTML(day){
+    const dt=new Date(day+'T12:00:00+08:00'),wd=['日','一','二','三','四','五','六'][dt.getUTCDay()];
+    let html='<section class="card mw-overview"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><h3 style="margin:0">🗓 '+Number(day.slice(5,7))+'月'+Number(day.slice(8))+'日 周'+wd+'</h3></div><div class="cal-cols" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">';
+    [['required','✅ 必须'],['ideal','⭐ 理想'],['extra','🌱 拓展']].forEach(([list,name])=>{
+      const items=taskItems(day,list);
+      html+='<div class="cal-col" style="border:1px solid var(--line);border-radius:10px;padding:9px 10px"><div class="cal-col-head" style="font-size:13px;font-weight:700;margin-bottom:6px">'+name+' <span class="tag">'+items.length+'</span></div>';
+      items.forEach(({task:t,ref})=>{
+        html+='<div class="cal-task'+(doneFor(t,ref)?' done':'')+'" style="border-bottom:1px dashed var(--line);padding:6px 2px"><span class="t-text" title="'+esc(t.text)+'" style="font-size:13.5px;word-break:break-all">'+esc(t.text)+(doneFor(t,ref)?' ✓':'')+(A.tasks?.carryTagHTML?.(t)||'')+(A.tasks?.lecTagHTML?.(t)||'')+'</span>';
+        if(t.standard)html+='<div class="t-std" style="font-size:11.5px;color:#f59e0b;margin-top:2px">📌 标准：'+esc(t.standard)+'</div>';
+        (t.groups||[]).forEach(g=>{const subs=g.subs||[];html+='<div class="t-ctx grp">🧩 '+esc(g.name||'任务组')+(subs.length?'（'+subs.filter(x=>x.done===true).length+'/'+subs.length+'）':'')+'</div>';subs.forEach(x=>{html+='<div class="t-ctx sub"><span>· '+esc(x.text)+(x.done===true?' ✓':x.done===false?' ✗':'')+'</span></div>';});});
+        (t.subs||[]).forEach(x=>{html+='<div class="t-ctx sub"><span>· '+esc(x.text)+'（限'+esc(x.minutes)+'分）'+(x.done===true?' ✓':x.done===false?' ✗':'')+'</span></div>';});
+        html+='</div>';
+      });html+='</div>';
+    });return html+'</div></section>';
   }
-  function overviewAction(day,ref,action){taskDay=day;A.app.switchView('tasks');showPane('today',false);render();if(action==='complete')complete(ref);else if(action==='edit')editor(ref);else requestAnimationFrame(()=>locate(ref));}
   function renderTasks() {
     taskDay = taskDay || M().userDay(); const day = S().getDay(taskDay), occurrenceDay = taskDay === M().userDay() ? M().userDay() : taskDay;
     const root = $('mw-today');
@@ -193,7 +200,6 @@
     root.addEventListener('click', e => {
       const b = e.target.closest('[data-mw]'), cardEl = e.target.closest('[data-mw-card]');
       if (b) { e.preventDefault(); e.stopImmediatePropagation(); const act = b.dataset.mw, ref = b.dataset.ref ? JSON.parse(b.dataset.ref) : null;
-        if(act==='locate')return locate(ref);
         if(act==='ddl')return A.ms.open();
         if(act==='column'){const col=$('mw-column-'+b.dataset.column);$('mw-today').querySelector('.mw-board').scrollTo({left:col.offsetLeft-col.parentElement.offsetLeft,behavior:'smooth'});return;}
         if (act.startsWith('add-')) return editor(null, act.slice(4));
@@ -215,5 +221,5 @@
     setInterval(() => { const now = M().userDay(); if (now !== lastDay) { if (taskDay === lastDay) taskDay = now; lastDay = now; render(); } }, 30000);
     render();
   }
-  A.memoWorkspace = { overviewHTML, overviewAction, init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
+  A.memoWorkspace = { overviewHTML, init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
 })();

@@ -820,6 +820,6 @@ test('task overview resolves queue identities and includes daily projects withou
  b.S.getDay(day).tasks.required.push({id:'proxy',fromQueue:'ovq',text:'旧副本'});
  d.memoProjects=[{id:'ovp',text:'每日推进总览',days:{},points:2}];
  vm.runInContext(source('js/memo-workspace.js'),b.ctx);
- let html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.equal((html.match(/title="队列总览"/g)||[]).length,1);assert.match(html,/每日推进总览/);assert.doesNotMatch(html,/旧副本/);
+ let html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.equal((html.match(/title="队列总览"/g)||[]).length,1);assert.match(html,/每日推进总览/);assert.doesNotMatch(html,/旧副本/);assert.doesNotMatch(html,/<button|data-mw=|mw-mini-title/);assert.match(html,/✅ 必须/);assert.match(html,/class="tag"/);
  A.completeCore({kind:'queue',id:'ovq',title:'队列总览'},'');html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.match(html,/队列总览 ✓/);assert.equal(d.ledger.filter(e=>e.type==='earn-queue').length,1);
 });

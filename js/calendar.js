@@ -577,7 +577,6 @@
 
   function bind() {
     const wrap = document.getElementById('calendar-view');
-    wrap.querySelectorAll('.mw-overview [data-mw]').forEach(b=>b.onclick=()=>App.memoWorkspace.overviewAction(selKey,JSON.parse(b.dataset.ref),b.dataset.mw));
     wrap.querySelectorAll('[data-open-workspace]').forEach(b=>b.onclick=()=>{App.app.switchView('tasks');App.memoWorkspace.enter('today',b.dataset.openWorkspace);});
     wrap.querySelectorAll('.hm-cell[data-k]').forEach(function (c) {
       c.onclick = function () {
