@@ -805,3 +805,12 @@ test('backfill completes canonical overdue task, refunds original penalty once a
  assert.equal(P.find(moved).done,true);assert.equal(b.S.pointsTotal(),0);const event=d.memoEvents.find(e=>e.sourceId==='bf');assert.equal(event.sourceDay,'2026-10-20');assert.equal(event.noteDay,M.userDay());assert.equal(event.backfillDay,'2026-10-20');
  A.undoCore(event.id);assert.equal(b.S.pointsTotal(),-2);assert.equal(P.find(moved).done,false);assert.equal(F.state().settlements[0].forgivenAt,undefined);
 });
+test('DDL counts Shanghai civil days independently of study user-day and preserves legacy records',async()=>{
+ const b=browser();await b.S.load();flowHarness(b);b.S.data().milestones=[{id:'old',name:'旧节点',end:'2026-10-25',note:'保留'}];const before=JSON.stringify(b.S.data().milestones);
+ vm.runInContext(source('js/milestones.js'),b.ctx);const ms=b.ctx.App.ms;
+ assert.equal(ms.daysLeft(ms.list()[0],Date.parse('2026-10-25T00:30:00+08:00')),0);
+ assert.equal(ms.daysLeft(ms.list()[0],Date.parse('2026-10-24T23:59:00+08:00')),1);
+ assert.equal(JSON.stringify(b.S.data().milestones),before);
+ assert.equal(ms.daysLeft({due:'2026-02-30'}),null);
+ b.S.data().milestones={unknown:true};assert.throws(()=>ms.list(),/数据异常/);assert.equal(b.S.data().milestones.unknown,true);
+});

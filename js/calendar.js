@@ -483,6 +483,7 @@
 
   /* ---------- 选中日的任务面板 ---------- */
   function dayPanelHTML(key) {
+    if(window.__MEMO_MODE)return '<div class="card"><h3>'+esc(key)+' · 任务</h3><button class="btn btn-primary" data-open-workspace="'+esc(key)+'">查看该日任务</button></div>';
     const day = S().getDay(key);
     const isToday = key === todayK();
     const isPast = key < todayK();
@@ -576,6 +577,7 @@
 
   function bind() {
     const wrap = document.getElementById('calendar-view');
+    wrap.querySelectorAll('[data-open-workspace]').forEach(b=>b.onclick=()=>{App.app.switchView('tasks');App.memoWorkspace.enter('today',b.dataset.openWorkspace);});
     wrap.querySelectorAll('.hm-cell[data-k]').forEach(function (c) {
       c.onclick = function () {
         const k = c.dataset.k;

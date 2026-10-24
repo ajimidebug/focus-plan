@@ -55,13 +55,14 @@
     const root = layerEl('modal-root');
     // 弹窗开在小窗里时，先把小窗临时放大一点，不然 330px 宽太挤
     if (App.tasks && App.tasks.pipNeedSpace) App.tasks.pipNeedSpace(true);
+    root._disposeModal?.();
     root.innerHTML = '';
     const mask = document.createElement('div');
     mask.className = 'modal-mask';
     mask.innerHTML =
       '<div class="modal">' +
       (title ? '<h3>' + title + '</h3>' : '') +
-      (bodyHTML || '') +
+      '<div class="modal-body">' + (bodyHTML || '') + '</div>' +
       '<div class="modal-actions">' + (actionsHTML || '') + '</div>' +
       (opts.rechoose ? '<button class="rechoose-btn" data-act="rechoose">重新选择</button>' : '') +
       '</div>';
@@ -82,11 +83,27 @@
     mask.addEventListener('mousedown', function (e) {
       if (e.target === mask && !opts.lock) closeModal();
     });
+    const doc=root.ownerDocument, win=doc.defaultView, viewport=win.visualViewport;
+    let frame, alive=true;
+    const layout=()=>{if(!alive)return;win.cancelAnimationFrame(frame);frame=win.requestAnimationFrame(()=>{
+      const height=viewport?.height || win.innerHeight, top=viewport?.offsetTop || 0;
+      mask.style.top=top+'px';mask.style.bottom='auto';mask.style.height=height+'px';
+      mask.classList.toggle('modal-compact',height<500);
+      const focused=doc.activeElement, body=modal.querySelector('.modal-body');
+      if(body?.contains(focused)){const box=body.getBoundingClientRect(), target=focused.getBoundingClientRect();
+        if(target.height>box.height){if(target.top<box.top||target.top>box.bottom-40)body.scrollTop+=target.top-box.top;}
+        else if(target.bottom>box.bottom)body.scrollTop+=target.bottom-box.bottom+12;
+        else if(target.top<box.top)body.scrollTop-=box.top-target.top+12;
+      }
+    });};
+    viewport?.addEventListener('resize',layout);viewport?.addEventListener('scroll',layout);win.addEventListener('resize',layout);modal.addEventListener('focusin',layout);
+    root._disposeModal=()=>{alive=false;win.cancelAnimationFrame(frame);viewport?.removeEventListener('resize',layout);viewport?.removeEventListener('scroll',layout);win.removeEventListener('resize',layout);modal.removeEventListener('focusin',layout);};
+    layout();
     if (opts.onOpen) opts.onOpen(modal);
     return modal;
   }
   function closeModal() {
-    const clear = function (d) { if (!d) return; const r = d.getElementById('modal-root'); if (r) r.innerHTML = ''; };
+    const clear = function (d) { if (!d) return; const r = d.getElementById('modal-root'); if (r) {r._disposeModal?.();r._disposeModal=null;r.innerHTML = '';} };
     clear(document);
     if (App.tasks && App.tasks.floatDoc) { try { clear(App.tasks.floatDoc()); } catch (e) { /* 忽略 */ } }
     if (App.tasks && App.tasks.pipNeedSpace) App.tasks.pipNeedSpace(false);   // 小窗恢复原尺寸
