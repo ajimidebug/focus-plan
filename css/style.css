@@ -2142,14 +2142,14 @@ body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) :is([data-mw-
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-row{box-sizing:border-box;min-width:0;margin:0;padding:10px;flex-direction:column;align-items:stretch;gap:10px;background:#fff;border-color:#dce3e9;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-row.done{background:#f2f8f4;border-color:#b7d4c1;}
-body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-main{min-width:0;width:100%;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-main{min-width:0;width:100%;flex:none;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-name{overflow-wrap:anywhere;line-height:1.5;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-cnt{display:block;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view :is(.ck-note,.ck-streak,.ck-year){overflow-wrap:anywhere;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-streak{display:inline-block;margin-left:0;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-acts{min-width:0;display:flex;flex-wrap:wrap;gap:6px;margin-top:auto;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-acts :is(.btn,.q-ib){box-sizing:border-box;min-height:36px;max-width:100%;white-space:normal;}
-body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view [data-act="ck-punch"]{flex:1 0 100%;min-height:44px;font-size:14px;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view [data-act="ck-punch"]{flex:none;width:100%;min-height:44px;font-size:14px;}
 .ck-week{display:grid;grid-template-columns:repeat(auto-fit,minmax(28px,1fr));gap:2px;}
 .ck-day{display:flex;align-items:center;justify-content:center;min-width:0;min-height:28px;border:0;background:transparent;padding:0;border-radius:4px;color:inherit;}
 button.ck-day{cursor:pointer;}button.ck-day:hover{background:#edf5ef;}.ck-day .ck-dot{display:block;box-sizing:border-box;flex:none;}.ck-day.makeup .ck-dot{border-style:dashed;}
@@ -2157,3 +2157,5 @@ button.ck-day{cursor:pointer;}button.ck-day:hover{background:#edf5ef;}.ck-day .c
 #point-summary{margin-top:14px;}#point-summary h2{font-size:16px;}#point-summary #flow-shop{max-width:100%;white-space:normal;min-height:44px;}
 @media(max-width:320px){body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-grid{grid-template-columns:1fr;}}
 [data-mw-pane="pending"]:not([aria-pressed="true"]){color:#805d20;background:#faf4e7;}
+
+.ck-titlebar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}.ck-titlebar h2{margin:0;}.ck-titlebar .btn{min-height:40px;}.ck-details{min-width:0;}.ck-grid .ck-punch-main{margin:0;}

@@ -389,6 +389,13 @@
       }
       return '<span class="ck-day ck-day-static" title="' + w.k + '：' + (w.times ? w.times + ' 次' : '没打') + '"><span class="ck-dot' + (full || (tg === 0 && on) ? ' on' : (on ? ' half' : '')) + '"></span></span>';
     }).join('');
+    if(window.__MEMO_MODE){
+      const count=tg===0?'选做 · 今日已做 '+n+' 次':'今日 '+n+'/'+tg+' 次'+(n>tg?' · 超额 '+(n-tg)+' 次':'');
+      return '<div class="ck-row'+(done?' done':'')+'" data-id="'+esc(it.id)+'"><div class="ck-main"><div class="ck-name">'+esc(it.text)+'</div><div class="ck-cnt">'+count+'</div></div>'+
+        '<button type="button" class="btn btn-primary ck-punch-main" data-act="ck-punch" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text+'，打卡，本次可得'+gain+'分')+'">'+(done?'＋ 再打一次':'打卡')+' +'+gain+'分</button>'+
+        '<div class="ck-details">'+(st>1?'<span class="ck-streak">连续有记录 '+st+' 天</span>':'')+(yearDaysOf(it)>0?'<span class="ck-year">今年 '+yearDaysOf(it)+' 天</span>':'')+(it.note?'<div class="ck-note">'+esc(it.note)+'</div>':'')+'<div class="ck-week">'+wk+'</div></div>'+
+        '<div class="ck-acts">'+(n>0?'<button type="button" class="btn btn-small" data-act="ck-undo" data-id="'+esc(it.id)+'">撤销一次</button>':'')+'<button type="button" class="btn btn-small" data-act="ck-history" data-id="'+esc(it.id)+'">记录</button><button type="button" class="q-ib" data-act="ck-edit" data-id="'+esc(it.id)+'" aria-label="编辑：'+esc(it.text)+'" title="编辑">✏️</button><button type="button" class="q-ib" data-act="ck-del" data-id="'+esc(it.id)+'" aria-label="停用：'+esc(it.text)+'" title="停用">🗑</button></div></div>';
+    }
     return '<div class="ck-row' + (done ? ' done' : '') + '" data-id="' + it.id + '">' +
       '<div class="ck-main">' +
       '<div class="ck-name">' + esc(it.text) +
@@ -447,7 +454,7 @@
       '<button class="btn btn-small" data-act="ck-add">＋ 加一个打卡项</button>' +
       '</div>';
 
-    if (window.__MEMO_MODE) h = '<div class="card"><h2>积分打卡</h2><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续记录；本次可得积分显示在按钮上，积分规则与额外得分次数在设置中查看。</p><button class="btn btn-primary ck-add-main" data-act="ck-add">＋ 添加打卡项</button>';
+    if (window.__MEMO_MODE) h = '<div class="card"><div class="ck-titlebar"><h2>积分打卡</h2><button type="button" class="btn btn-primary ck-add-main" data-act="ck-add">＋ 添加</button></div><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续记录；本次可得积分显示在按钮上，积分规则与额外得分次数在设置中查看。</p>';
 
     if (window.__MEMO_MODE) {
       const goals = list.filter(it => !it.archived && targetOf(it) > 0), active = list.filter(it => !it.archived);
@@ -515,7 +522,9 @@
     const mult = day === today() && timesTodayAll() === 0 ? multOf(streakWithToday()) : 1;
     return Math.max(0, Number(it.points) || 0) * mult;
   }
+  function focusItem(id){const root=document.getElementById('checkin-view');if(root&&!root.hidden)[...root.querySelectorAll('[data-act="ck-punch"]')].find(b=>b.dataset.id===id)?.focus({preventScroll:true});}
   App.checkin = {
+    focusItem: focusItem,
     memoPoints: memoPoints,
     init: init,
     render: render,

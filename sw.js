@@ -11,7 +11,7 @@ const ASSETS = [
   },
   {
     "url": "./css/style.css?v=170.8.0",
-    "sha256": "c1edbeb2c8c76649fa577eba854d65a04f516091870af2f7cf0dcec66dedb6b5"
+    "sha256": "ac6b6e3e8c88f8c359282d9b36de3069668e94c190fe67535417b08822a0ed21"
   },
   {
     "url": "./css/katex.css?v=170.8.0",
@@ -35,7 +35,7 @@ const ASSETS = [
   },
   {
     "url": "./js/checkin.js?v=170.8.0",
-    "sha256": "ac3c62a1e214b0952692384c5f73edd6a6b66c89abd5232214963eb77c02da3f"
+    "sha256": "a037b65131dfe7f0e9b6ba826309d235356ee75856c59832663b8e4a85aed4a8"
   },
   {
     "url": "./js/demo.js?v=170.8.0",
@@ -67,7 +67,7 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-actions.js?v=170.8.0",
-    "sha256": "e8c277e0c0d8ed898f8c70ce05dd5e6d29de2545dd4659a3635ed4e54f97e3cb"
+    "sha256": "1b06836cbe2b027385ae8fce51815864bbecafafbf5eac89e4a51b51552905ef"
   },
   {
     "url": "./js/memo-currency.js?v=170.8.0",
@@ -103,7 +103,7 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-workspace.js?v=170.8.0",
-    "sha256": "7cc70a2eb0b47a317f4f08dc4db192fb97f3a4762c60d0d14e78afe20a73fc50"
+    "sha256": "6a5a801eedfba540b336060a49255bb66f09d7d02ed98ffb1d89bb85514d4237"
   },
   {
     "url": "./js/memo.js?v=170.8.0",

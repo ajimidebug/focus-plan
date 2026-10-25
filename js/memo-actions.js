@@ -215,7 +215,7 @@
     m.querySelector('#memo-action-info').textContent = '本次任务积分 +' + Math.max(0, previewPoints || 0) + '；写入 ' + day + ' 的笔记（04:00分日）。';
     if (spec.kind === 'checkin') m.querySelector('#memo-action-info').textContent += '（' + (App.memoCurrency?.ruleLabel?.() || '旧连续倍率') + '）';
     bindCommit(m, () => completeCore(spec, m.querySelector('#memo-action-text').value, at,
-      [...m.querySelectorAll('[data-reward]:checked')].map(x => ({ kind: x.dataset.reward, points: m.querySelector('[data-reward-points="' + x.dataset.reward + '"]').value }))));
+      [...m.querySelectorAll('[data-reward]:checked')].map(x => ({ kind: x.dataset.reward, points: m.querySelector('[data-reward-points="' + x.dataset.reward + '"]').value }))), spec.kind==='checkin'?()=>App.checkin?.focusItem?.(spec.id):null);
   }
   function cancelEvent(event) {
     if (committing || unsettled) return;
@@ -225,14 +225,14 @@
       '<pre class="memo-delete-preview">' + E(text || '没有关联文段，或文段已被你删除。') + '</pre>' +
       '<label for="memo-action-text">取消原因（选填）</label><textarea id="memo-action-text" class="memo-action-text" placeholder="留空确认，不新增取消文字"></textarea><p id="memo-action-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">保留完成</button><button class="btn btn-danger" data-act="commit">确认取消</button>', { lock: true });
-    bindCommit(m, () => undoCore(event.id, m.querySelector('#memo-action-text').value));
+    bindCommit(m, () => undoCore(event.id, m.querySelector('#memo-action-text').value),event.kind==='checkin'?()=>App.checkin?.focusItem?.(event.sourceId):null);
   }
-  function bindCommit(m, mutate) {
-    App.ui.bindActions({ cancel: () => { if (!committing && !unsettled) App.ui.closeModal(); }, commit: async button => {
+  function bindCommit(m, mutate, returnFocus) {
+    App.ui.bindActions({ cancel: () => { if (!committing && !unsettled) {App.ui.closeModal();returnFocus?.();} }, commit: async button => {
       if (committing) return;
       button.disabled = true; m.querySelector('[data-act="cancel"]').disabled = true;
       try {
-        if (await transaction(mutate)) { App.ui.closeModal(); refresh(); App.ui.toast('已保存'); }
+        if (await transaction(mutate)) { App.ui.closeModal(); refresh(); returnFocus?.(); App.ui.toast('已保存'); }
       } catch (e) { m.querySelector('#memo-action-error').textContent = e.message; button.textContent = unsettled ? '重试保存' : '重新确认'; }
       finally { button.disabled = false; m.querySelector('[data-act="cancel"]').disabled = unsettled; }
     } });
