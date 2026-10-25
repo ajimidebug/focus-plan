@@ -21,7 +21,7 @@
     const t = found.task, r = found.ref;
     if (t.done || t.doneAt || t.archived || t.memoDismissed) throw new Error('请先恢复未完成状态');
     if (r.kind === 'queue') {
-      if (target === 'queue') { delete t.assignment; return; }
+      if (target === 'queue') { if(t.assignment)(t.assignmentHistory||(t.assignmentHistory=[])).push(clone(t.assignment));delete t.assignment; return; }
       if (t.assignment?.day === day && t.assignment.list === list) return;
       (t.assignmentHistory || (t.assignmentHistory = [])).push(clone(t.assignment || { at: new Date().toISOString(), state: '待安排' }));
       t.assignment = { day, list, at: new Date().toISOString() }; return;
@@ -80,7 +80,7 @@
     const days = Math.max(0, Math.round((Date.parse(M().userDay() + 'T00:00Z') - Date.parse(t.originalDay + 'T00:00Z')) / 86400000));
     return (t.done || t.doneAt ? '延期完成' : '顺延') + '自' + t.originalDay + ' · ' + days + '天' + (e ? e.forgivenAt ? ' · 扣分已撤销' : ' · 已扣' + e.points + '分' : '');
   }
-  function copyQuote(day) {
+  function noteCopyQuote(day) {
     const f = state(), snapshots = {}, lines = [];
     const carryDay = M().userDay();
     const baseline = f.copyCarry?.day === carryDay && f.copyCarry.selectedDay === day ? f.copyCarry.baseline : clone(f.copies);
@@ -99,7 +99,9 @@
     return { id: S().uid(), day, text: lines.join('\n\n'), snapshots, carryDay, baseline, at: new Date().toISOString() };
     } finally { f.copies = prior; }
   }
+  function copyQuote(day){const quote=noteCopyQuote(day);return A.memoReport?A.memoReport.attach(quote):quote;}
   function markCopyCore(quote) {
+    A.memoReport?.mark(quote);
     const f = state(); if(quote.baseline)f.copyCarry={day:quote.carryDay,selectedDay:quote.day,baseline:quote.baseline}; Object.entries(quote.snapshots).forEach(([day, snapshot]) => { f.copies[day] = Object.assign({}, snapshot, { at: quote.at }); });
     f.lastCopy = quote;
   }

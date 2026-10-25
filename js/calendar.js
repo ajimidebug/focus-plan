@@ -577,7 +577,7 @@
 
   function bind() {
     const wrap = document.getElementById('calendar-view');
-    wrap.querySelectorAll('.mw-overview').forEach(el=>{el.onclick=e=>App.memoWorkspace.overviewClick(e,selKey);el.onkeydown=e=>{if(e.target.matches('[data-overview-ref],[data-overview-list]')&&['Enter',' '].includes(e.key)&&!e.isComposing)App.memoWorkspace.overviewClick(e,selKey);};});
+    wrap.querySelectorAll('.mw-overview').forEach(el=>{el.onclick=e=>App.memoWorkspace.overviewClick(e,selKey);el.onkeydown=e=>{if(e.target.matches('[data-overview-ref],[data-overview-list],[data-goal]')&&['Enter',' '].includes(e.key)&&!e.isComposing)App.memoWorkspace.overviewClick(e,selKey);};});
     wrap.querySelectorAll('[data-open-workspace]').forEach(b=>b.onclick=()=>{App.app.switchView('tasks');App.memoWorkspace.enter('today',b.dataset.openWorkspace);});
     wrap.querySelectorAll('.hm-cell[data-k]').forEach(function (c) {
       c.onclick = function () {

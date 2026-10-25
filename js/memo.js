@@ -190,9 +190,9 @@
     const from = $('memo-from').value, to = $('memo-to').value;
     if (!validDate(from) || !validDate(to) || from > to) { App.ui.toast('请选择有效的起止日期'); return; }
     try {
-      const keys = entries('', from, to);
+      const keys = [...new Set(entries('',from,to).concat(App.memoReport?Object.keys(S().data().days).filter(k=>validDate(k)&&k>=from&&k<=to&&App.memoReport.report(k).any):[]))].sort();
       if (!keys.length) { App.ui.toast('这个日期范围内还没有笔记'); return; }
-      const text = exportText(keys);
+      const text = (App.memoReport?keys.map(k=>App.memoReport.report(k).text).join('\n\n')+'\n\n':'')+exportText(keys);
       App.ui.openModal('导出笔记 · ' + keys.length + ' 天', '<p class="hint">先检查内容，可在下方删去不想发送的部分；不会改变原笔记。</p><textarea id="memo-export-preview" aria-label="导出预览"></textarea>', '<button class="btn btn-primary" data-act="copy">复制文字</button><button class="btn" data-act="download">下载文本</button><button class="btn" data-act="close">关闭</button>');
       $('memo-export-preview').value = text;
       App.ui.bindActions({ copy: () => copyText($('memo-export-preview').value), download: () => download('备忘录-' + from + '-' + to + '.txt', $('memo-export-preview').value), close: App.ui.closeModal });

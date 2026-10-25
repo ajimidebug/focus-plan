@@ -2116,3 +2116,11 @@ body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) .mw-overview 
 #memo-rest{min-height:44px;}#memo-rest[aria-pressed="true"]{background:#edf5fb;color:#245b83;}
 
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) .ov-late{display:inline-block;margin-top:4px;padding:1px 5px;border-radius:4px;background:#fff3d8;color:#855713;font-size:11px;}
+
+body[data-theme=""] [data-score]{--score-color:#d5cbe7;border-right:2px solid var(--score-color)!important;}
+body[data-theme=""] [data-score="zero"]{--score-color:#d2d6db;}
+body[data-theme=""] [data-score="medium"]{--score-color:#9b7ab8;}
+body[data-theme=""] [data-score="high"]{--score-color:#69448d;}
+body[data-theme=""] [data-score="group"]{--score-color:#e0e3e7;}
+.goal-group{margin-top:10px;font-size:12px;color:var(--muted);}.goal-row{padding:8px 0;cursor:pointer;}.goal-row small{display:block;} .goal-row progress{display:block;width:100%;height:4px;accent-color:#8796a7;}
+[data-mw-pane="pending"]:not([aria-pressed="true"]){color:#805d20;background:#faf4e7;}

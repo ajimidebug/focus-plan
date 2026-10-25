@@ -823,11 +823,19 @@ test('task overview resolves queue identities and includes daily projects withou
  let html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.equal((html.match(/title="队列总览"/g)||[]).length,1);assert.match(html,/每日推进总览/);assert.doesNotMatch(html,/旧副本/);assert.doesNotMatch(html,/<button|data-mw=|mw-mini-title/);assert.match(html,/✅ 必须/);assert.match(html,/class="tag"/);
  A.completeCore({kind:'queue',id:'ovq',title:'队列总览'},'');html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.match(html,/队列总览 ✓/);assert.equal(d.ledger.filter(e=>e.type==='earn-queue').length,1);
 });
-test('rest pauses, survives save, excludes rest from task time and resumes original session',async()=>{
- const b=browser();await b.S.load();const {P,M}=flowHarness(b);vm.runInContext(source('js/memo-rest.js'),b.ctx);const R=b.ctx.App.memoRest,now=Date.parse('2026-10-24T03:55:00+08:00');
- b.S.data().queue=[{id:'restq',text:'计时任务'}];const run=P.startRef({kind:'queue',id:'restq'},now-60000);R.startCore(now);R.startCore(now+1000);assert.equal(run.status,'paused');assert.equal(R.state().intervals.length,1);assert.equal(P.elapsed(run,now+600000),60000);await b.S.save();
- const done=R.finishCore(now+600000);assert.equal(run.status,'running');assert.equal(done.resumedTitle,'计时任务');assert.equal(P.elapsed(run,now+660000),120000);assert.equal(R.active(),undefined);assert.match(M.read('2026-10-23').text,/开始休息/);assert.match(M.read('2026-10-24').text,/结束休息，共10分0秒/);
+test('rest stamp leaves running task and legacy rest state unchanged across reload',async()=>{
+ const b=browser();await b.S.load();const {P,M}=flowHarness(b);vm.runInContext(source('js/memo-rest.js'),b.ctx);const R=b.ctx.App.memoRest,now=Date.now();b.S.data().queue=[{id:'r',text:'任务'}];const run=P.startRef({kind:'queue',id:'r'},now);b.S.data().memoRest={version:1,intervals:[{id:'old',startedAt:now-1000}]};const old=JSON.stringify(b.S.data().memoRest);R.stampCore(now);R.stampCore(now+60000);assert.equal(run.status,'running');assert.equal(JSON.stringify(b.S.data().memoRest),old);assert.equal((M.read(M.userDay(now)).text.match(/休息/g)||[]).length,2);await b.S.save();
+ const next=browser({shared:b});await next.S.load();assert.match(next.S.data().memoNotes[M.userDay(now)].text,/休息/);
 });
-test('starting another task ends rest without resuming original task',async()=>{
- const b=browser();await b.S.load();const {P}=flowHarness(b);vm.runInContext(source('js/memo-rest.js'),b.ctx);const R=b.ctx.App.memoRest,now=Date.now();b.S.data().queue=[{id:'r1',text:'原任务'},{id:'r2',text:'新任务'}];const first=P.startRef({kind:'queue',id:'r1'},now);R.startCore(now+60000);const next=P.startRef({kind:'queue',id:'r2'},now+120000);assert.equal(R.active(),undefined);assert.equal(first.status,'paused');assert.equal(next.status,'running');assert.equal(R.state().intervals[0].resumedTitle,undefined);
+test('copy report carries task-only changes and retains repeated-copy corrections without changing notes',async()=>{
+ const b=browser();await b.S.load();const {F,M}=flowHarness(b),day=M.userDay(),old=M.shiftDay(day,-1);vm.runInContext(source('js/memo-goals.js'),b.ctx);vm.runInContext(source('js/memo-report.js'),b.ctx);
+ b.S.getDay(old).tasks.ideal=[{id:'rep',text:'旧日任务',done:false}];M.write(day,'手写原文');const original=M.read(day).text;
+ F.markCopyCore(F.copyQuote(day));b.S.getDay(old).tasks.ideal[0].done=true;let q=F.copyQuote(day);assert.match(q.text,/任务汇总修订/);assert.match(q.text,/✓ 旧日任务/);F.markCopyCore(q);assert.match(F.copyQuote(day).text,/任务汇总修订/);assert.equal(M.read(day).text,original);
+});
+test('deadline goals have historical progress but no daily tasks or ledger rewards',async()=>{
+ const b=browser();await b.S.load();const {F,M}=flowHarness(b);vm.runInContext(source('js/memo-goals.js'),b.ctx);const G=b.ctx.App.memoGoals,at=Date.parse('2026-10-25T10:00:00+08:00');const g=G.saveCore(null,{name:'目录',due:'2026-10-30',current:2,total:10,unit:'章'},at);G.saveCore(g.id,{name:'目录',due:'2026-10-30',current:5,total:10,unit:'章'},at+86400000);
+ assert.equal(G.at('2026-10-24').length,0);assert.equal(G.at('2026-10-25')[0].current,2);assert.equal(G.at('2026-10-26')[0].current,5);assert.equal(b.S.data().ledger.length,0);assert.throws(()=>G.saveCore(g.id,{name:'目录',due:'2026-10-30',current:11,total:10,unit:'章'}),/完成量/);
+});
+test('long-term scores sort descending stably and release assigned queues with history',async()=>{
+ const b=browser();await b.S.load();const {F,M}=flowHarness(b),day=M.userDay();vm.runInContext(source('js/memo-workspace.js'),b.ctx);const W=b.ctx.App.memoWorkspace;b.S.getDay(day).tasks.extra=[{id:'low',text:'低',points:1},{id:'high',text:'高',points:10},{id:'same',text:'同分',points:10}];assert.deepEqual(Array.from(W.taskItems(day,'extra'),x=>x.task.id),['high','same','low']);b.S.data().queue=[{id:'release',text:'原队列',assignment:{day,list:'ideal'}}];F.moveCore({kind:'queue',id:'release'},day,'ideal','queue');assert.equal(b.S.data().queue[0].assignmentHistory[0].day,day);assert.equal(b.S.data().queue[0].assignment,undefined);
 });

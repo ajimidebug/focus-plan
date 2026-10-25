@@ -28,7 +28,7 @@ function edit(id){if(A.memoActions.busy())return A.ui.toast('请先重试保存�
 function openList(){if(A.memoActions.busy())return A.ui.toast('请先重试保存当前操作');let items;try{items=sorted();}catch(e){return A.ui.toast(e.message);}
  const row=m=>'<article class="ms-row"><div class="ms-info"><strong>'+esc(m.name)+'</strong><p>'+esc(due(m))+' · '+label(daysLeft(m))+'</p>'+(m.note?'<p>'+esc(m.note)+'</p>':'')+'</div><button class="btn" data-act="edit" data-id="'+esc(m.id)+'">编辑</button><button class="btn" data-act="delete" data-id="'+esc(m.id)+'">删除</button></article>';
  const active=items.filter(m=>daysLeft(m)===null||daysLeft(m)>=0),past=items.filter(m=>daysLeft(m)<0);
- A.ui.openModal('截止日期',(active.map(row).join('')||'<p>暂无未过期的截止日期</p>')+'<details><summary>过去节点（'+past.length+'）</summary>'+past.map(row).join('')+'</details>','<button class="btn" data-act="close">关闭</button><button class="btn btn-primary" data-act="add">添加截止日期</button>',{lock:true});A.ui.bindActions({close:A.ui.closeModal,add:()=>edit(),edit:b=>edit(b.dataset.id),delete:b=>remove(b.dataset.id)});
+ A.ui.openModal('截止日期',(active.map(row).join('')||'<p>暂无未过期的截止日期</p>')+'<details><summary>过去节点（'+past.length+'）</summary>'+past.map(row).join('')+'</details>','<button class="btn" data-act="close">关闭</button><button class="btn" data-act="goal">添加截止目标</button><button class="btn btn-primary" data-act="add">添加截止日期</button>',{lock:true});A.ui.bindActions({close:A.ui.closeModal,goal:()=>A.memoGoals.editor(),add:()=>edit(),edit:b=>edit(b.dataset.id),delete:b=>remove(b.dataset.id)});
 }
 function open(){try{list().length?openList():edit();}catch(e){A.ui.toast(e.message);}}
 function init(){const b=document.getElementById('btn-ms');if(b)b.onclick=open;refresh();setInterval(refresh,60000);}

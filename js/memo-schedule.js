@@ -51,7 +51,6 @@
   function startRef(ref, now = Date.now(), itemId = null) {
     summaryCache = null; const d = state(), found = resolve(ref); if (!found || found.task.archived) throw new Error('任务已删除或停用，请重新选择');
     if (isDone({ ref: found.ref })) throw new Error('任务已完成；取消完成后再计时');
-    App.memoRest?.finishCore(now,false);
     const running = active(); if (running && key(running.ref) === key(found.ref) && (itemId == null || running.itemId === itemId)) return running;
     if (running) pauseCore(running, now);
     let session = d.sessions.slice().reverse().find(s => key(s.ref) === key(found.ref) && s.status === 'paused' && (s.itemId || null) === itemId);
