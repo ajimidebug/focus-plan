@@ -36,7 +36,7 @@
     const items=(S().getDay(day).tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed).map(task=>({task,ref:{kind:'task',id:task.id,day,list}}));
     A.memoFlow?.assigned(day,list).forEach(task=>items.push({task,ref:{kind:'queue',id:task.id}}));
     if(list==='extra')projects().filter(p=>!p.archived&&(!p.createdDay||p.createdDay<=day)).forEach(task=>items.push({task,ref:{kind:'project',id:task.id,day}}));
-    const seen=new Set();const result=items.filter(x=>{const found=A.memoSchedule.resolve(x.ref);if(!found)return false;const ref=found.ref,key=A.memoSchedule.key(ref);x.task=found.task;if(seen.has(key))return false;seen.add(key);x.ref=ref;return true;});if(list==='extra')return result.map((x,i)=>({x,i})).sort((a,b)=>Number(doneFor(a.x.task,a.x.ref))-Number(doneFor(b.x.task,b.x.ref))||(!doneFor(a.x.task,a.x.ref)?score(b.x.task,b.x.ref)-score(a.x.task,a.x.ref):0)||a.i-b.i).map(v=>v.x);return result;
+    const seen=new Set();const result=items.filter(x=>{const found=A.memoSchedule.resolve(x.ref);if(!found)return false;const ref=found.ref,key=A.memoSchedule.key(ref);x.task=found.task;if(seen.has(key))return false;seen.add(key);x.ref=ref;return true;});return result.map((x,i)=>({x,i})).sort((a,b)=>Number(doneFor(a.x.task,a.x.ref))-Number(doneFor(b.x.task,b.x.ref))||(!doneFor(a.x.task,a.x.ref)&&list!=='required'?score(b.x.task,b.x.ref)-score(a.x.task,a.x.ref):0)||a.i-b.i).map(v=>v.x);
   }
   // Calendar's original compact columns and row markup, without mutation controls.
   function overviewHTML(day){
@@ -75,7 +75,7 @@
   }
   function renderQueue() {
     const all = sortedQueue().filter(t=>!t.memoDismissed), q = all.filter(t => !t.assignment), assigned = all.filter(t => t.assignment), done = S().data().queueDone || [];
-    $('mw-queue').innerHTML = '<div class="mw-group-head"><h2>任务队列</h2>' + button('add-queue', '＋ 添加任务', '', true) + '</div><div class="mw-queue-grid">' + q.map((t, i) => card(t, { kind: 'queue', id: t.id }, { number: i + 1, first: i === 0, reorder: true })).join('') + '</div>' + (!q.length ? '<p class="hint">添加准备做的任务，再安排顺序。</p>' : '') + (assigned.length ? '<details class="mw-assigned"><summary>已安排（' + assigned.length + '）</summary>' + assigned.map(t => card(t, { kind: 'queue', id: t.id }, { number: '已安排', reorder: true })).join('') + '</details>' : '') + '<details><summary>已完成（' + done.length + '）</summary>' + done.slice(0, 100).map(t => card(t, { kind: 'queue', id: t.id }, { number: '已完成' })).join('') + '</details>';
+    $('mw-queue').innerHTML = '<section class="mw-waiting-section"><h2>需要重新安排</h2>'+pendingHTML()+'</section><section class="mw-waiting-section"><div class="mw-group-head"><h2>尚未安排</h2>' + button('add-queue', '＋ 添加任务', '', true) + '</div><div class="mw-queue-grid">' + q.map(waitingRow).join('') + '</div>' + (!q.length ? '<p class="hint">添加准备做的任务，再安排顺序。</p>' : '') + (assigned.filter(t=>t.assignment.day>=M().userDay()).length ? '<details class="mw-assigned"><summary>已安排（' + assigned.filter(t=>t.assignment.day>=M().userDay()).length + '）</summary>' + assigned.filter(t=>t.assignment.day>=M().userDay()).map(t => card(t, { kind: 'queue', id: t.id }, { number: '已安排', reorder: true })).join('') + '</details>' : '') + '<details><summary>已完成（' + done.length + '）</summary>' + done.slice(0, 100).map(t => card(t, { kind: 'queue', id: t.id }, { number: '已完成' })).join('') + '</details></section>';
   }
   function preserve(renderFn) {
     const root = $(pane === 'queue' ? 'mw-queue' : 'mw-today'), disclosures = new Set();
@@ -95,6 +95,7 @@
     $('mw-live')?.classList.toggle('mw-local-timer', !!shown && [...(container?.querySelectorAll('[data-mw-card]') || [])].some(el => A.memoSchedule.key(JSON.parse(el.dataset.ref)) === A.memoSchedule.key(shown.ref)));
   }
   function showPane(next, save = true, options = {}) {
+    if(next==='pending')next='queue';
     if (next === 'timeline') { A.app.switchView('timeline'); return A.memoSchedule.open(Object.assign({}, options, { workspace: true })); }
     if (save) positions[pane] = window.scrollY;
     pane = next; applyPane(); if (next === 'timeline') A.memoSchedule.open(Object.assign({}, options, { workspace: true }));
@@ -164,13 +165,17 @@
   function historyRow(x) {
     const t = x.task, day = x.day || x.ref.day, list = x.list || x.ref.list;
     const status = t.memoMovedTo ? '已重新安排' : t.memoDismissed ? '未完成 · 不再安排' : t.done || t.doneAt ? (t.backfillDay ? (t.backfillDay <= t.originalDay ? '补记按时完成' : '补记延期完成') : t.originalDay ? '延期完成' : '已完成') : '未完成';
-    return '<article class="mw-history-row"><strong>' + esc(t.text) + '</strong><p>' + esc(day + ' · ' + names[list] + ' · ' + status + (status === '未完成' ? (day < S().data().memoFlow?.startedDay ? ' · 旧任务，待安排' : list !== 'required' ? ' · 待重新安排' : '') : '')) + '</p>' + (!t.memoMovedTo && !t.memoDismissed ? (t.done || t.doneAt ? button('open-day', '查看当天', refAttrs(Object.assign({}, x.ref, {day}))) : button('enqueue','加入队列',refAttrs(x.ref)) + button('backfill', '补记完成', refAttrs(x.ref)) + button('assign', '重新安排', refAttrs(x.ref)) + button('dismiss', '不再安排', refAttrs(x.ref))) : t.memoDismissed ? button('restore-pending', '恢复待安排', refAttrs(x.ref)) : '') + '</article>';
+    return '<article class="mw-history-row"><strong>' + esc(t.text) + '</strong><p>' + esc(day + ' · ' + names[list] + ' · ' + status + (status === '未完成' ? (day < S().data().memoFlow?.startedDay ? ' · 旧任务，待安排' : list !== 'required' ? ' · 待重新安排' : '') : '')) + '</p>' + (!t.memoMovedTo && !t.memoDismissed ? (t.done || t.doneAt ? button('open-day', '查看当天', refAttrs(Object.assign({}, x.ref, {day}))) : button('enqueue','暂不安排',refAttrs(x.ref)) + button('backfill', '补记完成', refAttrs(x.ref)) + button('assign', '重新安排', refAttrs(x.ref)) + button('dismiss', '不再安排', refAttrs(x.ref))) : t.memoDismissed ? button('restore-pending', '恢复待安排', refAttrs(x.ref)) : '') + '</article>';
   }
   function backlog() {
     const rows = datedTasks().filter(x => (x.day || x.ref.day) < M().userDay() && !x.task.done && !x.task.doneAt && !x.task.memoMovedTo && !x.task.memoDismissed);
     return '<details class="mw-backlog"><summary>往日未完成（' + rows.length + '）</summary>' + rows.sort((a,b) => (a.day || a.ref.day).localeCompare(b.day || b.ref.day)).map(historyRow).join('') + '</details>';
   }
-  function renderPending(){const rows=datedTasks().filter(x=>(x.day||x.ref.day)<M().userDay()&&!x.task.done&&!x.task.doneAt&&!x.task.memoMovedTo&&!x.task.memoDismissed);$('mw-pending').innerHTML='<h2>待重新安排 <small>'+rows.length+'</small></h2>'+ (rows.map(historyRow).join('')||'<p>暂无待重新安排任务</p>');document.querySelector('[data-mw-pane="pending"]').textContent='待重新安排 '+rows.length;}
+  function pendingRows(){return datedTasks().filter(x=>(x.day||x.ref.day)<M().userDay()&&!x.task.done&&!x.task.doneAt&&!x.task.memoMovedTo&&!x.task.memoDismissed);}
+  function pendingHTML(){return pendingRows().map(historyRow).join('')||'<p class="hint">暂无需要重新安排的任务</p>';}
+  function waitingRow(t){const ref={kind:'queue',id:t.id},attrs=refAttrs(ref);return '<article class="mw-history-row"><strong>'+esc(t.text)+'</strong><div class="mw-waiting-actions">'+button('assign','安排日期',attrs)+button('complete','直接完成',attrs)+'</div><details><summary>计时与更多</summary>'+A.memoSchedule.rowControls(ref)+(t.note?'<p>'+esc(t.note)+'</p>':'')+button('edit','编辑',attrs)+button('pin',t.pinned?'取消置顶':'置顶',attrs)+button('up','上移',attrs)+button('down','下移',attrs)+button('dismiss','不再安排',attrs)+'</details></article>';}
+  function renderPending(){const nav=document.querySelector('[data-mw-pane="queue"]');if(nav)nav.textContent='待安排 '+(pendingRows().length+sortedQueue().filter(t=>!t.assignment&&!t.memoDismissed).length);}
+
   let historyFrom = '', historyTo = '', historyStatus = '', historyList = '';
   function renderHistory() {
     const root = $('mw-history'); if (!root) return;
@@ -202,7 +207,7 @@
     const root = $('view-tasks');
     const axis = document.createElement('section'); axis.id = 'view-memo-timeaxis'; axis.className = 'view'; document.querySelector('main').appendChild(axis); axis.appendChild($('memo-schedule-panel'));
     const error = document.createElement('button'); error.id = 'flow-save-error'; error.className = 'btn btn-danger'; error.hidden = true; document.querySelector('main').before(error);
-    root.insertAdjacentHTML('afterbegin', '<div class="mw-tabs" role="group" aria-label="任务子页面">' + [['today','当天任务'],['queue','任务队列'],['pending','待重新安排']].map(([id, label]) => '<button class="btn" data-mw-pane="' + id + '">' + label + '</button>').join('') + '</div><p id="mw-error" role="alert"></p><div id="mw-today"></div><div id="mw-queue" hidden></div><div id="mw-history" hidden></div><div id="mw-pending" hidden></div>');
+    root.insertAdjacentHTML('afterbegin', '<div class="mw-tabs" role="group" aria-label="任务子页面">' + [['today','当天任务'],['queue','待安排']].map(([id, label]) => '<button class="btn" data-mw-pane="' + id + '">' + label + '</button>').join('') + '</div><p id="mw-error" role="alert"></p><div id="mw-today"></div><div id="mw-queue" hidden></div><div id="mw-history" hidden></div><div id="mw-pending" hidden></div>');
     // Keep legacy review content reachable, with mutation entries retired in memo mode.
     const review = document.createElement('section'); review.id = 'view-memo-review'; review.className = 'view'; review.innerHTML = '<h2>今日复盘</h2><p class="hint">完成和补记请在任务中操作，统一关联笔记、积分与时间轴。</p>'; $('review-card').parentNode.removeChild($('review-card')); review.appendChild(document.createElement('div')).id = 'review-card'; document.querySelector('main').appendChild(review);
     document.querySelectorAll('.mn-grid, header nav').forEach(el => el.insertAdjacentHTML('beforeend', '<button class="nav-btn btn" data-view="memo-review">今日复盘</button>'));
@@ -242,5 +247,5 @@
     setInterval(refreshDates,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDates();});window.addEventListener('focus',refreshDates);
     render();
   }
-  A.memoWorkspace = { score, scoreBand, taskItems, overviewHTML, overviewClick, init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
+  A.memoWorkspace = { score, scoreBand, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
 })();
