@@ -106,7 +106,7 @@
 
   function init() {
     const old = A.settings.render; A.settings.render = function () { old(); panel(); flowPanel(); }; panel(); flowPanel();
-    const button=document.createElement('button');button.className='btn btn-primary';button.id='flow-shop';button.textContent='积分兑换与自定义支出';button.onclick=shop;document.getElementById('checkin-view').before(button);
+    const button=document.createElement('button');button.className='btn btn-primary';button.id='flow-shop';button.textContent='积分兑换与自定义支出';button.onclick=shop;(document.getElementById('point-summary')||document.getElementById('view-checkin')).append(button);
   }
   A.memoCurrency = { ruleLabel, enableFixedCore, quote, claim, estimate, fixedBonus, redeemCore, enableCore, init, panel, spendQuote, spendCore, refundCore, shop, customSpend, flowPanel };
 })();

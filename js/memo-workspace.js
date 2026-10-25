@@ -3,7 +3,7 @@
   'use strict';
   const A = window.App, S = () => A.store, M = () => A.memoCore, $ = id => document.getElementById(id), esc = x => S().esc(String(x ?? ''));
   const names = { required: '必做任务', ideal: '理想任务', extra: '长期拓展' };
-  let pane = 'today', taskDay, positions = {}, ready = false, lastDay, completionFocus;
+  let pane = 'today', taskDay, positions = {}, ready = false, lastDay, lastCivilDay, completionFocus;
   const projects = () => S().data().memoProjects || [];
   const button = (act, text, attrs = '', primary = false) => '<button type="button" class="btn btn-small' + (primary ? ' btn-primary' : '') + '" data-mw="' + act + '" ' + attrs + '>' + text + '</button>';
   function sortedQueue() { return (S().data().queue || []).slice().sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (a.rank ?? (S().data().queue.indexOf(a) * 1024)) - (b.rank ?? (S().data().queue.indexOf(b) * 1024))); }
@@ -21,8 +21,8 @@
   function doneFor(t, ref) { return ['project', 'daily'].includes(ref.kind) ? !!t.days?.[ref.day] : ref.kind === 'queue' ? !!(t.doneAt || t.doneDay) : !!t.done; }
   function card(t, ref, options = {}) {
     const done = doneFor(t, ref), attrs = refAttrs(ref);
-    const points = score(t,ref);
-    return '<article class="mw-task' + (done ? ' mw-done' : '') + '" data-mw-card data-score="'+scoreBand(points)+'" ' + attrs + '><div class="mw-task-heading">' + button('complete', done ? '✓' : '○', attrs + ' aria-label="' + (done ? '取消完成：' : '完成：') + esc(t.text) + '" aria-pressed="' + done + '"') + '<div class="mw-task-title"><strong>' + esc(t.text) + '</strong><div class="mw-task-meta">' + (ref.kind === 'queue' ? '<span>' + (t.pinned ? '置顶 · ' : '') + (options.number ? '第' + options.number + '项' : '已安排') + '</span>' : ref.kind === 'project' ? '<span>每日推进 · ' + esc(ref.day) + '</span>' : '') + (points != null ? '<span>＋' + esc(points) + '分</span>' : '') + '</div></div>' + button('edit', '编辑', attrs + ' aria-label="编辑：' + esc(t.text) + '"') + '</div><div class="mw-task-timing">' + A.memoSchedule.rowControls(ref) + '</div>' +
+    const points = score(t,ref), category = ref.list || t.assignment?.list || (ref.kind === 'project' ? 'extra' : 'queue');
+    return '<article class="mw-task' + (done ? ' mw-done' : '') + '" data-mw-card data-category="'+category+'" data-score="'+scoreBand(points)+'" ' + attrs + '><div class="mw-task-heading">' + button('complete', done ? '✓' : '○', attrs + ' aria-label="' + (done ? '取消完成：' : '完成：') + esc(t.text) + '" aria-pressed="' + done + '"') + '<div class="mw-task-title"><strong>' + esc(t.text) + '</strong>' + scoreHTML(points) + '<div class="mw-task-meta">' + (ref.kind === 'queue' ? '<span>' + (t.pinned ? '置顶 · ' : '') + (options.number ? '第' + options.number + '项' : '已安排') + '</span>' : ref.kind === 'project' ? '<span>每日推进 · ' + esc(ref.day) + '</span>' : '') + '</div></div>' + button('edit', '编辑', attrs + ' aria-label="编辑：' + esc(t.text) + '"') + '</div><div class="mw-task-timing">' + A.memoSchedule.rowControls(ref) + '</div>' +
       (true ? '<div class="mw-task-extras">' + (['task','queue'].includes(ref.kind) && (!done || t.overdueEventId) ? button('assign', done ? '安排与扣分记录' : ref.kind === 'queue' ? (t.assignment ? '调整今日安排' : '安排到今天') : '调整安排', attrs) : '') + (!done && ['task','queue'].includes(ref.kind) && (t.originalDay || (t.assignment?.day || ref.day) < M().userDay()) ? button('backfill', '补记完成', attrs) : '') + (t.originalDay ? '<small class="mw-late">' + esc(A.memoFlow.lateLabel(t)) + '</small>' : '') + (t.assignment ? '<small>' + esc(t.assignment.day + ' · ' + names[t.assignment.list]) + '</small>' : '') + (t.note ? '<details class="mw-note"><summary>备注</summary><p>' + esc(t.note) + '</p></details>' : '') + (options.reorder ? '<details class="mw-manage"><summary>更多操作</summary><div>' + button('pin', t.pinned ? '取消置顶' : '置顶', attrs) + button('up', '上移', attrs) + button('down', '下移', attrs) + '</div></details>' : '') + '</div>' : '') + '</article>';
   }
   function taskSection(items) {
@@ -30,6 +30,7 @@
     return open.map(x => card(x.task, x.ref)).join('') + (!open.length ? '<p class="hint mw-empty">暂无未完成任务</p>' : '') + (done.length ? '<details class="mw-completed"><summary>已完成（' + done.length + '）</summary>' + done.map(x => card(x.task, x.ref)).join('') + '</details>' : '');
   }
   function score(t,ref){if(ref.list==='required'||t.assignment?.list==='required')return null;if(ref.kind==='project')return Math.max(0,Number(t.points)||0);return Math.max(0,Number(t.points??(ref.kind==='queue'?S().settings().queuePoints??5:ref.list==='ideal'?S().settings().idealPoints??10:S().settings().extPoints??5))||0);}
+  function scoreHTML(n){return n===null?'':'<small class="mw-score">+'+esc(n)+'分</small>';}
   function scoreBand(n){return n===null?'group':n===0?'zero':n<5?'low':n<10?'medium':'high';}
   function taskItems(day,list){
     const items=(S().getDay(day).tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed).map(task=>({task,ref:{kind:'task',id:task.id,day,list}}));
@@ -45,7 +46,7 @@
       const items=taskItems(day,list);
       html+='<div class="cal-col" data-overview-list="'+list+'" tabindex="0" role="group" aria-label="'+names[list]+'，点击空白添加任务" style="border:1px solid var(--line);border-radius:10px;padding:9px 10px"><div class="cal-col-head" style="font-size:13px;font-weight:700;margin-bottom:6px">'+name+' <span class="tag">'+items.length+'</span></div>';
       items.forEach(({task:t,ref})=>{
-        html+='<div class="cal-task'+(doneFor(t,ref)?' done':'')+'" data-score="'+scoreBand(score(t,ref))+'" data-overview-ref="'+esc(JSON.stringify(ref))+'" tabindex="0" role="button" aria-label="打开任务：'+esc(t.text)+'" style="border-bottom:1px dashed var(--line);padding:6px 2px"><span class="t-text" title="'+esc(t.text)+'" style="font-size:13.5px;word-break:break-all">'+esc(t.text)+(doneFor(t,ref)?' ✓':'')+(A.tasks?.carryTagHTML?.(t)||'')+(A.tasks?.lecTagHTML?.(t)||'')+'</span>';
+        html+='<div class="cal-task'+(doneFor(t,ref)?' done':'')+'" data-category="'+list+'" data-score="'+scoreBand(score(t,ref))+'" data-overview-ref="'+esc(JSON.stringify(ref))+'" tabindex="0" role="button" aria-label="打开任务：'+esc(t.text)+'" style="border-bottom:1px dashed var(--line);padding:6px 2px"><span class="t-text" title="'+esc(t.text)+'" style="font-size:13.5px;word-break:break-all">'+esc(t.text)+(doneFor(t,ref)?' ✓':'')+scoreHTML(score(t,ref))+(A.tasks?.carryTagHTML?.(t)||'')+(A.tasks?.lecTagHTML?.(t)||'')+'</span>';
         if(t.originalDay&&!doneFor(t,ref))html+='<span class="ov-late" title="'+esc(A.memoFlow.lateLabel(t))+'">顺延</span>';
         if(t.standard)html+='<div class="t-std" style="font-size:11.5px;color:#f59e0b;margin-top:2px">📌 标准：'+esc(t.standard)+'</div>';
         (t.groups||[]).forEach(g=>{const subs=g.subs||[];html+='<div class="t-ctx grp">🧩 '+esc(g.name||'任务组')+(subs.length?'（'+subs.filter(x=>x.done===true).length+'/'+subs.length+'）':'')+'</div>';subs.forEach(x=>{html+='<div class="t-ctx sub"><span>· '+esc(x.text)+(x.done===true?' ✓':x.done===false?' ✗':'')+'</span></div>';});});
@@ -56,6 +57,7 @@
   }
   function overviewClick(e,day){
     const goal=e.target.closest('[data-goal]');if(goal){e.preventDefault();e.stopImmediatePropagation();return A.memoGoals.editor(goal.dataset.goal);}
+    if(e.target.closest('[data-goal-group]'))return;
     if(window.getSelection()?.toString())return;
     const task=e.target.closest('[data-overview-ref]'),col=e.target.closest('[data-overview-list]');if(!col)return;
     e.preventDefault();e.stopImmediatePropagation();if(task)complete(JSON.parse(task.dataset.overviewRef));else{taskDay=day;editor(null,col.dataset.overviewList);}
@@ -196,7 +198,7 @@
     $('mw-review-save').onclick = async () => { const text = $('mw-review-text').value; if (await commit(() => { day.review = { text, at: new Date().toISOString() }; })) $('mw-review-status').textContent = '已保存'; };
   }
   function init() {
-    ready = true; taskDay = M().userDay(); lastDay = taskDay;
+    ready = true; taskDay = M().userDay(); lastDay = taskDay; lastCivilDay = M().naturalDay();
     const root = $('view-tasks');
     const axis = document.createElement('section'); axis.id = 'view-memo-timeaxis'; axis.className = 'view'; document.querySelector('main').appendChild(axis); axis.appendChild($('memo-schedule-panel'));
     const error = document.createElement('button'); error.id = 'flow-save-error'; error.className = 'btn btn-danger'; error.hidden = true; document.querySelector('main').before(error);
@@ -236,7 +238,8 @@
     }, true);
     root.addEventListener('keydown',e=>{if(e.target.matches('[data-overview-ref],[data-overview-list],[data-goal]')&&['Enter',' '].includes(e.key)&&!e.isComposing)overviewClick(e,taskDay);});
     A.tasks.renderAll = render; A.queue.render = () => preserve(renderQueue);
-    setInterval(() => { const now = M().userDay(); if (now !== lastDay) { if (taskDay === lastDay) taskDay = now; lastDay = now; render(); } }, 30000);
+    function refreshDates(){const now=M().userDay(),civil=M().naturalDay();if(now!==lastDay){if(taskDay===lastDay)taskDay=now;lastDay=now;render();}else if(civil!==lastCivilDay)A.memoGoals?.refresh();lastCivilDay=civil;}
+    setInterval(refreshDates,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDates();});window.addEventListener('focus',refreshDates);
     render();
   }
   A.memoWorkspace = { score, scoreBand, taskItems, overviewHTML, overviewClick, init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };

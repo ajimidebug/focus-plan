@@ -832,13 +832,47 @@ test('copy report carries task-only changes and retains repeated-copy correction
  b.S.getDay(old).tasks.ideal=[{id:'rep',text:'旧日任务',done:false}];M.write(day,'手写原文');const original=M.read(day).text;
  F.markCopyCore(F.copyQuote(day));b.S.getDay(old).tasks.ideal[0].done=true;let q=F.copyQuote(day);assert.match(q.text,/任务汇总修订/);assert.match(q.text,/✓ 旧日任务/);F.markCopyCore(q);assert.match(F.copyQuote(day).text,/任务汇总修订/);assert.equal(M.read(day).text,original);
 });
-test('deadline goals have historical progress but no daily tasks or ledger rewards',async()=>{
- const b=browser();await b.S.load();const {F,M}=flowHarness(b);vm.runInContext(source('js/memo-goals.js'),b.ctx);const G=b.ctx.App.memoGoals,at=Date.parse('2026-10-25T10:00:00+08:00');const g=G.saveCore(null,{name:'目录',due:'2026-10-30',current:2,total:10,unit:'章'},at);G.saveCore(g.id,{name:'目录',due:'2026-10-30',current:5,total:10,unit:'章'},at+86400000);
- assert.equal(G.at('2026-10-24').length,0);assert.equal(G.at('2026-10-25')[0].current,2);assert.equal(G.at('2026-10-26')[0].current,5);assert.equal(b.S.data().ledger.length,0);assert.throws(()=>G.saveCore(g.id,{name:'目录',due:'2026-10-30',current:11,total:10,unit:'章'}),/完成量/);
+test('deadline reminders preserve legacy progress, historical visibility and ledger independence',async()=>{
+ const b=browser();await b.S.load();const {M}=flowHarness(b);vm.runInContext(source('js/memo-goals.js'),b.ctx);const G=b.ctx.App.memoGoals,at=Date.parse('2026-10-25T00:30:00+08:00');
+ const legacy={id:'oldgoal',history:[{name:'目录',due:'2026-10-30',current:2,total:10,unit:'章',day:'2026-10-24',at:new Date(at).toISOString()}]};b.S.data().memoGoals=[legacy];const old=JSON.stringify(legacy.history[0]);const ledger=JSON.stringify(b.S.data().ledger),tasks=JSON.stringify(b.S.data().days);
+ G.saveCore('oldgoal',{name:'目录提醒',due:'2026-11-01',hidden:true},at+86400000);assert.equal(JSON.stringify(legacy.history[0]),old);assert.equal(G.at('2026-10-24')[0].current,2);assert.equal(G.at('2026-10-25').length,0);assert.equal(G.at('2026-10-25',true)[0].hidden,true);assert.equal(G.origin(legacy),'2026-10-25');
+ G.saveCore('oldgoal',{name:'目录提醒',due:'2026-11-01',hidden:false},at+86400000+60000);assert.equal(G.at('2026-10-25').length,1);assert.equal(JSON.stringify(b.S.data().ledger),ledger);assert.equal(JSON.stringify(b.S.data().days),tasks);assert.throws(()=>G.saveCore(null,{name:'',due:'2026-10-30'}),/名称/);assert.throws(()=>G.saveCore(null,{name:'非法日期',due:'2026-02-30'}),/截止日期/);
+ await b.S.save();const again=browser({shared:b});await again.S.load();assert.equal(JSON.stringify(again.S.data().memoGoals[0].history[0]),old);
+});
+test('countdown uses civil date ordinals across midnight, leap days and deadline edits',async()=>{
+ const b=browser();await b.S.load();const {M}=flowHarness(b);vm.runInContext(source('js/memo-goals.js'),b.ctx);const G=b.ctx.App.memoGoals,g={createdCivilDay:'2026-10-25',due:'2026-10-30'};
+ assert.equal(G.countdown(g,'2026-10-25').ratio,1);assert.equal(G.countdown(g,'2026-10-29').text,'剩余1天');assert.equal(G.countdown(g,'2026-10-30').text,'今天截止');assert.equal(G.countdown(g,'2026-10-31').text,'已过期1天');assert.equal(G.countdown(g,'2026-10-31').ratio,0);
+ assert.equal(G.countdown({due:'2028-03-01',createdCivilDay:'2028-02-28'},'2028-02-29').remaining,1);assert.equal(G.countdown({due:'2027-01-01'},'2026-12-31').remaining,1);assert.equal(G.countdown({due:'2026-10-25',createdCivilDay:'2026-10-25'},'2026-10-25').ratio,0);
+ const before=Date.parse('2026-10-25T23:59:59+08:00'),after=before+1000;assert.equal(M.userDay(before),M.userDay(after));assert.equal(G.countdown(g,M.naturalDay(before)).remaining-G.countdown(g,M.naturalDay(after)).remaining,1);
+ assert.equal(G.countdown(g,M.naturalDay('2026-10-26T03:59:59+08:00')).remaining,G.countdown(g,M.naturalDay('2026-10-26T04:00:00+08:00')).remaining);
+ const created=G.saveCore(null,{name:'提醒',due:'2026-10-30'},before);G.saveCore(created.id,{name:'改名',due:'2026-11-01'},after);assert.equal(G.origin(created),'2026-10-25');assert.equal(G.at('2026-10-25')[0].due,'2026-11-01');
+ assert.equal(G.origin({history:[{day:'2026-10-20'}]}),'2026-10-20');assert.equal(G.countdown({due:'bad'},'2026-10-25').remaining,null);
 });
 test('long-term scores sort descending stably and release assigned queues with history',async()=>{
  const b=browser();await b.S.load();const {F,M}=flowHarness(b),day=M.userDay();vm.runInContext(source('js/memo-workspace.js'),b.ctx);const W=b.ctx.App.memoWorkspace;b.S.getDay(day).tasks.extra=[{id:'low',text:'低',points:1},{id:'high',text:'高',points:10},{id:'same',text:'同分',points:10}];assert.deepEqual(Array.from(W.taskItems(day,'extra'),x=>x.task.id),['high','same','low']);b.S.data().queue=[{id:'release',text:'原队列',assignment:{day,list:'ideal'}}];F.moveCore({kind:'queue',id:'release'},day,'ideal','queue');assert.equal(b.S.data().queue[0].assignmentHistory[0].day,day);assert.equal(b.S.data().queue[0].assignment,undefined);
 });
 test('new historical task date after a successful copy is carried repeatedly',async()=>{
  const b=browser();await b.S.load();const {F,M}=flowHarness(b),day=M.userDay(),old=M.shiftDay(day,-2);vm.runInContext(source('js/memo-report.js'),b.ctx);F.markCopyCore(F.copyQuote(day));b.S.getDay(old).tasks.ideal=[{id:'new-history',text:'新增往日安排'}];const q=F.copyQuote(day);assert.match(q.text,/新增往日安排/);F.markCopyCore(q);assert.match(F.copyQuote(day).text,/新增往日安排/);
+});
+
+test('report format upgrade suppresses only proven formatting differences and preserves pending corrections',async()=>{
+ const b=browser();await b.S.load();const {M,F}=flowHarness(b),day=M.userDay(),old=M.shiftDay(day,-1);vm.runInContext(source('js/memo-goals.js'),b.ctx);vm.runInContext(source('js/memo-report.js'),b.ctx);const R=b.ctx.App.memoReport;
+ b.S.data().memoGoals=[{id:'legacy',history:[{name:'截止测试',due:'2026-12-19',current:1,total:10,unit:'章',day:old,at:old+'T10:00:00+08:00'}]}];b.S.getDay(old).tasks.ideal=[{id:'task',text:'旧任务',done:false}];F.state().reportCopies=Object.fromEntries(Object.keys(b.S.data().days).map(k=>[k,R.report(k,true).text]));
+ const prior=JSON.stringify(F.state().reportCopies),q=F.copyQuote(day);assert.doesNotMatch(q.text,/任务汇总修订/);assert.equal(JSON.stringify(F.state().reportCopies),prior);assert.match(q.text,/截止测试；截止 2026-12-19/);assert.doesNotMatch(q.text,/1\/10章/);
+ b.S.getDay(old).tasks.ideal[0].done=true;const changed=F.copyQuote(day);assert.match(changed.text,/任务汇总修订/);assert.match(changed.text,/✓ 旧任务/);F.markCopyCore(changed);assert.match(F.copyQuote(day).text,/任务汇总修订/);
+ const text=R.report(old).text;class Later extends Date{constructor(...args){super(...(args.length?args:[Date.now()+86400000]));}static now(){return Date.now()+86400000;}}b.ctx.Date=Later;assert.equal(R.report(old).text,text);
+});
+test('rest retry persists one stamp and focuses its actual day before the trailing newline',async()=>{
+ const b=browser();await b.S.load();const {A,M}=flowHarness(b);let button,shown,caret,focus=false,composing=false;const editor={contentEditable:'true',focus(){focus=true;}};
+ b.ctx.document={createElement(){return {};},getElementById(id){return id==='memo-time'?{after(el){button=el;}}:editor;}};b.ctx.App.memo={flush:async()=>true,show(day){shown=day;}};b.ctx.App.memoEditor={busy:()=>composing,text:()=>M.read(shown)?.text||'',select(pos){caret=pos;}};b.ctx.App.ui={toast(){}};
+ vm.runInContext(source('js/memo-rest.js'),b.ctx);b.ctx.App.memoRest.init();b.options.localFails=b.options.idbFails=true;await button.onclick();assert(A.busy());const recorded=Object.keys(b.S.data().memoNotes).find(k=>M.read(k).text.includes('休息')),text=M.read(recorded).text;assert.equal(shown,undefined);
+ b.options.localFails=b.options.idbFails=false;await button.onclick();assert(!A.busy());assert.equal(shown,recorded);assert(focus);assert.equal(caret,text.length-1);assert.equal(M.read(recorded).text,text);
+ composing=true;await button.onclick();assert.equal(M.read(recorded).text,text);
+});
+test('habit cards keep active items in a grid and native makeup buttons with habit labels',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);b.ctx.__MEMO_MODE=true;vm.runInContext(source('js/checkin.js'),b.ctx);b.S.data().checkins=[{id:'visible',text:'喝水测试',points:5,target:1,days:{}},{id:'archived',text:'已停用测试',archived:true,days:{}}];
+ const html=b.ctx.App.checkin.pageHTML();assert.match(html,/class="ck-grid"/);assert.match(html,/<button type="button" class="ck-day makeup"/);assert.match(html,/aria-label="喝水测试，打卡，本次可得5分"/);assert.match(html,/<div class="ck-secondary"><details>/);assert.equal((html.match(/class="ck-row/g)||[]).length,1);assert(!html.includes('<span class="ck-dot makeup"'));
+});
+test('overview point labels and category rails use actual score for both assigned and project tasks',async()=>{
+ const b=browser();await b.S.load();const {M}=flowHarness(b),day=M.userDay();b.S.getDay(day).tasks.ideal=[{id:'zero',text:'零分',points:0}];b.S.data().queue=[{id:'queue',text:'队列分',points:10,assignment:{day,list:'ideal'}}];b.S.data().memoProjects=[{id:'project',text:'推进分',points:5,days:{}}];vm.runInContext(source('js/memo-workspace.js'),b.ctx);const html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.match(html,/data-category="ideal" data-score="zero"/);assert.match(html,/data-category="ideal" data-score="high"/);assert.match(html,/data-category="extra" data-score="medium"/);assert.match(html,/class="mw-score">\+0分/);assert.match(html,/class="mw-score">\+10分/);
 });

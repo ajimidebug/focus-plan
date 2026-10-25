@@ -383,12 +383,11 @@
       const full = tg > 0 && w.times >= tg;
       // 🔁 v119：过去且没打满的圆点 → 直接点就是补卡（今天/未来不在其列）
       if (w.k < kToday && (!full || window.__MEMO_MODE)) {
-        return '<span class="ck-dot makeup" data-act="ck-makeup" data-id="' + it.id + '" data-day="' + w.k +
-          '" title="' + w.k + '：' + (w.times ? w.times + ' 次，点一下再补一次' : '没打，点一下补这张卡') +
-          '（按目标和当日次数计算积分，不补发连续奖励）"></span>';
+        return '<button type="button" class="ck-day makeup" data-act="ck-makeup" data-id="' + it.id + '" data-day="' + w.k +
+          '" aria-label="' + esc(it.text+'，'+w.k+'，已有'+w.times+'次，补记一次') + '" title="' + w.k + '：' + (w.times ? w.times + ' 次，点一下再补一次' : '没打，点一下补这张卡') +
+          '（按目标和当日次数计算积分，不补发连续奖励）"><span class="ck-dot'+(full?' on':on?' half':'')+'" aria-hidden="true"></span></button>';
       }
-      return '<span class="ck-dot' + (full || (tg === 0 && on) ? ' on' : (on ? ' half' : '')) + '" title="' + w.k + '：' +
-        (w.times ? w.times + ' 次' : '没打') + '"></span>';
+      return '<span class="ck-day ck-day-static" title="' + w.k + '：' + (w.times ? w.times + ' 次' : '没打') + '"><span class="ck-dot' + (full || (tg === 0 && on) ? ' on' : (on ? ' half' : '')) + '"></span></span>';
     }).join('');
     return '<div class="ck-row' + (done ? ' done' : '') + '" data-id="' + it.id + '">' +
       '<div class="ck-main">' +
@@ -402,12 +401,12 @@
       '<span class="ck-acts">' +
       (done && !window.__MEMO_MODE
         ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '" title="撤销今天一次">↩ 撤销</button>'
-        : '<button class="btn btn-small btn-primary" data-act="ck-punch" data-id="' + it.id + '">' + (done ? '＋ 再打一次' : '✅ 打卡') +
+        : '<button class="btn btn-small btn-primary" data-act="ck-punch" data-id="' + it.id + '" aria-label="' + esc(it.text+'，打卡，本次可得'+gain+'分') + '">' + (done ? '＋ 再打一次' : '✅ 打卡') +
           (window.__MEMO_MODE ? ' +' + gain + '分' : it.points ? ' +' + gain : '') + (mult > 1 ? '（×' + mult + '）' : '') + '</button>') +
       (window.__MEMO_MODE && n > 0 ? '<button class="btn btn-small" data-act="ck-undo" data-id="' + it.id + '">撤销一次</button>' : '') +
       (window.__MEMO_MODE ? '<button class="btn btn-small" data-act="ck-history" data-id="' + it.id + '">记录</button>' : '') +
-      '<button class="q-ib" data-act="ck-edit" data-id="' + it.id + '" title="改">✏️</button>' +
-      '<button class="q-ib" data-act="ck-del" data-id="' + it.id + '" title="删掉">🗑</button>' +
+      '<button class="q-ib" data-act="ck-edit" data-id="' + it.id + '" aria-label="编辑：' + esc(it.text) + '" title="改">✏️</button>' +
+      '<button class="q-ib" data-act="ck-del" data-id="' + it.id + '" aria-label="停用：' + esc(it.text) + '" title="停用">🗑</button>' +
       '</span></div>';
   }
 
@@ -454,20 +453,26 @@
       const goals = list.filter(it => !it.archived && targetOf(it) > 0), active = list.filter(it => !it.archived);
       h += '<p class="ck-goal-status">' + (goals.length ? '今日目标达标 ' + goals.filter(doneToday).length + '/' + goals.length + ' 项' : '无每日目标') + ' · 选做 ' + (active.length - goals.length) + ' 项 · 连续有记录 ' + streakAll() + ' 天</p><p class="hint">目标0表示选做，不计入目标达标比例；有记录天数不等于全勤。当前积分：' + (App.memoCurrency?.ruleLabel?.() || '旧连续倍率') + '。</p>';
     }
-    if (!list.length) {
-      h += '<div class="q-empty">还没有。<br>想坚持什么事？加一条，每天来点一下 —— 比如「喝水 2000ml」「23:30 前躺下」。</div>';
+    if (!(window.__MEMO_MODE?list.filter(x=>!x.archived):list).length) {
+      h += '<div class="q-empty">暂无启用的打卡项。<br>想坚持什么事？加一条，每天来点一下 —— 比如「喝水 2000ml」「23:30 前躺下」。</div>';
     } else {
-      h += list.map(rowHTML).join('');
+      h += '<div class="ck-grid">'+list.map(rowHTML).join('')+'</div>';
     }
+    if(window.__MEMO_MODE)h+='</div><div class="ck-secondary">';
     if (window.__MEMO_MODE) h += '<details><summary>已停用习惯</summary>' + list.filter(x => x.archived).map(x => '<div class="memo-queue-row">' + esc(x.text) + ' <button class="btn btn-small" data-act="ck-unarchive" data-id="' + esc(x.id) + '">恢复习惯</button><button class="btn btn-small" data-act="ck-history" data-id="' + esc(x.id) + '">历史记录</button></div>').join('') + '</details>';
-    h += '</div>';
-    h += yearCardHTML();      // 📊 v108：年度统计（一年打卡多少天）
+    if(!window.__MEMO_MODE)h += '</div>';
+    h += yearCardHTML()+(window.__MEMO_MODE?'</div>':'');      // 📊 v108：年度统计（一年打卡多少天）
     return h;
   }
 
   function render() {
     const el = document.getElementById('checkin-view');
-    if (el) el.innerHTML = pageHTML();
+    if (el) {
+      const active=document.activeElement,focused=el.contains(active)?{id:active.dataset.id,act:active.dataset.act,day:active.dataset.day}:null;
+      const root=document.getElementById('view-checkin'),old=root.querySelector(':scope > .ck-secondary'),open=old?.querySelector('details')?.open;old?.remove();el.innerHTML=pageHTML();
+      const secondary=el.querySelector('.ck-secondary'),summary=document.getElementById('point-summary');if(secondary){(summary||el).after(secondary);secondary.hidden=el.hidden;if(open&&secondary.querySelector('details'))secondary.querySelector('details').open=true;}
+      if(focused)[...el.querySelectorAll('[data-act]')].find(b=>b.dataset.id===focused.id&&b.dataset.act===focused.act&&b.dataset.day===focused.day)?.focus({preventScroll:true});
+    }
   }
 
   function onClick(e) {
@@ -498,7 +503,7 @@
   }
 
   function init() {
-    const el = document.getElementById('checkin-view');
+    const el = document.getElementById('view-checkin');
     if (el) el.addEventListener('click', onClick);
     render();
   }
