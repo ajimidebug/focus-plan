@@ -2175,3 +2175,17 @@ body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) :is([data-mw-
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) :is(.mw-done,.cal-task.done){--task-rail:#d7dcdf!important;background:#fafbfc!important;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) :is(.mw-done .mw-task-title>strong,.mw-done .mw-score,.cal-task.done .t-text,.cal-task.done .mw-score){color:#8b949e;}
 .mw-waiting-section+.mw-waiting-section{margin-top:24px;border-top:1px solid var(--line);padding-top:16px;}.mw-waiting-actions{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}.mw-waiting-section .mw-queue-grid{display:block;}.mw-waiting-section .mw-history-row{min-width:0;overflow-wrap:anywhere;}.mw-waiting-section details .btn{margin:4px;}
+
+/* Compact habit cards: details are read on demand. Default white only. */
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #view-checkin{--primary:#355f73;--ink:#292d32;--muted:#62676e;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view>.card{background:#f6f5f1;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-grid{gap:8px;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-row{gap:7px;padding:9px;border:1px solid #dedfdc;border-radius:10px;background:#fff;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-row.done{background:#edf4ee;border-color:#c8d8cc;}
+.ck-info-entry{display:block;width:100%;padding:0;border:0;background:transparent;text-align:left;color:inherit;font:inherit;font-weight:600;cursor:pointer;min-height:44px;}
+.ck-info-entry span{color:#62676e;}.ck-info-entry:focus-visible{outline:2px solid #355f73;outline-offset:2px;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) #checkin-view .ck-punch-main{margin-top:auto;background:#355f73;border-color:#355f73;color:#fff;border-radius:7px;}
+.ck-item-information .ck-week{grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;}.ck-item-information .ck-day{min-height:44px;flex-direction:column;gap:5px;}.ck-item-information .ck-day small{font-size:10px;white-space:nowrap;}.ck-item-information .ck-acts{display:flex;flex-wrap:wrap;gap:8px;}.ck-item-information .btn{min-height:44px;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) :is([data-mw-card],[data-overview-ref])[data-carried="true"]{border-right:3px solid #c99a16!important;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) :is([data-mw-card],[data-overview-ref])[data-carried="true"]:is([data-category="ideal"],[data-category="extra"]){border-right-width:4px!important;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) :is(.mw-done,.cal-task.done)[data-carried="true"]{border-right-color:#e4d6aa!important;}

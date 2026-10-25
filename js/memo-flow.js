@@ -73,6 +73,10 @@
     const original = S().data().ledger.find(x => x.id === e.id);
     if (original) S().data().ledger.push({ id: S().uid(), operationId: 'forgive:' + e.id, date: M().userDay(), type: 'refund-penalty', points: -original.points, leisure: 0, at: e.forgivenAt, note: '撤销错误扣分：' + e.title + '；' + e.reason });
   }
+  function isCarried(t) {
+    if (t.backfillDay && t.originalDay && t.backfillDay <= t.originalDay) return false;
+    return !!(t.overdueEventId && S().data().memoFlow?.settlements.some(e => e.id === t.overdueEventId && e.taskId === t.id)) || !!t.carried;
+  }
   function lateLabel(t) {
     if (t.backfillDay) return (t.backfillDay <= t.originalDay ? '已补记按时完成 · ' : '已补记延期完成 · ') + t.backfillDay;
     if (!t.originalDay) return '';
@@ -134,5 +138,5 @@
     finally { settling = false; }
   }
   async function init() { await settle(); setInterval(settle, 30000); document.addEventListener('visibilitychange', () => { if (!document.hidden) settle(); }); }
-  A.memoFlow = { backfill, state, enableCore, queues, assignment, assigned, moveCore, overdue, settleCore, settle, forgiveCore, lateLabel, copyQuote, markCopyCore, init };
+  A.memoFlow = { backfill, state, enableCore, queues, assignment, assigned, moveCore, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
 })();
