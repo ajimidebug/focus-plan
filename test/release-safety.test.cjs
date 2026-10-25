@@ -839,3 +839,6 @@ test('deadline goals have historical progress but no daily tasks or ledger rewar
 test('long-term scores sort descending stably and release assigned queues with history',async()=>{
  const b=browser();await b.S.load();const {F,M}=flowHarness(b),day=M.userDay();vm.runInContext(source('js/memo-workspace.js'),b.ctx);const W=b.ctx.App.memoWorkspace;b.S.getDay(day).tasks.extra=[{id:'low',text:'低',points:1},{id:'high',text:'高',points:10},{id:'same',text:'同分',points:10}];assert.deepEqual(Array.from(W.taskItems(day,'extra'),x=>x.task.id),['high','same','low']);b.S.data().queue=[{id:'release',text:'原队列',assignment:{day,list:'ideal'}}];F.moveCore({kind:'queue',id:'release'},day,'ideal','queue');assert.equal(b.S.data().queue[0].assignmentHistory[0].day,day);assert.equal(b.S.data().queue[0].assignment,undefined);
 });
+test('new historical task date after a successful copy is carried repeatedly',async()=>{
+ const b=browser();await b.S.load();const {F,M}=flowHarness(b),day=M.userDay(),old=M.shiftDay(day,-2);vm.runInContext(source('js/memo-report.js'),b.ctx);F.markCopyCore(F.copyQuote(day));b.S.getDay(old).tasks.ideal=[{id:'new-history',text:'新增往日安排'}];const q=F.copyQuote(day);assert.match(q.text,/新增往日安排/);F.markCopyCore(q);assert.match(F.copyQuote(day).text,/新增往日安排/);
+});
