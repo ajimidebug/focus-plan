@@ -42,12 +42,12 @@
   function enableFixedCore() {
     S().data().memoCurrency = { version: 3, enabledAt: new Date().toISOString(), mode: 'fixed' };
   }
-  function redeemCore(item, price, operationId) {
+  function redeemCore(item, price, operationId, purpose = '') {
     const d = S().data(); if (d.ledger.some(e => e.operationId === operationId)) return;
     const current = S().settings().redeemTable.find(x => x.item === item && Number(x.points) === price);
     if (!current || !Number.isFinite(price) || price <= 0) throw new Error('兑换项或价格已改变，请重新打开商店');
     if (S().pointsTotal() < price) throw new Error('当前积分不足，未兑换');
-    d.ledger.push({ id: S().uid(), operationId, date: M().userDay(), type: 'redeem', points: -price, leisure: 0, note: '兑换：' + item, at: new Date().toISOString(), ruleVersion: rules()?.version || 1, itemSnapshot: { item, price } });
+    d.ledger.push({ id: S().uid(), operationId, date: M().userDay(), type: 'redeem', points: -price, leisure: 0, note: '兑换：' + item, at: new Date().toISOString(), ruleVersion: rules()?.version || 1, itemSnapshot: { item, price, note:purpose } });A.memoFinance?.note(d.ledger.at(-1));
   }
   function enableCore() {
     const day = M().userDay(), hadPunch = (S().data().checkins || []).some(it => Number(it.days?.[day]) > 0);
@@ -68,13 +68,13 @@
     if(!quote || !String(quote.purpose || '').trim() || !Number.isSafeInteger(quote.points) || quote.points<=0 || quote.points>10000000000)throw new Error('支出内容无效');
     if(quote.mode==='money' && (quote.rate!==A.memoFlow.state().rate || quote.points!==Math.ceil(quote.amountCents*Math.round(quote.rate*100)/10000)))throw new Error('换算比例已改变，请重新填写');
     if(S().pointsTotal()<quote.points)throw new Error('当前积分不足');
-    d.ledger.push({id:S().uid(),operationId,date:M().userDay(),type:'redeem',points:-quote.points,leisure:0,at:new Date().toISOString(),note:'自定义支出：'+quote.purpose,itemSnapshot:cloneQuote(quote)});
+    d.ledger.push({id:S().uid(),operationId,date:M().userDay(),type:'redeem',points:-quote.points,leisure:0,at:new Date().toISOString(),note:'自定义支出：'+quote.purpose,itemSnapshot:cloneQuote(quote)});A.memoFinance?.note(d.ledger.at(-1));
   }
   function cloneQuote(q){return JSON.parse(JSON.stringify(q));}
   function refundCore(id) {
     const d=S().data(), e=d.ledger.find(e=>e.id===id && e.type==='redeem'); if(!e)throw new Error('找不到原支出');
     if(d.ledger.some(x=>x.operationId==='refund:'+id))return;
-    d.ledger.push({id:S().uid(),operationId:'refund:'+id,date:M().userDay(),type:'refund-redeem',points:-e.points,leisure:0,at:new Date().toISOString(),note:'撤销支出：'+e.note,refundOf:id});
+    d.ledger.push({id:S().uid(),operationId:'refund:'+id,date:M().userDay(),type:'refund-redeem',points:-e.points,leisure:0,at:new Date().toISOString(),note:'撤销支出：'+e.note,refundOf:id});A.memoFinance?.note(d.ledger.at(-1));
   }
   function modalCommit(m, fn, success) {
     return async b=>{b.disabled=true;try{if(await A.memoActions.commit(fn)){A.ui.closeModal();A.app.refreshStats();if(success)success();}}catch(e){m.querySelector('[role="alert"]').textContent=e.message;if(A.memoActions.busy()){b.textContent='重试保存';m.querySelectorAll('input,select,textarea').forEach(el=>el.disabled=true);}}finally{b.disabled=false;}};
@@ -95,7 +95,7 @@
     const d=S().data(), table=S().settings().redeemTable || [], refunded=new Set(d.ledger.filter(e=>e.refundOf).map(e=>e.refundOf));
     const m=A.ui.openModal('积分兑换与支出','<p>可用积分：<strong>'+S().pointsTotal()+'</strong></p><button class="btn btn-primary" data-act="custom">＋ 自定义支出</button><h3>固定兑换</h3>'+table.filter(t=>t.points>0).map((t,i)=>'<p>'+esc(t.item)+' · '+t.points+'分 <button class="btn" data-act="preset" data-index="'+i+'">兑换</button></p>').join('')+'<details><summary>支出与撤销记录</summary>'+d.ledger.filter(e=>['redeem','refund-redeem'].includes(e.type)).slice().reverse().map(e=>'<p>'+esc(e.date+' · '+e.note+' · '+e.points+'分')+(e.itemSnapshot?.amountCents?' · '+(e.itemSnapshot.amountCents/100).toFixed(2)+'元（'+e.itemSnapshot.rate+'分/元）':'')+(e.itemSnapshot?.note?' · '+esc(e.itemSnapshot.note):'')+(e.type==='redeem'&&!refunded.has(e.id)?'<button class="btn btn-small" data-act="refund" data-id="'+esc(e.id)+'">撤销</button>':'')+'</p>').join('')+'</details><p role="alert"></p>','<button class="btn" data-act="cancel">关闭</button>',{lock:true});
     const items=table.filter(t=>t.points>0);
-    A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},custom:customSpend,preset:b=>{const t=items[Number(b.dataset.index)],id=S().uid();const confirm=A.ui.openModal('确认兑换','<p>用 '+t.points+' 分兑换“'+esc(t.item)+'”</p><p role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">兑换</button>',{lock:true});A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())shop();},save:modalCommit(confirm,()=>redeemCore(t.item,Number(t.points),id),shop)});},refund:b=>{const id=b.dataset.id;const confirm=A.ui.openModal('撤销支出','<p>将按原次实际扣分退回，保留原支出及撤销流水。</p><p role="alert"></p>','<button class="btn" data-act="cancel">保留</button><button class="btn btn-primary" data-act="save">确认撤销</button>',{lock:true});A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())shop();},save:modalCommit(confirm,()=>refundCore(id),shop)});}});
+    A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},custom:customSpend,preset:b=>{const t=items[Number(b.dataset.index)],id=S().uid();const confirm=A.ui.openModal('确认兑换','<p>用 '+t.points+' 分兑换“'+esc(t.item)+'”</p><label>用途／备注<input id="redeem-purpose" value="'+esc(t.item)+'"></label><p role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">兑换</button>',{lock:true});A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())shop();},save:modalCommit(confirm,()=>redeemCore(t.item,Number(t.points),id,confirm.querySelector('#redeem-purpose')?.value||t.item),shop)});},refund:b=>{const id=b.dataset.id;const confirm=A.ui.openModal('撤销支出','<p>将按原次实际扣分退回，保留原支出及撤销流水。</p><p role="alert"></p>','<button class="btn" data-act="cancel">保留</button><button class="btn btn-primary" data-act="save">确认撤销</button>',{lock:true});A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())shop();},save:modalCommit(confirm,()=>refundCore(id),shop)});}});
   }
   function flowPanel() {
     let root=document.getElementById('flow-settings');if(!root){root=document.createElement('section');root.id='flow-settings';root.className='card';document.getElementById('view-settings').prepend(root);}

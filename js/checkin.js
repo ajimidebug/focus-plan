@@ -391,7 +391,7 @@
     }).join('');
     if(window.__MEMO_MODE){
       const count=tg===0?'选做 · 今日已做 '+n+' 次':'今日 '+n+'/'+tg+' 次'+(n>tg?' · 超额 '+(n-tg)+' 次':'');
-      const detail = '<div class="ck-item-information">'+(it.note?'<p class="ck-note">'+esc(it.note)+'</p>':'')+'<p>'+count+'</p><p>每日目标 '+tg+' 次 · 本次可得 '+gain+' 分</p><h3>近七日记录与补卡</h3><p class="hint">日期按北京时间04:00划分，点击过去的日期补记一次。</p><div class="ck-week">'+wk+'</div><p>连续有记录 '+st+' 天 · 今年 '+yearDaysOf(it)+' 天</p><div class="ck-acts">'+(n>0?'<button type="button" class="btn" data-act="ck-undo" data-id="'+esc(it.id)+'">撤销最近一次</button>':'')+'<button type="button" class="btn" data-act="ck-history" data-id="'+esc(it.id)+'">打卡记录</button><button type="button" class="btn" data-act="ck-edit" data-id="'+esc(it.id)+'">编辑项目</button><button type="button" class="btn" data-act="ck-del" data-id="'+esc(it.id)+'">停用项目</button></div></div>';
+      const detail = '<button class="btn" data-act="ck-plan" data-id="'+esc(it.id)+'">安排到任务</button><div class="ck-item-information">'+(it.note?'<p class="ck-note">'+esc(it.note)+'</p>':'')+'<p>'+count+'</p><p>每日目标 '+tg+' 次 · 本次可得 '+gain+' 分</p><h3>近七日记录与补卡</h3><p class="hint">日期按北京时间04:00划分，点击过去的日期补记一次。</p><div class="ck-week">'+wk+'</div><p>连续有记录 '+st+' 天 · 今年 '+yearDaysOf(it)+' 天</p><div class="ck-acts">'+(n>0?'<button type="button" class="btn" data-act="ck-undo" data-id="'+esc(it.id)+'">撤销最近一次</button>':'')+'<button type="button" class="btn" data-act="ck-history" data-id="'+esc(it.id)+'">打卡记录</button><button type="button" class="btn" data-act="ck-edit" data-id="'+esc(it.id)+'">编辑项目</button><button type="button" class="btn" data-act="ck-del" data-id="'+esc(it.id)+'">停用项目</button></div></div>';
       if(detailsOnly)return detail;
       return '<div class="ck-row'+(done?' done':'')+'" data-id="'+esc(it.id)+'"><div class="ck-main"><button type="button" class="ck-name ck-info-entry" data-act="ck-info" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text)+'，更多信息">'+esc(it.text)+'<span aria-hidden="true"> ›</span></button><div class="ck-cnt">'+count+(done?' · 已达标':'')+'</div></div><button type="button" class="btn btn-primary ck-punch-main" data-act="ck-punch" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text+'，打卡，本次可得'+gain+'分')+'">'+(n>0?'再记一次':'打卡')+' +'+gain+'分</button></div>';
     }
@@ -485,6 +485,7 @@
     const b = e.target.closest ? e.target.closest('[data-act]') : null;
     if (!b) return;
     const act = b.dataset.act, id = b.dataset.id;
+    if (act === 'ck-plan') {App.ui.closeModal();App.memoFinance.arrange(id);return;}
     if (act === 'ck-info') { const it=find(id);if(!it)return;const m=App.ui.openModal(it.text+' · 更多信息',rowHTML(it,true),'<button type="button" class="btn" data-act="ck-close-info" data-id="'+esc(id)+'">关闭</button>');m.addEventListener('click',onClick);return; }
     if (act === 'ck-close-info') { App.ui.closeModal();focusItem(id);return; }
     if (act === 'ck-add') { editModal(null); return; }
@@ -526,6 +527,7 @@
   }
   function focusItem(id){const root=document.getElementById('checkin-view');if(root&&!root.hidden)[...root.querySelectorAll('[data-act="ck-punch"]')].find(b=>b.dataset.id===id)?.focus({preventScroll:true});}
   App.checkin = {
+    onClick: onClick,
     detailHTML: id => { const it=find(id);return it?rowHTML(it,true):''; },
     focusItem: focusItem,
     memoPoints: memoPoints,

@@ -106,7 +106,7 @@
     } else throw new Error('无法识别勾选来源');
     event.ruleVersion = d.memoCurrency?.version || 1;
     App.memoSchedule?.stopRef({ kind: spec.kind, id: spec.id, day: (spec.kind === 'task' || spec.kind === 'daily' || spec.kind === 'project') ? spec.day : undefined, list: spec.kind === 'task' ? spec.list : undefined }, Date.parse(at));
-    events(d).push(event); append(event, text); grantRewards(event, choices); return event;
+    events(d).push(event); grantRewards(event, choices); const actual=d.ledger.filter(e=>e.memoEventId===event.id||e.memoReward&&e.taskId===event.sourceId&&e.at===event.at).reduce((n,e)=>n+e.points,0); append(event, text.trim()?text+'\n本次实际获得积分：'+actual+'分':text); return event;
   }
   function undoCore(id, reason = '', at = new Date().toISOString()) {
     if (S().status().readOnly) throw new Error('记录保护中，暂不能取消');
@@ -137,6 +137,7 @@
     }
     const backfilled=event.kind==='task'?locateTask({kind:'task',id:event.sourceId,day:event.sourceDay,list:event.sourceList}):(d.queue||[]).find(t=>t.id===event.sourceId);
     if(backfilled)delete backfilled.backfillDay;
+    (d.memoFinanceAudit||(d.memoFinanceAudit=[])).push({id:S().uid(),eventId:event.id,day:M().userDay(at),at,title:event.title,points:event.points,reason:reason||'撤销完成'});
     d.ledger = d.ledger.filter(l => !event.ledgerIds.includes(l.id));
     const kept = []; let removedLine = false;
     blocks.forEach(block => {
@@ -457,7 +458,7 @@
   function archiveHabit(id) {
     const it = (S().data().checkins || []).find(x => x.id === id); if (!it) return;
     App.ui.confirm('停用“' + E(it.text) + '”？历史次数、积分和笔记保留，可在打卡页的“已停用习惯”恢复。', '停用习惯', async () => {
-      try { if (await transaction(() => { it.archived = true; })) refresh(); } catch (e) { recover(e); }
+      try { if (await transaction(() => { it.archived = true;it.memoArchivedDay=M().userDay(); })) refresh(); } catch (e) { recover(e); }
     });
   }
 
