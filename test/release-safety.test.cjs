@@ -622,7 +622,7 @@ test('redemption revalidates price and balance, is idempotent, and keeps origina
   const b = browser(); await b.S.load(); const { C } = currencyHarness(b);
   b.S.settings().redeemTable = [{ item: '游戏', points: 30 }]; b.S.data().ledger = [{ id: 'income', points: 50 }];
   C.redeemCore('游戏', 30, 'operation'); C.redeemCore('游戏', 30, 'operation'); assert.equal(b.S.pointsTotal(), 20);
-  assert.throws(() => C.redeemCore('游戏', 30, 'second')); b.S.settings().redeemTable[0].points = 10;
+  C.redeemCore('游戏',30,'second');assert.equal(b.S.pointsTotal(),-10); b.S.settings().redeemTable[0].points = 10;
   assert.throws(() => C.redeemCore('游戏', 30, 'stale-price')); assert.equal(b.S.data().ledger[1].itemSnapshot.price, 30);
 });
 test('clearing a plan end switches to a named point and midnight execution is not counted twice', async () => {
@@ -749,12 +749,12 @@ test('copy checkpoints carry append, old edits, deletion and multiple missed day
   M.write('2026-10-20','');q=F.copyQuote('2026-10-23');assert.match(q.text,/修订后的全文/);F.markCopyCore(q);
   assert.match(F.copyQuote('2026-10-23').text,/用户日 2026-10-20/); // Same-day repeated copies retain corrections.
 });
-test('custom money spending rounds up, refunds exact original value and rejects invalid amounts',async()=>{
+test('custom money spending supports cents, debt and exact idempotent refunds',async()=>{
   const b=browser();await b.S.load();const {F,C}=flowHarness(b);b.S.data().ledger.push({id:'seed',points:1000});
-  const quote=C.spendQuote('money','30.01','买小说');assert.equal(quote.points,61);C.spendCore(quote,'op-1');C.spendCore(quote,'op-1');assert.equal(b.S.pointsTotal(),939);
+  const quote=C.spendQuote('money','30.01','买小说');assert.equal(quote.points,60.02);C.spendCore(quote,'op-1');C.spendCore(quote,'op-1');assert.equal(b.S.pointsTotal(),939.98);
   const spend=b.S.data().ledger.find(e=>e.operationId==='op-1');F.state().rate=4;C.refundCore(spend.id);C.refundCore(spend.id);assert.equal(b.S.pointsTotal(),1000);assert.equal(spend.itemSnapshot.rate,2);
-  assert.throws(()=>C.spendQuote('money','1.001','用途'));assert.throws(()=>C.spendQuote('points','1.5','用途'));assert.throws(()=>C.spendQuote('money','2',''));assert.throws(()=>C.spendCore(quote,'op-2'),/比例/);
-  assert.throws(()=>C.spendCore(C.spendQuote('points','1001','用途'),'op-3'),/不足/);
+  assert.throws(()=>C.spendQuote('money','1.001','用途'));assert.equal(C.spendQuote('points','1.5','用途').points,1.5);assert.throws(()=>C.spendQuote('money','2',''));assert.throws(()=>C.spendCore(quote,'op-2'),/比例/);
+  C.spendCore(C.spendQuote('points','1001','用途'),'op-3');assert.equal(b.S.pointsTotal(),-1);
 });
 test('workflow backup retains copy checkpoints, assignment, prospective rules and expenditure metadata',async()=>{
   const b=browser();await b.S.load();const {F,M,C}=flowHarness(b);M.write('2026-10-20','正文');F.markCopyCore(F.copyQuote('2026-10-20'));b.S.data().queue=[{id:'q',text:'任务'}];F.moveCore({kind:'queue',id:'q'},'2026-10-20','ideal');b.S.data().ledger.push({id:'seed',points:20});C.spendCore(C.spendQuote('money','2','目的'),'spend');await b.S.save();

@@ -46,7 +46,7 @@
     const d = S().data(); if (d.ledger.some(e => e.operationId === operationId)) return;
     const current = S().settings().redeemTable.find(x => x.item === item && Number(x.points) === price);
     if (!current || !Number.isFinite(price) || price <= 0) throw new Error('兑换项或价格已改变，请重新打开商店');
-    if (S().pointsTotal() < price) throw new Error('当前积分不足，未兑换');
+
     d.ledger.push({ id: S().uid(), operationId, date: M().userDay(), type: 'redeem', points: -price, leisure: 0, note: '兑换：' + item, at: new Date().toISOString(), ruleVersion: rules()?.version || 1, itemSnapshot: { item, price, note:purpose } });A.memoFinance?.note(d.ledger.at(-1));
   }
   function enableCore() {
@@ -59,21 +59,22 @@
     const rate = A.memoFlow.state().rate;
     if (!String(purpose || '').trim()) throw new Error('请填写支出用途');
     if (!/^\d+(\.\d{1,2})?$/.test(String(value)) || Number(value) <= 0 || Number(value)>1000000) throw new Error('请输入大于0、不超过100万的数值（最多两位小数）');
-    const cents = Math.round(Number(value)*100), points = mode === 'money' ? Math.ceil(cents*Math.round(rate*100)/10000) : Number(value);
-    if(!Number.isSafeInteger(points) || points<=0)throw new Error('积分应为正整数');
+    const cents = Math.round(Number(value)*100), points = mode === 'money' ? Math.round(cents*Math.round(rate*100)/100)/100 : Number(value);
+    if(!Number.isSafeInteger(Math.round(points*100)) || points<=0)throw new Error('积分应大于0，最多两位小数');
     return { purpose:String(purpose).trim(), points, mode, amountCents:mode==='money'?cents:null, rate:mode==='money'?rate:null };
   }
   function spendCore(quote, operationId) {
     const d=S().data(); if(d.ledger.some(e=>e.operationId===operationId))return;
-    if(!quote || !String(quote.purpose || '').trim() || !Number.isSafeInteger(quote.points) || quote.points<=0 || quote.points>10000000000)throw new Error('支出内容无效');
-    if(quote.mode==='money' && (quote.rate!==A.memoFlow.state().rate || quote.points!==Math.ceil(quote.amountCents*Math.round(quote.rate*100)/10000)))throw new Error('换算比例已改变，请重新填写');
-    if(S().pointsTotal()<quote.points)throw new Error('当前积分不足');
+    if(!quote || !String(quote.purpose || '').trim() || !Number.isFinite(quote.points) || !Number.isSafeInteger(Math.round(quote.points*100)) || quote.points<=0 || quote.points>10000000000)throw new Error('支出内容无效');
+    if(quote.mode==='money' && (quote.rate!==A.memoFlow.state().rate || quote.points!==Math.round(quote.amountCents*Math.round(quote.rate*100)/100)/100))throw new Error('换算比例已改变，请重新填写');
+
     d.ledger.push({id:S().uid(),operationId,date:M().userDay(),type:'redeem',points:-quote.points,leisure:0,at:new Date().toISOString(),note:'自定义支出：'+quote.purpose,itemSnapshot:cloneQuote(quote)});A.memoFinance?.note(d.ledger.at(-1));
   }
   function cloneQuote(q){return JSON.parse(JSON.stringify(q));}
   function refundCore(id) {
     const d=S().data(), e=d.ledger.find(e=>e.id===id && e.type==='redeem'); if(!e)throw new Error('找不到原支出');
     if(d.ledger.some(x=>x.operationId==='refund:'+id))return;
+    if(e.wishSnapshot){const a=d.memoWishes||(d.memoWishes=[]),i=a.findIndex(w=>w.id===e.wishId),w=JSON.parse(JSON.stringify(e.wishSnapshot));if(i<0)a.push(w);else a[i]=w;}
     d.ledger.push({id:S().uid(),operationId:'refund:'+id,date:M().userDay(),type:'refund-redeem',points:-e.points,leisure:0,at:new Date().toISOString(),note:'撤销支出：'+e.note,refundOf:id});A.memoFinance?.note(d.ledger.at(-1));
   }
   function modalCommit(m, fn, success) {
@@ -84,7 +85,7 @@
     const rate=A.memoFlow.state().rate, operationId=S().uid();
     const m=A.ui.openModal('自定义支出','<label>用途<input id="spend-purpose" maxlength="500" placeholder="例如：购买小说"></label><label>方式<select id="spend-mode"><option value="money">按金额换算</option><option value="points">直接扣积分</option></select></label><label>金额／积分<input id="spend-value" type="number" min="0.01" step="0.01"></label><label>备注（选填）<textarea id="spend-note"></textarea></label><p id="spend-preview">当前 '+rate+' 分＝1元；确认后记账</p><p role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">确认支出</button>',{lock:true});
     const q=id=>m.querySelector('#spend-'+id);
-    const update=()=>{try{const quote=spendQuote(q('mode').value,q('value').value,q('purpose').value);q('preview').textContent='本次扣除 '+quote.points+' 分'+(quote.mode==='money'?'（'+(quote.amountCents/100).toFixed(2)+'元；'+rate+'分＝1元，积分向上取整）':'');}catch(e){q('preview').textContent=e.message;}};
+    const update=()=>{try{const quote=spendQuote(q('mode').value,q('value').value,q('purpose').value);q('preview').textContent='本次扣除 '+quote.points+' 分'+(quote.mode==='money'?'（'+(quote.amountCents/100).toFixed(2)+'元；'+rate+'分＝1元，积分保留两位小数）':'')+'；操作后余额 '+A.memoMoney.fmt(S().pointsTotal()-quote.points)+' 分（负数为欠债）';}catch(e){q('preview').textContent=e.message;}};
     ['mode','value','purpose'].forEach(id=>q(id).oninput=update);
     A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},save:modalCommit(m,()=>{const quote=spendQuote(q('mode').value,q('value').value,q('purpose').value);quote.note=q('note').value;spendCore(quote,operationId);},shop)});
     q('purpose').focus();
@@ -95,7 +96,7 @@
     const d=S().data(), table=S().settings().redeemTable || [], refunded=new Set(d.ledger.filter(e=>e.refundOf).map(e=>e.refundOf));
     const m=A.ui.openModal('积分兑换与支出','<p>可用积分：<strong>'+S().pointsTotal()+'</strong></p><button class="btn btn-primary" data-act="custom">＋ 自定义支出</button><h3>固定兑换</h3>'+table.filter(t=>t.points>0).map((t,i)=>'<p>'+esc(t.item)+' · '+t.points+'分 <button class="btn" data-act="preset" data-index="'+i+'">兑换</button></p>').join('')+'<details><summary>支出与撤销记录</summary>'+d.ledger.filter(e=>['redeem','refund-redeem'].includes(e.type)).slice().reverse().map(e=>'<p>'+esc(e.date+' · '+e.note+' · '+e.points+'分')+(e.itemSnapshot?.amountCents?' · '+(e.itemSnapshot.amountCents/100).toFixed(2)+'元（'+e.itemSnapshot.rate+'分/元）':'')+(e.itemSnapshot?.note?' · '+esc(e.itemSnapshot.note):'')+(e.type==='redeem'&&!refunded.has(e.id)?'<button class="btn btn-small" data-act="refund" data-id="'+esc(e.id)+'">撤销</button>':'')+'</p>').join('')+'</details><p role="alert"></p>','<button class="btn" data-act="cancel">关闭</button>',{lock:true});
     const items=table.filter(t=>t.points>0);
-    A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},custom:customSpend,preset:b=>{const t=items[Number(b.dataset.index)],id=S().uid();const confirm=A.ui.openModal('确认兑换','<p>用 '+t.points+' 分兑换“'+esc(t.item)+'”</p><label>用途／备注<input id="redeem-purpose" value="'+esc(t.item)+'"></label><p role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">兑换</button>',{lock:true});A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())shop();},save:modalCommit(confirm,()=>redeemCore(t.item,Number(t.points),id,confirm.querySelector('#redeem-purpose')?.value||t.item),shop)});},refund:b=>{const id=b.dataset.id;const confirm=A.ui.openModal('撤销支出','<p>将按原次实际扣分退回，保留原支出及撤销流水。</p><p role="alert"></p>','<button class="btn" data-act="cancel">保留</button><button class="btn btn-primary" data-act="save">确认撤销</button>',{lock:true});A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())shop();},save:modalCommit(confirm,()=>refundCore(id),shop)});}});
+    A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},custom:customSpend,preset:b=>{const t=items[Number(b.dataset.index)],id=S().uid();const confirm=A.ui.openModal('确认兑换','<p>用 '+t.points+' 分兑换“'+esc(t.item)+'”；操作后余额 '+A.memoMoney.fmt(S().pointsTotal()-t.points)+' 分（负数为欠债）</p><label>用途／备注<input id="redeem-purpose" value="'+esc(t.item)+'"></label><p role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">兑换</button>',{lock:true});A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())shop();},save:modalCommit(confirm,()=>redeemCore(t.item,Number(t.points),id,confirm.querySelector('#redeem-purpose')?.value||t.item),shop)});},refund:b=>{const id=b.dataset.id;const confirm=A.ui.openModal('撤销支出','<p>将按原次实际扣分退回，保留原支出及撤销流水。</p><p role="alert"></p>','<button class="btn" data-act="cancel">保留</button><button class="btn btn-primary" data-act="save">确认撤销</button>',{lock:true});A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())shop();},save:modalCommit(confirm,()=>refundCore(id),shop)});}});
   }
   function flowPanel() {
     let root=document.getElementById('flow-settings');if(!root){root=document.createElement('section');root.id='flow-settings';root.className='card';document.getElementById('view-settings').prepend(root);}

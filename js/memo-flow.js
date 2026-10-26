@@ -35,7 +35,7 @@
     }
     if (r.day === day && r.list === list) return;
     const destination = S().getDay(day).tasks[list];
-    if (Object.values(S().getDay(day).tasks).flat().some(x => x.id === t.id && !x.memoMovedTo)) throw new Error('此任务已在目标日，请刷新');
+    if (r.day!==day && Object.values(S().getDay(day).tasks).flat().some(x => x.id === t.id && !x.memoMovedTo)) throw new Error('此任务已在目标日，请刷新');
     const next = Object.assign({}, t, { originalDay: t.originalDay || r.day }); delete next.memoMovedTo;
     if (r.day === day) S().getDay(r.day).tasks[r.list] = S().getDay(r.day).tasks[r.list].filter(x => x.id !== t.id);
     else t.memoMovedTo = { kind: 'task', id: t.id, day, list };

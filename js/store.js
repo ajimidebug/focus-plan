@@ -324,7 +324,7 @@
     save();
   }
   function pointsTotal() {
-    return data.ledger.reduce(function (s, e) { return s + (e.points || 0); }, 0);
+    return Number(data.ledger.reduce(function (s, e) { return s + (e.points || 0); }, 0).toFixed(8));
   }
   function leisureTotal() {
     return data.ledger.reduce(function (s, e) { return s + (e.leisure || 0); }, 0);
