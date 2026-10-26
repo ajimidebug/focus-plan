@@ -905,7 +905,7 @@
     const addCss = function () {
       if (document.getElementById('katex-css')) return;
       const l = document.createElement('link');
-      l.id = 'katex-css'; l.rel = 'stylesheet'; l.href = 'css/katex.css?v=170.15.0';
+      l.id = 'katex-css'; l.rel = 'stylesheet'; l.href = 'css/katex.css?v=170.16.0';
       document.head.appendChild(l);
     };
     const load = function (src) {
@@ -918,10 +918,10 @@
       });
     };
     addCss();
-    load('js/marked.min.js?v=170.15.0').then(function () {
-      return load('js/katex.min.js?v=170.15.0');
+    load('js/marked.min.js?v=170.16.0').then(function () {
+      return load('js/katex.min.js?v=170.16.0');
     }).then(function () {
-      return load('js/mhchem.min.js?v=170.15.0');
+      return load('js/mhchem.min.js?v=170.16.0');
     }).then(done, done);
   }
 
