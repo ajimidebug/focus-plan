@@ -80,9 +80,12 @@
       modal.appendChild(x);
     }
     // 遮罩点击关闭（不允许时忽略）
-    mask.addEventListener('mousedown', function (e) {
-      if (e.target === mask && !opts.lock) closeModal();
-    });
+    if(opts.cancelOnBackdrop){
+      let origin=null;
+      mask.addEventListener('pointerdown',e=>{origin=e.target===mask&&e.button===0?{x:e.clientX,y:e.clientY,id:e.pointerId}:null;});
+      mask.addEventListener('pointercancel',()=>{origin=null;});
+      mask.addEventListener('click',e=>{const start=origin;origin=null;if(e.target!==mask||!start||Math.hypot(e.clientX-start.x,e.clientY-start.y)>8)return;e.preventDefault();e.stopPropagation();const cancel=modal.querySelector('[data-act="cancel"]');if(cancel&&!cancel.disabled)cancel.click();});
+    }else mask.addEventListener('mousedown',function(e){if(e.target===mask&&!opts.lock)closeModal();});
     const doc=root.ownerDocument, win=doc.defaultView, viewport=win.visualViewport;
     let frame, alive=true;
     const layout=()=>{if(!alive)return;win.cancelAnimationFrame(frame);frame=win.requestAnimationFrame(()=>{

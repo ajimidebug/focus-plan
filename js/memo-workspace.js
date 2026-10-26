@@ -115,16 +115,21 @@
     const m = A.ui.openModal(existing ? '编辑任务' : '添加' + (names[list] || '队列任务'), (!existing && kind === 'task' ? '<label>任务栏目<select id="mw-list">' + Object.keys(names).map(k => '<option value="' + k + '"' + (k === list ? ' selected' : '') + '>' + names[k] + '</option>').join('') + '</select></label>' : '') + '<label for="mw-title">任务名称</label><textarea id="mw-title" rows="2"></textarea><label for="mw-note-edit">备注（选填）</label><textarea id="mw-note-edit" rows="2"></textarea>' +
       (existing && kind === 'task' && ref?.list === 'required' ? '' : '<label for="mw-points">完成积分</label><input type="number" id="mw-points" min="0">') + (!existing && kind === 'task' ? '<fieldset id="mw-repeat-wrap"><legend>长期拓展完成方式</legend><label><input type="radio" name="mw-repeat" value="once">一次性完成</label><label><input type="radio" name="mw-repeat" value="daily" checked>每日推进</label></fieldset>' : '') +
       '<label>预计用时（分钟，选填）<input id="mw-estimate" type="number" min="0" max="1440"></label>' + timingFields() + (existing ? '<p class="hint">这里可追加一段安排；修改已有时间请点卡片上的“修改／追加时间”。</p>' : '') + '<p id="mw-form-error" role="alert"></p>',
-      '<button class="btn" data-act="cancel">取消</button>' + (existing ? '<button class="btn btn-danger" data-act="delete">' + (kind === 'project' || kind === 'daily' ? '停用' : '删除') + '</button>' + (kind === 'task' && ref.list === 'extra' ? '<button class="btn" data-act="convert">转为每日推进</button>' : '') : '') + '<button class="btn btn-primary" data-act="save">保存</button>', { lock: true });
+      '<button class="btn" data-act="cancel">取消</button>' + (existing ? '<button class="btn btn-danger" data-act="delete">' + (kind === 'project' || kind === 'daily' ? '停用' : '删除') + '</button>' + (kind === 'task' && ref.list === 'extra' ? '<button class="btn" data-act="convert">转为每日推进</button>' : '') : '') + '<button class="btn" data-act="save">保存</button><button class="btn btn-primary mw-save-start" data-act="save-start">保存并立即开始</button>', { lock: true, cancelOnBackdrop: true });
     const q = s => m.querySelector(s); q('#mw-title').value = existing?.text || ''; q('#mw-note-edit').value = existing?.note || ''; if (q('#mw-points')) q('#mw-points').value = existing?.points ?? (kind === 'queue' ? S().settings().queuePoints ?? 5 : list === 'ideal' || ref?.list === 'ideal' ? S().settings().idealPoints ?? 10 : S().settings().extPoints ?? 5);
     q('#mw-estimate').value = existing?.estimatedMinutes || '';
     const selectList = q('#mw-list');
     if (selectList) { let pointsEdited = false; q('#mw-points').addEventListener('input', () => { pointsEdited = true; }); const update = () => { if (!pointsEdited) q('#mw-points').value = selectList.value === 'ideal' ? S().settings().idealPoints ?? 10 : S().settings().extPoints ?? 5; q('#mw-repeat-wrap').hidden = selectList.value !== 'extra'; q('#mw-points').hidden = selectList.value === 'required'; q('#mw-points').previousElementSibling.hidden = selectList.value === 'required'; }; selectList.onchange = update; update(); }
     q('#mw-title').focus();
     if (kind === 'project') { const hist = document.createElement('details'); hist.innerHTML = '<summary>每日完成记录</summary>' + Object.keys(existing.days || {}).sort().reverse().map(k => '<button type="button" class="btn" data-project-day="' + esc(k) + '">' + esc(k) + ' · 取消本日完成</button>').join(''); q('#mw-form-error').before(hist); hist.querySelectorAll('[data-project-day]').forEach(b => b.onclick = () => A.memoActions.project(ref.id, b.dataset.projectDay)); }
-    async function save(b, convert = false) {
-      b.disabled = true;
-      try { if (await A.memoActions.commit(() => {
+    const immediate=q('[data-act="save-start"]');
+    const running=existing&&A.memoSchedule.state().sessions.slice().reverse().find(s=>A.memoSchedule.key(s.ref)===A.memoSchedule.key(ref)&&s.status!=='ended');
+    immediate.hidden=day!==M().userDay()||!!(existing&&(existing.archived||doneFor(existing,ref)));
+    immediate.textContent=running?.status==='running'?'保存并返回':running?'保存并继续计时':'保存并立即开始';
+    let submitting=false,savedRef=null,taskSaved=false;
+    async function save(b, convert = false, begin = false) {
+      if(submitting)return;submitting=true;const actions=[...m.querySelectorAll('.modal-actions button')];actions.forEach(x=>x.disabled=true);
+      try { if(!taskSaved){if (await A.memoActions.commit(() => {
         const text = q('#mw-title').value.trim(); if (!text) throw new Error('请填写任务名称'); if (!existing && text.includes('\n')) throw new Error('一次添加一个任务，正文说明可写在备注中');
         const selectedList = q('#mw-list')?.value || list;
         const d = S().data(), isProject = kind === 'project' || convert || (selectedList === 'extra' && q('[name="mw-repeat"]:checked')?.value === 'daily');
@@ -142,12 +147,14 @@
         }
         t.estimatedMinutes = Math.min(1440, Math.max(0, Number(q('#mw-estimate').value) || 0)); t.dateBasis = 'user';
         t.text = text; t.note = q('#mw-note-edit').value; if (q('#mw-points')) t.points = Math.max(0, Number(q('#mw-points').value) || 0);
-        saveTiming(m, targetRef, text, targetRef.kind === 'project' ? targetRef.day : day);
-      })) { A.ui.closeModal(); render(); A.memoSchedule.render(); } }
-      catch (e) { q('#mw-form-error').textContent = e.message; b.textContent = A.memoActions.busy() ? '重试保存' : '保存'; }
-      finally { b.disabled = false; }
+        saveTiming(m, targetRef, text, targetRef.kind === 'project' ? targetRef.day : day); savedRef=targetRef;
+      })){taskSaved=true;}else return;}
+      if(begin){if(day!==M().userDay())throw Error('日期已改变，任务已保存，请关闭后重新开始');if(!await A.memoActions.commit(()=>A.memoSchedule.startRef(savedRef)))return;}
+      A.ui.closeModal();render();A.memoSchedule.render();if(begin)A.ui.toast('任务已保存，计时已开始或保持运行');
+      }catch(e){q('#mw-form-error').textContent=(taskSaved?'任务已保存；计时尚未保存成功。':'')+e.message;b.textContent=A.memoActions.busy()?'重试保存':taskSaved?'重试开始计时':'重新保存';}
+      finally{submitting=false;const pending=A.memoActions.busy();actions.forEach(x=>x.disabled=pending||taskSaved);if(!pending){const cancel=q('[data-act="cancel"]');if(cancel)cancel.disabled=false;}if(b.isConnected)b.disabled=false;m.querySelectorAll('input,textarea,select').forEach(x=>x.disabled=pending||taskSaved);}
     }
-    A.ui.bindActions({ cancel: () => { if (!A.memoActions.busy()) A.ui.closeModal(); }, save, convert: b => save(b, true), delete: () => {
+    A.ui.bindActions({ cancel: () => { if (!submitting&&!A.memoActions.busy()) A.ui.closeModal(); }, save, 'save-start':b=>save(b,false,true), convert: b => save(b, true), delete: () => {
       if (A.memoActions.busy()) return;
       if (kind === 'project' || kind === 'daily') A.ui.confirm('停用后不再列入当前清单，历史完成、积分和笔记保留，可恢复。', '停用项目', () => commit(() => { existing.archived = true; const state = A.memoSchedule.state(); state.sessions.filter(s => s.ref.kind === kind && s.ref.id === ref.id).forEach(s => A.memoSchedule.stopRef(s.ref)); state.items.filter(p => p.ref.kind === kind && p.ref.id === ref.id && p.start >= Date.now()).forEach(p => p.suspendedByArchive = true); }).then(ok => { if (ok) A.ui.closeModal(); }));
       else A.memoActions.deleteTask(ref);
@@ -242,5 +249,5 @@
     setInterval(refreshDates,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDates();});window.addEventListener('focus',refreshDates);
     render();
   }
-  A.memoWorkspace = { score, scoreBand, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
+  A.memoWorkspace = { complete, score, scoreBand, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
 })();
