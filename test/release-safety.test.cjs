@@ -818,7 +818,7 @@ test('task overview resolves queue identities and includes daily projects withou
  const b=browser();await b.S.load();const {F,M,A}=flowHarness(b),d=b.S.data(),day=M.userDay();
  d.queue=[{id:'ovq',text:'队列总览',assignment:{day,list:'ideal'},points:3}];
  b.S.getDay(day).tasks.required.push({id:'proxy',fromQueue:'ovq',text:'旧副本'});
- d.memoProjects=[{id:'ovp',text:'每日推进总览',days:{},points:2}];
+ d.memoProjects=[{id:'ovp',text:'每日推进总览',days:{},points:2}];b.ctx.document={addEventListener(){}};vm.runInContext(source('js/memo-organize.js'),b.ctx);
  vm.runInContext(source('js/memo-workspace.js'),b.ctx);
  let html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.equal((html.match(/title="队列总览"/g)||[]).length,1);assert.match(html,/每日推进总览/);assert.doesNotMatch(html,/旧副本/);assert.doesNotMatch(html,/<button|data-mw=|mw-mini-title/);assert.match(html,/✅ 必须/);assert.match(html,/class="tag"/);
  A.completeCore({kind:'queue',id:'ovq',title:'队列总览'},'');html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.match(html,/队列总览 ✓/);assert.equal(d.ledger.filter(e=>e.type==='earn-queue').length,1);
@@ -864,7 +864,7 @@ test('report format upgrade suppresses only proven formatting differences and pr
 });
 test('rest retry persists one stamp and focuses its actual day before the trailing newline',async()=>{
  const b=browser();await b.S.load();const {A,M}=flowHarness(b);let button,shown,caret,focus=false,composing=false;const editor={contentEditable:'true',focus(){focus=true;}};
- b.ctx.document={createElement(){return {};},getElementById(id){return id==='memo-time'?{after(el){button=el;}}:editor;}};b.ctx.App.memo={flush:async()=>true,show(day){shown=day;}};b.ctx.App.memoEditor={busy:()=>composing,text:()=>M.read(shown)?.text||'',select(pos){caret=pos;}};b.ctx.App.ui={toast(){}};
+ const buttons={};b.ctx.document={createElement(){return {after(){}};},getElementById(id){return id==='memo-time'?{after(el){button=el;buttons[el.id]=el;}}:id==='memo-rest'?button:editor;}};b.ctx.App.memo={flush:async()=>true,show(day){shown=day;}};b.ctx.App.memoEditor={busy:()=>composing,text:()=>M.read(shown)?.text||'',select(pos){caret=pos;}};b.ctx.App.ui={toast(){}};
  vm.runInContext(source('js/memo-rest.js'),b.ctx);b.ctx.App.memoRest.init();b.options.localFails=b.options.idbFails=true;await button.onclick();assert(A.busy());const recorded=Object.keys(b.S.data().memoNotes).find(k=>M.read(k).text.includes('休息')),text=M.read(recorded).text;assert.equal(shown,undefined);
  b.options.localFails=b.options.idbFails=false;await button.onclick();assert(!A.busy());assert.equal(shown,recorded);assert(focus);assert.equal(caret,text.length-1);assert.equal(M.read(recorded).text,text);
  composing=true;await button.onclick();assert.equal(M.read(recorded).text,text);
@@ -874,7 +874,7 @@ test('habit cards keep active items in a grid and native makeup buttons with hab
  const html=b.ctx.App.checkin.pageHTML();assert.match(html,/class="ck-grid"/);assert(!html.includes('class="ck-week"'));const details=b.ctx.App.checkin.detailHTML('visible');assert.match(details,/<button type="button" class="ck-day makeup"/);assert.match(details,/补卡/);assert.match(html,/data-act="ck-info"/);assert.match(html,/aria-label="喝水测试，打卡，本次可得5分"/);assert.match(html,/<div class="ck-secondary"><details>/);assert.equal((html.match(/class="ck-row/g)||[]).length,2);assert(!html.includes('<span class="ck-dot makeup"'));
 });
 test('overview point labels and category rails use actual score for both assigned and project tasks',async()=>{
- const b=browser();await b.S.load();const {M}=flowHarness(b),day=M.userDay();b.S.getDay(day).tasks.ideal=[{id:'zero',text:'零分',points:0}];b.S.data().queue=[{id:'queue',text:'队列分',points:10,assignment:{day,list:'ideal'}}];b.S.data().memoProjects=[{id:'project',text:'推进分',points:5,days:{}}];vm.runInContext(source('js/memo-workspace.js'),b.ctx);const html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.match(html,/data-category="ideal" data-score="zero"/);assert.match(html,/data-category="ideal" data-score="high"/);assert.match(html,/data-category="extra" data-score="medium"/);assert.match(html,/class="mw-score">\+0分/);assert.match(html,/class="mw-score">\+10分/);
+ const b=browser();await b.S.load();const {M}=flowHarness(b),day=M.userDay();b.S.getDay(day).tasks.ideal=[{id:'zero',text:'零分',points:0}];b.S.data().queue=[{id:'queue',text:'队列分',points:10,assignment:{day,list:'ideal'}}];b.S.data().memoProjects=[{id:'project',text:'推进分',points:5,days:{}}];vm.runInContext(source('js/memo-workspace.js'),b.ctx);const html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.match(html,/data-category="ideal" data-bounty="false" data-score="zero"/);assert.match(html,/data-category="ideal" data-bounty="false" data-score="high"/);assert.match(html,/data-category="extra" data-bounty="false" data-score="medium"/);assert.match(html,/class="mw-score">\+0分/);assert.match(html,/class="mw-score">\+10分/);
 });
 
 test('all overview columns place completed last and score-sort ideal while required stays stable',async()=>{
@@ -917,4 +917,17 @@ test('same-day category change preserves running timer, task identity and histor
 });
 test('wishlist refund restores removed item and keeps original cents exactly once',async()=>{
  const b=browser();await b.S.load();const {C}=flowHarness(b);const w={id:'wish',name:'书',cents:3001};C.spendCore(C.spendQuote('money','30.01','书'),'wish-buy');const e=b.S.data().ledger.find(x=>x.operationId==='wish-buy');e.wishId=w.id;e.wishSnapshot=copy(w);b.S.data().memoWishes=[{...w,purchase:e.id,paid:60.02,hidden:true}];assert.equal(b.S.pointsTotal(),-60.02);C.refundCore(e.id);C.refundCore(e.id);assert.equal(b.S.pointsTotal(),0);assert.deepEqual(copy(b.S.data().memoWishes),[w]);assert.equal(b.S.data().ledger.filter(x=>x.refundOf===e.id).length,1);
+});
+
+test('bounty threshold is inclusive and grouping has independent stable regions',async()=>{
+ const b=browser();await b.S.load();flowHarness(b);b.ctx.document={addEventListener(){}};vm.runInContext(source('js/memo-organize.js'),b.ctx);const O=b.ctx.App.memoOrganize;assert(!O.bounty(29.99));assert(O.bounty(30));assert(O.bounty(30.01));assert(!O.bounty(null));b.S.settings().memoBountyThreshold=50;assert(!O.bounty(30));assert(O.bounty(50));b.S.data().memoTaskGroups=[{id:'g',name:'组'}];const rows=[{task:{id:'a',memoGroup:'g'}}],render=rows=>rows.map(x=>x.task.id).join('');let full=O.grouped(rows,render),mini=O.grouped(rows,render,true);assert.match(full,/data-family="full:g"/);assert.match(mini,/data-family="overview:g"/);b.ctx.localStorage.setItem('task-group:overview:g','closed');mini=O.grouped(rows,render,true);assert.doesNotMatch(mini,/data-family-id="g" open/);assert.match(O.grouped(rows,render),/data-family-id="g" open/);assert.deepEqual(copy(rows),[{task:{id:'a',memoGroup:'g'}}]);
+});
+test('dense timeline groups collision details without mutating records or totals',async()=>{
+ const b=browser();await b.S.load();const {P}=scheduleHarness(b);const rows=Array.from({length:8},(_,i)=>({id:String(i),card:'c-'+i,title:'任务'+i,start:10+i*.1,end:10+i*.1+.001,realEnd:10+i*.1,completed:true,type:'point'})),old=JSON.stringify(rows),out=P.denseLayout(rows,3,1,true);assert.equal(out.length,1);assert.equal(out[0].members.length,8);assert.equal(JSON.stringify(rows),old);assert.equal(out[0].title,'完成 8 项');const spans=[{id:'a',start:0,end:60,realEnd:60},{id:'b',start:1,end:50,realEnd:50},{id:'c',start:2,end:40,realEnd:40}];assert.equal(P.denseLayout(spans,1,2)[0].members.length,3);assert.equal(P.denseLayout([{id:'x',start:90,end:95,realEnd:95}],1,1)[0].realEnd,95);
+});
+test('unscheduled excludes stopped, completed and other-day tasks, uses whole-day plans',async()=>{
+ const b=browser();await b.S.load();const {P,M}=flowHarness(b),day=M.userDay();b.S.data().queue=[{id:'free',text:'未分配'},{id:'other',text:'别日',assignment:{day:M.shiftDay(day,1),list:'ideal'}},{id:'today',text:'今日',assignment:{day,list:'ideal'}},{id:'stop',text:'停用',archived:true}];b.S.data().daily=[{id:'old',text:'停用基础',archived:true}];let rows=P.unscheduled(day);assert.deepEqual(Array.from(rows,x=>x.ref.id).sort(),['free','today']);P.savePlan({ref:{kind:'queue',id:'today'},day,title:'今日',type:'point',start:Date.parse(day+'T23:00:00+08:00')});assert.deepEqual(Array.from(P.unscheduled(day),x=>x.ref.id),['free']);assert.equal(b.S.data().ledger.length,0);
+});
+test('thought stamp preserves user day at midnight and leaves timers and copy wording alone',async()=>{
+ const b=browser();await b.S.load();const {M,P}=flowHarness(b);vm.runInContext(source('js/memo-rest.js'),b.ctx);const now=Date.parse('2026-10-27T02:03:00+08:00');b.S.data().queue=[{id:'think',text:'任务'}];const session=P.startRef({kind:'queue',id:'think'},now-60000),r=b.ctx.App.memoRest.stampCore(now,'【思考/建设】');assert.equal(r.day,'2026-10-26');assert.match(M.read(r.day).text,/次日0203 【思考\/建设】\n$/);assert.equal(session.status,'running');assert.equal(b.S.data().ledger.length,0);
 });
