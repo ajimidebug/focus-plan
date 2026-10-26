@@ -83,8 +83,9 @@
     if(opts.cancelOnBackdrop){
       let origin=null;
       mask.addEventListener('pointerdown',e=>{origin=e.target===mask&&e.button===0?{x:e.clientX,y:e.clientY,id:e.pointerId}:null;});
+      mask.addEventListener('pointerup',e=>{if(!origin)return;origin.released=e.target===mask&&e.pointerId===origin.id&&Math.hypot(e.clientX-origin.x,e.clientY-origin.y)<=8;});
       mask.addEventListener('pointercancel',()=>{origin=null;});
-      mask.addEventListener('click',e=>{const start=origin;origin=null;if(e.target!==mask||!start||Math.hypot(e.clientX-start.x,e.clientY-start.y)>8)return;e.preventDefault();e.stopPropagation();const cancel=modal.querySelector('[data-act="cancel"]');if(cancel&&!cancel.disabled)cancel.click();});
+      mask.addEventListener('click',e=>{const start=origin;origin=null;if(e.target!==mask||!start?.released||Math.hypot(e.clientX-start.x,e.clientY-start.y)>8)return;e.preventDefault();e.stopPropagation();const cancel=modal.querySelector('[data-act="cancel"]');if(cancel&&!cancel.disabled)cancel.click();});
     }else mask.addEventListener('mousedown',function(e){if(e.target===mask&&!opts.lock)closeModal();});
     const doc=root.ownerDocument, win=doc.defaultView, viewport=win.visualViewport;
     let frame, alive=true;

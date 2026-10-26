@@ -133,13 +133,14 @@
         const text = q('#mw-title').value.trim(); if (!text) throw new Error('请填写任务名称'); if (!existing && text.includes('\n')) throw new Error('一次添加一个任务，正文说明可写在备注中');
         const selectedList = q('#mw-list')?.value || list;
         const d = S().data(), isProject = kind === 'project' || convert || (selectedList === 'extra' && q('[name="mw-repeat"]:checked')?.value === 'daily');
-        let t = existing, targetRef = ref;
+        const current=existing?A.memoSchedule.find(ref):null;if(existing&&!current)throw new Error('任务已移动或删除，请重新打开');
+        let t = current, targetRef = ref;
         if (isProject && kind !== 'project') {
-          if (existing?.memoProjectId) throw new Error('此任务已转换，请编辑对应每日项目');
+          if (current?.memoProjectId) throw new Error('此任务已转换，请编辑对应每日项目');
           if (!d.memoProjects) d.memoProjects = [];
           t = { id: S().uid(), text, days: {}, createdAt: new Date().toISOString(), createdDay: day, source: existing ? { id: existing.id, day, list: ref.list } : null };
           d.memoProjects.push(t); targetRef = { kind: 'project', id: t.id, day: ref?.day || (day === M().userDay() ? M().userDay() : day) }; t.createdDay = targetRef.day;
-          if (existing) { if (existing.done) throw new Error('已完成的旧任务保留历史，请新建每日推进项目'); A.memoSchedule.stopRef(ref); existing.memoProjectId = t.id; }; // Preserve historical source and its ledger; never infer a merge by title.
+          if (current) { if (current.done) throw new Error('已完成的旧任务保留历史，请新建每日推进项目'); A.memoSchedule.stopRef(ref); current.memoProjectId = t.id; }; // Preserve historical source and its ledger; never infer a merge by title.
         } else if (!t) {
           t = { id: S().uid(), createdAt: new Date().toISOString() };
           if (kind === 'queue') { (d.queue || (d.queue = [])).push(t); targetRef = { kind: 'queue', id: t.id }; }
@@ -156,7 +157,7 @@
     }
     A.ui.bindActions({ cancel: () => { if (!submitting&&!A.memoActions.busy()) A.ui.closeModal(); }, save, 'save-start':b=>save(b,false,true), convert: b => save(b, true), delete: () => {
       if (A.memoActions.busy()) return;
-      if (kind === 'project' || kind === 'daily') A.ui.confirm('停用后不再列入当前清单，历史完成、积分和笔记保留，可恢复。', '停用项目', () => commit(() => { existing.archived = true; const state = A.memoSchedule.state(); state.sessions.filter(s => s.ref.kind === kind && s.ref.id === ref.id).forEach(s => A.memoSchedule.stopRef(s.ref)); state.items.filter(p => p.ref.kind === kind && p.ref.id === ref.id && p.start >= Date.now()).forEach(p => p.suspendedByArchive = true); }).then(ok => { if (ok) A.ui.closeModal(); }));
+      if (kind === 'project' || kind === 'daily') A.ui.confirm('停用后不再列入当前清单，历史完成、积分和笔记保留，可恢复。', '停用项目', () => commit(() => { const current=A.memoSchedule.find(ref);if(!current)throw new Error('任务已不存在，请重新打开');current.archived = true; const state = A.memoSchedule.state(); state.sessions.filter(s => s.ref.kind === kind && s.ref.id === ref.id).forEach(s => A.memoSchedule.stopRef(s.ref)); state.items.filter(p => p.ref.kind === kind && p.ref.id === ref.id && p.start >= Date.now()).forEach(p => p.suspendedByArchive = true); }).then(ok => { if (ok) A.ui.closeModal(); }));
       else A.memoActions.deleteTask(ref);
     } });
   }
