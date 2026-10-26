@@ -2244,7 +2244,7 @@ body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-bounty=
 .mw-day-shortcuts [data-mw="today"]{border:2px solid #436b7a;font-weight:750;color:#244c5c;}
 .mw-day-shortcuts [aria-pressed="true"]{background:#3c6878;color:#fff;border-color:#3c6878;}
 /* Texture is a background layer, with no badge or added layout height. */
-body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-bounty="true"]{background-image:repeating-linear-gradient(135deg,transparent 0,transparent 11px,#a77b2929 11px,#a77b2929 12px)!important;background-color:#fff9ec;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-bounty="true"]:is(.mw-task,.cal-task,.habit-plan-row,.mw-history-row){background-image:repeating-linear-gradient(135deg,transparent 0,transparent 11px,#a77b2929 11px,#a77b2929 12px)!important;background-color:#fff9ec;}
 .memo-toolbar{display:grid;grid-template-columns:1fr .9fr .9fr 1.45fr 1fr;gap:5px;align-items:stretch;}
 .memo-toolbar>.btn,.memo-toolbar>#memo-copy-menu>summary{box-sizing:border-box;width:100%;min-width:0;margin:0;padding:9px 3px;font-size:12px;white-space:nowrap;text-align:center;}
 #memo-copy-menu{min-width:0;position:relative;}
