@@ -180,9 +180,7 @@
     const ref = { kind: spec.kind, id: spec.id, day: spec.day, list: spec.list }, P = App.memoSchedule;
     const task = spec.kind === 'checkin' ? (S().data().checkins || []).find(t => t.id === spec.id) : P?.find(ref);
     const schedule = S().data().memoSchedule, plans = P && schedule ? schedule.items.filter(p => !p.deleted && P.key(p.ref) === P.key(ref) && (!spec.day || p.day === spec.day)).map(p => ({ id:p.id, day:p.day, start:p.start, end:p.end, title:p.title })) : [];
-    const sessions = P && schedule ? schedule.sessions.filter(s => P.key(s.ref) === P.key(ref)) : [];
-    const bounds = spec.day && ['project','daily','checkin'].includes(spec.kind) ? [Date.parse(spec.day+'T04:00:00+08:00'),Date.parse(M().shiftDay(spec.day,1)+'T04:00:00+08:00')] : [-Infinity,now];
-    const actualMs = sessions.reduce((sum,s)=>sum+s.chunks.reduce((n,c)=>n+Math.max(0,Math.min(c.end ?? now,bounds[1],now)-Math.max(c.start,bounds[0])),0),0);
+    const actualMs = P?.timing ? P.timing(ref,now).totalMs : 0;
     const lines = [];
     if(plans.length) lines.push('计划：'+plans.map(p=>M().naturalDay(p.start)+' '+M().clock(p.start)+(p.end?'—'+(M().naturalDay(p.end)!==M().naturalDay(p.start)?M().naturalDay(p.end)+' ':'')+M().clock(p.end):'（时间点）')).join('；'));
     const explicitEstimate=task?.memoEstimatedDays?.[spec.day]??task?.estimatedMinutes;
@@ -212,7 +210,7 @@
     const ref={kind:spec.kind,id:spec.id,day:spec.day,list:spec.list};
     function saveEstimate(){const n=Number(m.querySelector('#ma-estimate').value)||0;if(n<0||n>1440)throw Error('预计用时应在0—1440分钟之间');const task=App.memoSchedule.find(ref);if(!task)throw Error('任务已移动或停用');if(['checkin','project','daily'].includes(spec.kind))(task.memoEstimatedDays||(task.memoEstimatedDays={}))[spec.day||M().userDay()]=n;else task.estimatedMinutes=n;}
     const timerButton=m.querySelector('#ma-timer');
-    function timerState(){const active=App.memoSchedule.state().sessions.slice().reverse().find(s=>App.memoSchedule.key(s.ref)===App.memoSchedule.key(ref)&&s.status!=='ended');timerButton.textContent=active?.status==='running'?'暂停计时':active?'继续计时':'开始计时';m.querySelector('#ma-timer-state').textContent=active?.status==='running'?'计时中':active?'已暂停':'尚未开始计时';return active;}
+    function timerState(){const active=App.memoSchedule.state().sessions.slice().reverse().find(s=>App.memoSchedule.key(s.ref)===App.memoSchedule.key(ref)&&s.status!=='ended');timerButton.textContent=active?.status==='running'?'暂停计时':active?'继续计时':'开始计时';const t=App.memoSchedule.timing(ref);m.querySelector('#ma-timer-state').textContent=(active?.status==='running'?'计时中':active?'已暂停':'尚未开始计时')+(t.session?' · '+App.memoSchedule.timingText(t).replace('\n',' · '):'');return active;}
     timerButton.hidden=!!(spec.day&&spec.day!==M().userDay());timerState();
     timerButton.onclick=async()=>{if(committing)return;timerButton.disabled=true;try{if(unsettled){if(await transaction(()=>{})){timerState();App.ui.toast('保存已完成');}return;}if(spec.day&&spec.day!==M().userDay())throw Error('日期已改变，请重新打开');const active=timerState();if(await transaction(()=>{saveEstimate();if(active?.status==='running')App.memoSchedule.pauseCore(active,Date.now());else App.memoSchedule.startRef(ref);})){if(textarea.value===initialText&&active?.status!=='running'){App.ui.closeModal();refresh();App.ui.toast('计时已开始；其他任务的运行计时会自动暂停');}else timerState();}}catch(e){m.querySelector('#memo-action-error').textContent=e.message;timerButton.textContent=unsettled?'重试保存':timerButton.textContent;}finally{timerButton.disabled=false;}};
     const habitPlan=spec.kind==='checkin'&&App.memoFinance?.plans(spec.day).find(x=>x.it.id===spec.id);let chosenList=habitPlan?.r?.list||spec.list||sourceTask?.assignment?.list||sourceTask?.memoCategoryDays?.[spec.day]||'extra';

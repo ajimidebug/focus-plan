@@ -47,6 +47,15 @@
   }
   function unscheduled(day=selectedDay||M().userDay()){const base=dayStart(day),keys=new Set(state().items.filter(p=>!p.deleted&&!p.suspendedByArchive&&p.start<base+86400000&&(p.type==='point'?p.start>=base:p.end>base)).map(p=>key(p.ref)));return sources(day).filter(x=>!keys.has(key(x.ref))&&!isDone({ref:x.ref}));}
   function elapsed(session, now = Date.now()) { return session.chunks.reduce((sum, c) => sum + Math.max(0, (c.end == null ? now : c.end) - c.start), 0); }
+  function timing(ref,now=Date.now()) {
+    const r=canonical(ref);planSummary(r);const sessions=summaryCache&&summaryCache.schedule===S().data().memoSchedule?summaryCache.sessionIndex?.get(key(r))||[]:[];
+    const bounds=['project','daily','checkin'].includes(r.kind)&&r.day?[dayStart(r.day),dayStart(M().shiftDay(r.day,1))]:[-Infinity,now];
+    const effective=s=>s.chunks.reduce((n,c)=>n+Math.max(0,Math.min(c.end??now,now,bounds[1])-Math.max(c.start,bounds[0])),0);
+    const rank=s=>s.status==='running'?2:s.status==='paused'?1:0,last=s=>s.chunks.at(-1)?.end??s.chunks.at(-1)?.start??0;
+    const session=sessions.slice().sort((a,b)=>rank(b)-rank(a)||last(b)-last(a))[0]||null;
+    return {totalMs:sessions.reduce((n,s)=>n+effective(s),0),currentMs:session?effective(session):0,session};
+  }
+  function timingText(t){return '累计 '+duration(t.totalMs)+'\n'+(t.session?.status==='ended'?'上次 ':'本次 ')+duration(t.currentMs);}
   function duration(ms) { const sec = Math.floor(Math.max(0, ms) / 1000); return Math.floor(sec / 3600) + ':' + String(Math.floor(sec / 60) % 60).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); }
   function active() { return state().sessions.find(s => s.status === 'running'); }
   function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
@@ -168,7 +177,7 @@
       if (controls) { const signature = shown ? shown.id + ':' + shown.status : ''; if (controls.dataset.session !== signature) { controls.dataset.session = signature; const ref = shown && esc(JSON.stringify(shown.ref)); controls.innerHTML = shown ? (shown.status === 'running' ? '<button class="btn btn-small" data-schedule-command="pause" data-schedule-ref="' + ref + '">暂停</button>' : '<button class="btn btn-small" data-schedule-command="start" data-session-id="' + esc(shown.id) + '" data-schedule-ref="' + ref + '">继续</button>') + '<button class="btn btn-small" data-schedule-command="end" data-schedule-ref="' + ref + '">结束</button>' : ''; } }
       App.memoFloat?.update(current||paused[0],paused);
       const back = $('schedule-active'); if (back) back.hidden = !current && !paused.length;
-      document.querySelectorAll('[data-inline-session]').forEach(el => { const s = d.sessions.find(x => x.id === el.dataset.inlineSession); if (s) el.textContent = (s.status === 'running' ? '计时中 ' : s.status === 'paused' ? '已暂停 ' : '已结束 ') + duration(elapsed(s, now)); });
+      document.querySelectorAll('[data-task-timing]').forEach(el=>{const t=timing(JSON.parse(el.dataset.taskTiming),now);el.textContent=timingText(t);});
       if (!mode || document.hidden || !$('view-memo-timeaxis')?.classList.contains('active') && !$('view-tasks')?.classList.contains('active')) return;
       const f = frame(selectedDay, now);
       const panel = $('memo-schedule-panel'); if (panel?.dataset.frameFrom !== String(f.from)) { render(); return; }
@@ -200,8 +209,8 @@
       const index = new Map();
       schedule.items.filter(p => !p.deleted).forEach(p => { const k = key(p.ref); if (!index.has(k)) index.set(k, []); index.get(k).push(p); });
       index.forEach(list => list.sort((a, b) => a.start - b.start));
-      const activeIndex = new Map(); (schedule.sessions || []).filter(s => s.status !== 'ended').forEach(s => activeIndex.set(key(s.ref), s));
-      summaryCache = { schedule, revision: data._storageRevision, index, activeIndex };
+      const activeIndex=new Map(),sessionIndex=new Map();(schedule.sessions||[]).forEach(s=>{const k=key(s.ref);if(!sessionIndex.has(k))sessionIndex.set(k,[]);sessionIndex.get(k).push(s);if(s.status!=='ended'&&activeIndex.get(k)?.status!=='running')activeIndex.set(k,s);});
+      summaryCache = { schedule, revision: data._storageRevision, index, activeIndex, sessionIndex };
     }
     const targetDay = find(ref)?.assignment?.day || ref.day;
     const plans = (summaryCache.index.get(key(ref)) || []).filter(p => !targetDay || p.day === targetDay);
@@ -209,9 +218,11 @@
   }
   function rowControls(ref) {
     try { const r = canonical(ref), encoded = esc(JSON.stringify(r)), summary = planSummary(r);
-      const session = summaryCache?.schedule === S().data().memoSchedule ? summaryCache.activeIndex?.get(key(r)) : null;
+      const t=timing(r),session=t.session?.status!=='ended'?t.session:null;
       const command = (act, text) => '<button type="button" class="btn btn-small" data-schedule-command="' + act + '" data-schedule-ref="' + encoded + '"' + (session ? ' data-session-id="' + esc(session.id) + '"' : '') + '>' + text + '</button>';
-      return '<div class="schedule-row-tools"><span class="mw-plan-control">' + command('plan', summary || '安排时间') + '</span><span class="mw-timer-control">' + (session ? '<strong class="schedule-inline-status" data-inline-session="' + esc(session.id) + '">' + (session.status === 'running' ? '计时中 ' : '已暂停 ') + duration(elapsed(session)) + '</strong>' + command(session.status === 'running' ? 'pause' : 'start', session.status === 'running' ? '暂停' : '继续') + '<details class="mw-session-menu"><summary>计时操作</summary>' + command('end', '结束') + '</details>' : isDone({ ref: r }) ? '<small>已完成</small>' : command('start', '开始计时')) + '</span></div>';
+      const stats=t.session?'<strong class="schedule-inline-status" data-task-timing="'+encoded+'">'+esc(timingText(t))+'</strong>':'';
+      return '<div class="schedule-row-tools"><span class="mw-plan-control">'+command('plan',summary||'安排时间')+'</span><span class="mw-timer-control">'+stats+(session?command(session.status==='running'?'pause':'start',session.status==='running'?'暂停':'继续')+'<details class="mw-session-menu"><summary>计时操作</summary>'+command('end','结束')+'</details>':isDone({ref:r})?'<small>已完成</small>':command('start','开始计时'))+'</span></div>';
+
 
     } catch (_) { return '<small>时间安排暂不可用，请先备份</small>'; }
   }
@@ -352,5 +363,5 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } }); window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();
   }
-  App.memoSchedule = { setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
+  App.memoSchedule = { setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
 })();

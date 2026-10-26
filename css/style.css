@@ -2224,12 +2224,31 @@ body[data-view] #mw-live.mw-local-timer[data-status="paused"]{border-color:#a081
 
 /* Sparse reward texture, shared task groups, and separate completion markers. */
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-bounty="true"]{background-color:#fff8e8;background-image:repeating-linear-gradient(135deg,transparent 0,transparent 12px,#b98b3020 12px,#b98b3020 13px);}
-.bounty-label{font-size:10px;color:#775514;border:1px solid #c9ab6a;border-radius:4px;padding:1px 3px;margin-right:4px;white-space:nowrap;}
+
 .mw-done[data-bounty],.cal-task.done[data-bounty],.habit-plan-done[data-bounty]{opacity:.5;}
 .family-compact{margin:5px 0;padding:0;}.family-compact>summary{font-size:11px;padding:7px 0;overflow-wrap:anywhere;}.family-compact .family-body{min-height:24px;padding-bottom:5px;}.family-compact .cal-task{margin:3px 0;}
-.mw-overview .mw-completed{padding:3px;margin-top:6px;}.mw-overview .mw-completed>summary{font-size:11px;padding:6px 0;min-height:32px;}.mw-overview .bounty-label{display:block;width:max-content;margin-top:2px;}
+.mw-overview .mw-completed{padding:3px;margin-top:6px;}.mw-overview .mw-completed>summary{font-size:11px;padding:6px 0;min-height:32px;}
 .schedule-spans{position:absolute;inset:0;}.schedule-spans.has-markers{right:32%;}.schedule-markers{position:absolute;top:0;bottom:0;right:0;width:30%;border-left:1px dashed #aac6ae;}
 .schedule-markers .schedule-block{background:#edf5e9;border-color:#83a37c;color:#34532c;min-height:26px;font-size:10px;}
 .schedule-block>span{display:block;overflow-wrap:anywhere;white-space:normal;text-align:left;}.schedule-block.schedule-short>span{top:0;min-height:26px;max-height:48px;overflow:hidden;}
 .schedule-is-plan{background:#eaf2fc!important;border-color:#7f9fc3!important;}.schedule-new:not(.schedule-is-plan){background:#e7f2eb;color:#28543a;border-color:#83a78e;}
 .schedule-waiting small{display:block;color:var(--muted);font-size:11px;}
+
+/* Shared timer totals and compact current-run display. */
+.schedule-inline-status{white-space:pre-line;font-variant-numeric:tabular-nums;line-height:1.5;}
+#mw-live .float-toggle{grid-template-rows:auto auto auto;}
+#mw-live .float-current{grid-column:1;grid-row:3;font-size:12px;font-variant-numeric:tabular-nums;}
+#mw-live .float-arrow{grid-row:1 / 4;}
+.mw-day-shortcuts{display:flex;gap:4px;flex-shrink:0;}
+.mw-day-shortcuts .btn{min-height:44px;font-weight:650;padding:7px 12px;border:1px solid #aebfc5;background:#f1f5f5;color:#345664;}
+.mw-day-shortcuts [data-mw="today"]{border:2px solid #436b7a;font-weight:750;color:#244c5c;}
+.mw-day-shortcuts [aria-pressed="true"]{background:#3c6878;color:#fff;border-color:#3c6878;}
+/* Texture is a background layer, with no badge or added layout height. */
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-bounty="true"]{background-image:repeating-linear-gradient(135deg,transparent 0,transparent 11px,#a77b2929 11px,#a77b2929 12px)!important;background-color:#fff9ec;}
+.memo-toolbar{display:grid;grid-template-columns:1fr .9fr .9fr 1.45fr 1fr;gap:5px;align-items:stretch;}
+.memo-toolbar>.btn,.memo-toolbar>#memo-copy-menu>summary{box-sizing:border-box;width:100%;min-width:0;margin:0;padding:9px 3px;font-size:12px;white-space:nowrap;text-align:center;}
+#memo-copy-menu{min-width:0;position:relative;}
+#memo-copy-menu[open]{padding:0;border:0;}
+.memo-copy-options{position:absolute;bottom:calc(100% + 6px);right:0;width:min(280px,calc(100vw - 32px));max-height:50dvh;overflow:auto;z-index:102;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;box-shadow:0 3px 12px #18212f20;box-sizing:border-box;}
+.memo-copy-options .btn{width:100%;box-sizing:border-box;white-space:normal;}
+.memo-toolbar>#memo-time{background:var(--primary);color:#fff;border-color:var(--primary);}
