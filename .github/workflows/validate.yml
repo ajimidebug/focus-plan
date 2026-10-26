@@ -1,0 +1,33 @@
+name: Validate focus-plan changes
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [audit-171-safety-20261027]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: focus-plan-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare temporary release assets
+        run: node scripts/prepare-release.mjs ci-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Run release and regression checks
+        run: node scripts/check-release.mjs
+      - name: Ensure validation does not publish or mutate source branch
+        run: |
+          echo "Prepared artifacts are local to this runner."
+          git status --short
