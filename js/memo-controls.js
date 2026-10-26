@@ -1,0 +1,1 @@
+(function(){'use strict';window.App.memoNumbers={add(value,amount,max=Infinity){const n=String(value??'').trim()===''?0:Number(value);if(!Number.isFinite(n)||!Number.isFinite(amount))throw Error('请先输入有效数值');return Math.min(max,Math.max(0,Math.round(n*100)+Math.round(amount*100))/100);}};})();

@@ -3,11 +3,13 @@
 'use strict';
 const A=window.App, S=()=>A.store, esc=x=>S().esc(String(x??''));
 function enhance(){
- document.querySelectorAll('#mw-points,#ck-points,[data-reward-points],#spend-value,#mq-points').forEach(input=>{
-  if(input.dataset.presets){input.nextElementSibling.hidden=input.hidden;return;} input.dataset.presets='1';
+ document.querySelectorAll('#mw-points,#ck-points,[data-reward-points],#spend-value,#mq-points,#mw-estimate,#ck-estimate,#ma-estimate').forEach(input=>{
+  if(input.dataset.presets){const row=input.nextElementSibling;row.hidden=input.hidden;row.querySelectorAll('button').forEach(b=>b.disabled=input.disabled);return;} input.dataset.presets='1';
   const row=document.createElement('div'); row.className='point-presets';
-  function update(){const unit=input.id==='spend-value' && document.getElementById('spend-mode')?.value==='money'?'元':'分';row.querySelectorAll('button').forEach(b=>b.textContent=b.dataset.value+unit);}
-  [1,5,10].forEach(v=>{const b=document.createElement('button');b.type='button';b.className='btn';b.dataset.value=v;b.onclick=()=>{if(input.disabled)return;input.value=v;input.dispatchEvent(new Event('input',{bubbles:true}));};row.append(b);});input.after(row);row.hidden=input.hidden;update();document.getElementById('mw-list')?.addEventListener('change',()=>{row.hidden=input.hidden;});document.getElementById('spend-mode')?.addEventListener('change',update);
+  const time=/estimate/.test(input.id);
+  function update(){const unit=time?'分钟':input.id==='spend-value'&&document.getElementById('spend-mode')?.value==='money'?'元':'分';row.querySelectorAll('[data-value]').forEach(b=>b.textContent='+'+b.dataset.value+unit);}
+  (time?[5,20,60]:[1,5,10]).forEach(v=>{const b=document.createElement('button');b.type='button';b.className='btn';b.dataset.value=v;b.onclick=()=>{if(input.disabled)return;try{const max=input.max?Number(input.max):Infinity;input.value=A.memoNumbers.add(input.value,v,max);input.dispatchEvent(new Event('input',{bubbles:true}));}catch(e){A.ui.toast(e.message);}};row.append(b);});
+  const reset=document.createElement('button');reset.type='button';reset.className='btn';reset.textContent='Reset';reset.setAttribute('aria-label',time?'清除预计时间':'数值归零');reset.onclick=()=>{if(input.disabled)return;input.value=time?'':'0';input.dispatchEvent(new Event('input',{bubbles:true}));};row.append(reset);input.after(row);row.hidden=input.hidden;update();document.getElementById('mw-list')?.addEventListener('change',()=>{row.hidden=input.hidden;});document.getElementById('spend-mode')?.addEventListener('change',update);
  });
  if(!A.app || !A.memoCore || !S().data()?.ledger)return;
  const root=document.getElementById('view-checkin');if(!root || document.getElementById('point-records'))return;

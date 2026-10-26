@@ -17,6 +17,7 @@
     const token = JSON.stringify(ref); if (visited.has(token)) return null; visited.add(token);
     if (!ref) return null;
     const d = S().data();
+    if (ref.kind === 'checkin') {const task=(d.checkins||[]).find(t=>t.id===ref.id);return task?{task,ref:{kind:'checkin',id:task.id,day:ref.day||M().userDay()}}:null;}
     if (ref.kind === 'queue') { const task = (d.queue || []).concat(d.queueDone || []).find(t => t.id === ref.id); return task && !task.memoDismissed ? { task, ref: { kind: 'queue', id: task.id } } : null; }
     if (ref.kind === 'project') { const task = (d.memoProjects || []).find(t => t.id === ref.id); return task ? { task, ref: { kind: 'project', id: task.id, day: ref.day || M().userDay() } } : null; }
     if (ref.kind === 'daily') { const task = (d.daily || []).find(t => t.id === ref.id); return task ? { task, ref: { kind: 'daily', id: task.id, day: ref.day || M().userDay() } } : null; }
