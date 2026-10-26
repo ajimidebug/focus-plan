@@ -50,8 +50,17 @@
     (S().data().queue || []).filter(t => !t.memoDismissed && !t.archived && !t.doneAt && t.assignment?.list === 'required' && t.assignment.day >= f.startedDay && t.assignment.day < today).forEach(task => out.push({ task, ref: { kind: 'queue', id: task.id }, day: task.assignment.day }));
     return out;
   }
+  function longOverdue(now = Date.now()) {
+    const today=M().userDay(now),out=[];
+    Object.entries(S().data().days).filter(([day])=>day<today).sort(([a],[b])=>a.localeCompare(b)).forEach(([day,d])=>{
+      (d.tasks.extra||[]).filter(t=>!t.done&&!t.doneAt&&!t.archived&&!t.fromDaily&&!t.fromQueue&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed).forEach(task=>out.push({task,ref:{kind:'task',id:task.id,day,list:'extra'},day}));
+    });
+    (S().data().queue||[]).filter(t=>!t.doneAt&&!t.done&&!t.archived&&!t.memoDismissed&&t.assignment?.list==='extra'&&t.assignment.day<today).forEach(task=>out.push({task,ref:{kind:'queue',id:task.id},day:task.assignment.day}));
+    return out;
+  }
   function settleCore(now = Date.now()) {
     const f = state(), today = M().userDay(now), at = new Date(now).toISOString();
+    longOverdue(now).forEach(({task:t,ref,day})=>{t.originalDay=t.originalDay||day;t.memoAutoCarry={kind:'extra',at,origin:t.memoAutoCarry?.origin||day};moveCore(ref,today,'extra');});
     overdue(now).forEach(({ task: t, ref, day }) => {
       const dueDay = day || ref.day, origin = t.originalDay || dueDay;
       let event = f.settlements.find(e => e.taskId === t.id && e.origin === origin);
@@ -75,7 +84,7 @@
   }
   function isCarried(t) {
     if (t.backfillDay && t.originalDay && t.backfillDay <= t.originalDay) return false;
-    return !!(t.overdueEventId && S().data().memoFlow?.settlements.some(e => e.id === t.overdueEventId && e.taskId === t.id)) || !!t.carried;
+    return !!t.memoAutoCarry || !!(t.overdueEventId && S().data().memoFlow?.settlements.some(e => e.id === t.overdueEventId && e.taskId === t.id)) || !!t.carried;
   }
   function lateLabel(t) {
     if (t.backfillDay) return (t.backfillDay <= t.originalDay ? '已补记按时完成 · ' : '已补记延期完成 · ') + t.backfillDay;
@@ -131,12 +140,12 @@
   let settling = false;
   async function settle() {
     if (settling || A.memoEditor?.busy() || A.memoActions.busy() || S().status().readOnly) return;
-    if (S().data().memoFlow && !overdue().length) return;
+    if (S().data().memoFlow && !overdue().length && !longOverdue().length) return;
     settling = true;
     try { if (await A.memoActions.commit(() => { enableCore(); settleCore(); })) { A.memoWorkspace?.render(); A.app?.refreshStats(); } }
     catch (e) { A.ui.toast(e.message); const el = document.getElementById('flow-save-error'); if (el) { el.hidden = false; el.textContent = '跨日处理尚未保存 · 点此重试'; el.onclick = async () => { try { if (await A.memoActions.commit(() => {})) { el.hidden = true; await settle(); A.memoWorkspace.render(); } } catch (err) { A.ui.toast(err.message); } }; } }
     finally { settling = false; }
   }
   async function init() { await settle(); setInterval(settle, 30000); document.addEventListener('visibilitychange', () => { if (!document.hidden) settle(); }); }
-  A.memoFlow = { backfill, state, enableCore, queues, assignment, assigned, moveCore, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
+  A.memoFlow = { backfill, state, enableCore, queues, assignment, assigned, moveCore, longOverdue, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
 })();

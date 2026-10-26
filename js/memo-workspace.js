@@ -78,12 +78,12 @@
   }
   function preserve(renderFn) {
     const root = $(pane === 'queue' ? 'mw-queue' : 'mw-today'), disclosures = new Set();
-    const detailKey = el => (el.closest('[data-mw-card]')?.dataset.ref || root?.id) + ':' + (el.classList.contains('mw-completed') ? el.closest('.mw-group')?.querySelector('h2')?.textContent.replace(/ · 待做.*/, '') : el.querySelector('summary')?.textContent);
+    const detailKey = el => (el.closest('[data-ref]')?.dataset.ref || root?.id) + ':' + (el.classList.contains('mw-completed') ? el.closest('.mw-group')?.querySelector('h2')?.textContent.replace(/ · 待做.*/, '') : el.querySelector('summary')?.textContent);
     root?.querySelectorAll('details[open]').forEach(el => disclosures.add(detailKey(el)));
-    const anchor = [...(root?.querySelectorAll('[data-mw-card]') || [])].find(el => el.getBoundingClientRect().bottom > 0), ref = anchor?.dataset.ref, offset = anchor?.getBoundingClientRect().top;
+    const anchor = [...(root?.querySelectorAll('[data-mw-card],.mw-history-row[data-ref]') || [])].find(el => el.getBoundingClientRect().bottom > 0), ref = anchor?.dataset.ref, offset = anchor?.getBoundingClientRect().top;
     renderFn();
     root?.querySelectorAll('details').forEach(el => { if (disclosures.has(detailKey(el))) el.open = true; });
-    if (ref && document.body.dataset.view === 'tasks' && pane !== 'timeline') requestAnimationFrame(() => { const next = [...root.querySelectorAll('[data-mw-card]')].find(el => el.dataset.ref === ref); if (next) window.scrollBy(0, next.getBoundingClientRect().top - offset); });
+    if (ref && document.body.dataset.view === 'tasks' && pane !== 'timeline') requestAnimationFrame(() => { const next = [...root.querySelectorAll('[data-mw-card],.mw-history-row[data-ref]')].find(el => el.dataset.ref === ref); if (next) window.scrollBy(0, next.getBoundingClientRect().top - offset); });
   }
   function render() { if (!ready) return; preserve(() => { renderTasks(); renderQueue(); renderHistory(); renderPending(); applyPane(); }); A.memoSchedule.tick?.(); A.app?.refreshStats();
     if (completionFocus) { const ref = completionFocus.ref, t = A.memoSchedule.find(ref); if (t && doneFor(t, ref) !== completionFocus.before) { const cardEl = [...document.querySelectorAll('[data-mw-card]')].find(el => el.dataset.ref === JSON.stringify(ref)); const folded = cardEl?.closest('.mw-completed:not([open])'); (folded?.querySelector('summary') || cardEl?.querySelector('[data-mw="complete"]'))?.focus({ preventScroll: true }); completionFocus = null; } }
@@ -164,7 +164,7 @@
   function historyRow(x) {
     const t = x.task, day = x.day || x.ref.day, list = x.list || x.ref.list;
     const status = t.memoMovedTo ? '已重新安排' : t.memoDismissed ? '未完成 · 不再安排' : t.done || t.doneAt ? (t.backfillDay ? (t.backfillDay <= t.originalDay ? '补记按时完成' : '补记延期完成') : t.originalDay ? '延期完成' : '已完成') : '未完成';
-    return '<article class="mw-history-row"><strong>' + esc(t.text) + '</strong><p>' + esc(day + ' · ' + names[list] + ' · ' + status + (status === '未完成' ? (day < S().data().memoFlow?.startedDay ? ' · 旧任务，待安排' : list !== 'required' ? ' · 待重新安排' : '') : '')) + '</p>' + (!t.memoMovedTo && !t.memoDismissed ? (t.done || t.doneAt ? button('open-day', '查看当天', refAttrs(Object.assign({}, x.ref, {day}))) : button('enqueue','暂不安排',refAttrs(x.ref)) + button('backfill', '补记完成', refAttrs(x.ref)) + button('assign', '重新安排', refAttrs(x.ref)) + button('dismiss', '不再安排', refAttrs(x.ref))) : t.memoDismissed ? button('restore-pending', '恢复待安排', refAttrs(x.ref)) : '') + '</article>';
+    return '<article class="mw-history-row" '+refAttrs(x.ref)+'><strong>' + esc(t.text) + '</strong><p>' + esc(day + ' · ' + names[list] + ' · ' + status + (status === '未完成' ? (day < S().data().memoFlow?.startedDay ? ' · 旧任务，待安排' : list !== 'required' ? ' · 待重新安排' : '') : '')) + '</p>' + (!t.memoMovedTo && !t.memoDismissed ? (t.done || t.doneAt ? button('open-day', '查看当天', refAttrs(Object.assign({}, x.ref, {day}))) : button('assign', '重新安排', refAttrs(x.ref)) + '<details class="mw-row-more"><summary>更多</summary><div class="mw-secondary-actions">' + button('backfill','补记完成',refAttrs(x.ref))+button('edit','编辑',refAttrs(x.ref))+button('enqueue','暂不安排',refAttrs(x.ref))+button('dismiss','不再安排',refAttrs(x.ref))+'</div></details>') : t.memoDismissed ? button('restore-pending', '恢复待安排', refAttrs(x.ref)) : '') + '</article>';
   }
   function backlog() {
     const rows = datedTasks().filter(x => (x.day || x.ref.day) < M().userDay() && !x.task.done && !x.task.doneAt && !x.task.memoMovedTo && !x.task.memoDismissed);
@@ -172,7 +172,7 @@
   }
   function pendingRows(){return datedTasks().filter(x=>(x.day||x.ref.day)<M().userDay()&&!x.task.done&&!x.task.doneAt&&!x.task.memoMovedTo&&!x.task.memoDismissed);}
   function pendingHTML(){return pendingRows().map(historyRow).join('')||'<p class="hint">暂无需要重新安排的任务</p>';}
-  function waitingRow(t){const ref={kind:'queue',id:t.id},attrs=refAttrs(ref);return '<article class="mw-history-row"><strong>'+esc(t.text)+'</strong><div class="mw-waiting-actions">'+button('assign','安排日期',attrs)+button('complete','直接完成',attrs)+'</div><details><summary>计时与更多</summary>'+A.memoSchedule.rowControls(ref)+(t.note?'<p>'+esc(t.note)+'</p>':'')+button('edit','编辑',attrs)+button('pin',t.pinned?'取消置顶':'置顶',attrs)+button('up','上移',attrs)+button('down','下移',attrs)+button('dismiss','不再安排',attrs)+'</details></article>';}
+  function waitingRow(t){const ref={kind:'queue',id:t.id},attrs=refAttrs(ref);return '<article class="mw-history-row" '+attrs+'><strong>'+esc(t.text)+'<small class="mw-score">+'+Math.max(0,Number(t.points??S().settings().queuePoints??5))+'分</small>'+'</strong><div class="mw-waiting-actions">'+button('assign','安排',attrs)+'</div><details><summary>更多</summary><div class="mw-secondary-actions">'+button('complete','直接完成',attrs)+A.memoSchedule.rowControls(ref)+(t.note?'<p>'+esc(t.note)+'</p>':'')+button('edit','编辑',attrs)+button('pin',t.pinned?'取消置顶':'置顶',attrs)+button('up','上移',attrs)+button('down','下移',attrs)+button('dismiss','不再安排',attrs)+'</div></details></article>';}
   function renderPending(){const nav=document.querySelector('[data-mw-pane="queue"]');if(nav)nav.textContent='待安排 '+(pendingRows().length+sortedQueue().filter(t=>!t.assignment&&!t.memoDismissed).length);}
 
   let historyFrom = '', historyTo = '', historyStatus = '', historyList = '';
@@ -186,14 +186,10 @@
   function assignmentEditor(ref) {
     if (A.memoActions.busy()) return A.ui.toast('请先重试保存当前操作');
     const t = A.memoSchedule.find(ref); if (!t) return;
-    const m = A.ui.openModal('安排 · ' + t.text, '<label>日期<input type="date" id="ma-day" value="'+M().userDay()+'"></label><label>栏目<select id="ma-list">'+Object.entries(names).map(([k,v])=>'<option value="'+k+'">'+v+'</option>').join('')+'</select></label><p class="hint">同一任务只完成、奖励一次。必做按整组奖励；理想和一次性拓展使用任务分值。原计划与执行记录保留，新的具体时间请重新安排。</p><p id="ma-error" role="alert"></p>', '<button class="btn" data-act="cancel">关闭</button><button class="btn" data-act="queue">放回队列</button>' + (t.overdueEventId ? '<button class="btn" data-act="forgive">纠正错误扣分</button>' : '') + '<button class="btn btn-primary" data-act="save">安排</button>', {lock:true});
-    m.querySelector('#ma-list').value = t.assignment?.list || ref.list || 'ideal';
-    async function save(b, target) { b.disabled=true; try { if(await A.memoActions.commit(()=>A.memoFlow.moveCore(ref,m.querySelector('#ma-day').value,m.querySelector('#ma-list').value,target))) { A.ui.closeModal(); render(); A.memoSchedule.render(); } } catch(e) { m.querySelector('#ma-error').textContent=e.message; if(A.memoActions.busy()) b.textContent='重试保存'; } finally {b.disabled=false;} }
-    A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},save:b=>save(b,'task'),queue:b=>save(b,'queue'),forgive:()=>{
-      if(A.memoActions.busy())return;
-      const reason=document.createElement('input'); reason.id='ma-reason'; reason.placeholder='说明实际按时完成或错误原因'; m.querySelector('#ma-error').before(reason);
-      const b=m.querySelector('[data-act="forgive"]'); b.textContent='确认纠正'; b.onclick=async()=>{try{if(await A.memoActions.commit(()=>A.memoFlow.forgiveCore(ref,reason.value))){A.ui.closeModal();render();A.app.refreshStats();}}catch(e){m.querySelector('#ma-error').textContent=e.message;}};
-    }});
+    const m = A.ui.openModal('安排 · '+t.text, '<p id="ma-target">安排到今天 · '+M().userDay()+'</p><div class="mw-assign-choices">'+['required','ideal','extra'].map((list,i)=>'<button class="btn" data-act="pick" data-list="'+list+'">'+['必做','理想','长期'][i]+'</button>').join('')+'</div><details><summary>更多设置</summary><label>安排日期<input type="date" id="ma-day" value="'+M().userDay()+'"></label><p>具体时间与预计用时</p>'+'<button class="btn" data-act="time-settings">安排时间与预计用时</button><button class="btn" data-act="edit-task">编辑名称、备注与积分</button><button class="btn" data-act="queue">暂不安排</button>'+(t.overdueEventId?'<button class="btn" data-act="forgive">纠正错误扣分</button>':'')+'</details><p id="ma-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button>', {lock:true});
+    const date=m.querySelector('#ma-day');date.oninput=()=>{m.querySelector('#ma-target').textContent='安排到 '+date.value;};
+    async function save(b,target,list){if(A.memoActions.busy())return;const buttons=m.querySelectorAll('[data-act="pick"],[data-act="queue"]');buttons.forEach(x=>x.disabled=true);try{if(await A.memoActions.commit(()=>A.memoFlow.moveCore(ref,date.value,list||t.assignment?.list||ref.list||'ideal',target))){A.ui.closeModal();render();A.memoSchedule.render();A.ui.toast('已安排');}}catch(e){m.querySelector('#ma-error').textContent=e.message;}finally{buttons.forEach(x=>x.disabled=false);}}
+    A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},pick:b=>save(b,'task',b.dataset.list),queue:b=>save(b,'queue'),'time-settings':()=>{if(!A.memoActions.busy()){A.ui.closeModal();A.memoSchedule.arrange(ref);}},'edit-task':()=>{if(!A.memoActions.busy()){A.ui.closeModal();editor(ref);}},forgive:()=>{if(A.memoActions.busy()||m.querySelector('#ma-reason'))return;const reason=document.createElement('input');reason.id='ma-reason';reason.placeholder='说明错误原因';m.querySelector('#ma-error').before(reason);const b=m.querySelector('[data-act="forgive"]');b.textContent='确认纠正';b.onclick=async()=>{try{if(await A.memoActions.commit(()=>A.memoFlow.forgiveCore(ref,reason.value))){A.ui.closeModal();render();A.app.refreshStats();}}catch(e){m.querySelector('#ma-error').textContent=e.message;}};}});
   }
 
   function renderReview(day) {
