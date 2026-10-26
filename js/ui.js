@@ -61,13 +61,15 @@
     mask.className = 'modal-mask';
     mask.innerHTML =
       '<div class="modal">' +
-      (title ? '<h3>' + title + '</h3>' : '') +
+      (title ? '<h3 class="modal-heading"></h3>' : '') +
       '<div class="modal-body">' + (bodyHTML || '') + '</div>' +
       '<div class="modal-actions">' + (actionsHTML || '') + '</div>' +
       (opts.rechoose ? '<button class="rechoose-btn" data-act="rechoose">重新选择</button>' : '') +
       '</div>';
     root.appendChild(mask);
     const modal = mask.querySelector('.modal');
+    // The title is plain text, including task names originating from imported data.
+    if (title) modal.querySelector('.modal-heading').textContent = String(title);
     // 宽弹窗（公告/长内容用）
     if (opts.wide) modal.style.maxWidth = '680px';
     // 右上角 ✕ 关闭按钮
