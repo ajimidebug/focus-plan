@@ -1029,3 +1029,89 @@ test('archiving a penalty habit pauses deductions and restoring never back-charg
   assert.equal(b.S.pointsTotal(),-6);
   assert.equal(P.settleCore(now),0);
 });
+
+
+test('173 individual streak stays half, then three-quarter, then full, respecting 99 reward punches',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);
+ vm.runInContext(source('js/memo-economy.js'),b.ctx);
+ const E=b.ctx.App.memoEconomy;E.enableCore(Date.parse('2026-10-27T10:00:00+08:00'));
+ const h={id:'repeat',points:10,target:1,rewardLimit:99,days:{}};
+ const M=b.ctx.App.memoCore,start='2026-10-28';
+ assert.equal(E.quote(h,start).total,5);
+ h.days[start]=1;
+ assert.equal(E.quote(h,'2026-10-29').total,5);
+ h.days['2026-10-29']=1;
+ assert.equal(E.quote(h,'2026-10-30').total,7.5);
+ for(let i=30;i<=31;i++)h.days['2026-10-'+i]=1;
+ for(let i=1;i<=2;i++)h.days['2026-11-0'+i]=1;
+ assert.equal(E.quote(h,'2026-11-03').total,10);
+ h.days['2026-11-03']=1;
+ assert.equal(E.quote(h,'2026-11-05').total,5,'a missed day resets the rate');
+ h.days['2026-11-05']=1;
+ assert.equal(E.quote(h,'2026-11-05').total,5);
+ h.days['2026-11-05']=98;
+ assert.equal(E.quote(h,'2026-11-05').total,5);
+ h.days['2026-11-05']=99;
+ assert.equal(E.quote(h,'2026-11-05').total,0);
+});
+test('173 monthly interest settles once, uses partial first month and does not rewrite after late backfill',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);
+ vm.runInContext(source('js/memo-economy.js'),b.ctx);
+ const E=b.ctx.App.memoEconomy,d=b.S.data();
+ d.ledger.push({id:'old',type:'adjust',points:100,at:'2026-10-25T04:00:00Z'});
+ E.enableCore(Date.parse('2026-10-27T10:00:00+08:00'));
+ assert.equal(E.state().startedDay,'2026-10-28');
+ d.ledger.push({id:'spent',type:'redeem',points:-50,at:'2026-10-29T10:00:00+08:00'});
+ const at=Date.parse('2026-11-01T04:00:00+08:00');
+ assert.equal(E.hasPending(at),true);
+ assert.equal(E.settleCore(at),1);
+ assert.equal(E.state().settlements[0].positive,0.16);
+ assert.equal(E.settleCore(at),0);
+ assert.equal(E.state().settlements.length,1);
+ assert.equal(b.S.pointsTotal(),50.16);
+ d.ledger.push({id:'late',date:'2026-10-28',type:'earn-checkin',points:1000,at:'2026-11-03T10:00:00+08:00'});
+ assert.equal(E.state().settlements[0].positive,0.16);
+ assert.equal(E.balanceAt(Date.parse('2026-11-01T04:00:00+08:00')),50.16);
+ await b.S.save();const recovered=browser({shared:b});await recovered.S.load();
+ assert.equal(recovered.S.data().memoEconomy.settlements.length,1);
+});
+test('173 negative interest charges four percent per month with no amount cap',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);vm.runInContext(source('js/memo-economy.js'),b.ctx);
+ const E=b.ctx.App.memoEconomy;b.S.data().ledger.push({id:'debt',points:-1000,at:'2026-10-25T00:00:00Z'});
+ E.enableCore(Date.parse('2026-10-27T10:00:00+08:00'));
+ E.settleCore(Date.parse('2026-11-01T04:00:00+08:00'));
+ assert.equal(E.state().settlements[0].negative,-5.16);
+ assert.equal(b.S.pointsTotal(),-1005.16);
+});
+test('173 cancellation adds a compensating ledger entry and preserves the original after bank activation',async()=>{
+ const b=browser();await b.S.load();const {A}=actionHarness(b);
+ vm.runInContext(source('js/memo-economy.js'),b.ctx);
+ b.ctx.App.memoEconomy.enableCore(Date.parse('2026-10-18T10:00:00+08:00'));
+ b.S.data().checkins=[{id:'h',text:'check',target:1,points:7,days:{}}];
+ const event=A.completeCore({kind:'checkin',id:'h',day:'2026-10-19',title:'check'},'记录',actionAt);
+ assert.equal(b.S.pointsTotal(),14);
+ A.undoCore(event.id,'误点','2026-10-20T09:00:00Z');
+ assert.equal(b.S.pointsTotal(),0);
+ assert.equal(b.S.data().ledger.length,2);
+ assert.equal(b.S.data().ledger[0].points,14);
+ assert.equal(b.S.data().ledger[1].points,-14);
+ assert.match(b.S.data().ledger[1].operationId,/undo-event/);
+});
+test('173 malformed bank and duplicate settled month are rejected by backup validator',async()=>{
+ const b=browser();await b.S.load();const d=copy(b.S.data());
+ d.memoEconomy={version:1,startedDay:'2026-10-27',enabledAt:'2026-10-27T00:00:00Z',
+  openingBalance:10,positiveRate:.02,negativeRate:.04,settlements:[
+  {month:'2026-10',positive:1,negative:0,effectiveAt:'2026-11-01T00:00:00Z',postedAt:'2026-11-01T01:00:00Z'},
+  {month:'2026-10',positive:1,negative:0,effectiveAt:'2026-11-01T00:00:00Z',postedAt:'2026-11-01T01:00:00Z'}]};
+ assert.equal(b.S.validate(d),false);
+});
+test('173 supervised bad habit appears in a three-column plan but is never completed',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b),day=b.ctx.App.memoCore.userDay();
+ b.ctx.App.memoPenalty={policy:()=>({mode:'punch',amount:7})};
+ b.ctx.App.checkin={memoPoints:()=>-7};
+ b.S.data().checkins=[{id:'b',text:'刷视频',target:0,points:0,days:{[day]:3}}];
+ b.S.data().memoHabitPlans=[{id:'p',habitId:'b',mode:'daily',from:day,list:'required',target:1}];
+ assert.match(F.planned(day,'required',false),/刷视频/);
+ assert.match(F.planned(day,'required',false),/-7分/);
+ assert.equal(F.planned(day,'required',true),'');
+});
