@@ -263,6 +263,25 @@
           x.sessions.some(e => !e.ref || typeof e.ref !== 'object'))
         throw new Error('时间线关联结构异常');
     }
+    if (clean.memoHabitPenalties !== undefined &&
+        (!Array.isArray(clean.memoHabitPenalties) || clean.memoHabitPenalties.some(x => !x ||
+          typeof x.habitId !== 'string' || typeof x.day !== 'string' ||
+          !['penalized','refunded'].includes(x.status) ||
+          !Number.isSafeInteger(x.amount) || x.amount < 0 || !Array.isArray(x.entries)))) {
+      throw new Error('习惯扣分流水结构异常');
+    }
+    (clean.checkins || []).forEach(it => {
+      if (!it || typeof it !== 'object') throw new Error('打卡项结构异常');
+      const policies = it.memoPenaltyPolicies;
+      if (policies !== undefined && (!Array.isArray(policies) || policies.some(p => !p ||
+          !['reward','miss','punch'].includes(p.mode) ||
+          !Number.isSafeInteger(p.amount) || p.amount < 0 || p.amount > 10000 ||
+          !Number.isSafeInteger(p.target) || p.target < 0 || p.target > 10000 ||
+          typeof p.from !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(p.from) ||
+          (p.until && (typeof p.until !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(p.until)))))) {
+        throw new Error('习惯奖惩设置结构异常');
+      }
+    });
     return clean;
   }
   async function load() {
