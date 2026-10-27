@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feat-173-economy-ledger-20261027]
+    branches: [main, fix-173.1-float-memo-ledger-20261027]
   workflow_dispatch:
 
 permissions:
@@ -40,8 +40,8 @@ jobs:
   prepare-release:
     needs: check
     if: >
-      (github.event_name == 'push' && github.ref == 'refs/heads/feat-173-economy-ledger-20261027') ||
-      (github.event_name == 'pull_request' && github.head_ref == 'feat-173-economy-ledger-20261027')
+      (github.event_name == 'push' && github.ref == 'refs/heads/fix-173.1-float-memo-ledger-20261027') ||
+      (github.event_name == 'pull_request' && github.head_ref == 'fix-173.1-float-memo-ledger-20261027')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -54,8 +54,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Prepare final 173.0.0 release assets
-        run: node scripts/prepare-release.mjs 173.0.0
+      - name: Prepare final 173.1.0 release assets
+        run: node scripts/prepare-release.mjs 173.1.0
       - name: Verify exact release artifact before upload
         run: node scripts/check-release.mjs
       - name: Commit only verified release assets to the review branch
@@ -63,5 +63,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html sw.js version.json js/
-          git diff --cached --quiet || git commit -m "build: prepare verified 173.0.0 release artifacts [skip ci]"
-          git push origin HEAD:feat-173-economy-ledger-20261027
+          git diff --cached --quiet || git commit -m "build: prepare verified 173.1.0 release artifacts [skip ci]"
+          git push origin HEAD:fix-173.1-float-memo-ledger-20261027

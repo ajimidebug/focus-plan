@@ -2334,3 +2334,62 @@ body[data-theme="purple"] :is(#checkin-view .ck-row,.habit-plan-row,.task-habit-
 .habit-plan-row[data-habit-kind="punch"].habit-plan-done{opacity:1;background:#fff0ee;}
 .memo-bank{margin:12px 0;border-top:3px solid var(--primary);padding:14px;}
 .memo-bank p{line-height:1.6;overflow-wrap:anywhere;}
+
+/* 173.1: make actual timer action prominent; do not make edit-save accidentally primary. */
+.mw-task .mw-timer-control>[data-schedule-command],
+.mw-task .mw-timer-control>.btn,
+.mw-task .mw-timer-control>button[data-schedule-command="start"],
+.mw-task .mw-timer-control>button[data-schedule-command="pause"]{
+  min-height:44px;padding:9px 13px;border-radius:10px;
+  background:var(--primary);color:#fff;border:1px solid var(--primary);font-size:14px;font-weight:700;
+}
+.mw-task .mw-timer-control{max-width:none;min-width:0;}
+.mw-task .schedule-row-tools{grid-template-columns:minmax(0,1fr) minmax(128px,auto);}
+.modal-actions:has(.mw-save-start) .mw-save-start{background:var(--primary)!important;color:#fff!important;border:1px solid var(--primary)!important;font-weight:700;min-height:44px;flex:1 1 52%;}
+.modal-actions:has(.mw-save-start)>[data-act="save"]{background:var(--card);color:var(--ink);border:1px solid var(--line);flex:0 1 auto;}
+/* Floater must not make a full fixed invisible rectangle block memo text selection. */
+body[data-view="memo"] #mw-live,body[data-view="memo-history"] #mw-live{pointer-events:none;}
+body[data-view="memo"] #mw-live :is(button,summary),body[data-view="memo-history"] #mw-live :is(button,summary){pointer-events:auto;}
+#mw-live #float-meter{display:flex;flex-direction:column;gap:5px;width:100%;min-width:0;}
+#mw-live #float-meter[hidden]{display:none!important;}
+#mw-live .float-meter-track{height:9px;background:rgba(70,91,117,.2);border-radius:999px;overflow:hidden;}
+#mw-live .float-meter-fill,#mw-live .float-meter-mini-fill{display:block;height:100%;width:0;background:#2b7e70;border-radius:999px;transition:width .35s linear,background-color .2s ease;}
+#mw-live .float-meter-text{font-size:11px;font-weight:600;color:#23485e;overflow-wrap:anywhere;}
+#mw-live.float-overtime .float-meter-fill,#mw-live.float-overtime .float-meter-mini-fill{background:#c64c43;}
+#mw-live.float-overtime .float-meter-text{color:#a6312b;}
+#mw-live .float-meter-mini{display:block;grid-column:1 / -1;grid-row:3;height:4px;background:rgba(70,91,117,.2);border-radius:999px;overflow:hidden;width:100%;}
+#mw-live .float-meter-mini[hidden]{display:none!important;}
+#mw-live.float-collapsed .float-meter-mini{display:block;}
+#mw-live.float-collapsed .float-meter-mini[hidden]{display:none!important;}
+#mw-live.float-collapsed .float-toggle{display:grid;grid-template-columns:minmax(0,1fr) 20px;grid-template-rows:auto auto 4px;white-space:normal;gap:3px;align-items:center;}
+#mw-live.float-collapsed .float-name{grid-column:1;grid-row:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#mw-live.float-collapsed .float-clock{grid-column:1;grid-row:2;}
+#mw-live.float-collapsed .float-arrow{grid-column:2;grid-row:1 / 3;}
+#mw-live:not(.float-collapsed) #float-estimate{display:block;font-size:11px;color:var(--ink);overflow-wrap:anywhere;}
+#mw-live:not(.float-collapsed) .float-meter-mini{display:none;}
+body #mw-live.float-editor-focus{opacity:.88;}
+/* Wrap score metadata within three genuinely narrow columns, never across column edges. */
+.habit-plan-row{min-width:0;max-width:100%;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);gap:3px;align-content:start;}
+.habit-plan-row>.habit-plan-title,.habit-plan-row>.habit-plan-meta{display:block;min-width:0;width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word;}
+.habit-plan-row>.habit-plan-meta{display:flex;flex-wrap:wrap;gap:2px 5px;align-items:baseline;font-size:11px;line-height:1.35;}
+.habit-plan-row>.habit-plan-meta strong{font-variant-numeric:tabular-nums;font-size:12px;}
+.mw-overview .habit-plan-row{display:grid;grid-template-columns:minmax(0,1fr);padding:6px 5px;}
+.mw-overview .habit-plan-row>.habit-plan-meta{display:flex;}
+@media(max-width:370px){
+  .mw-task .schedule-row-tools{grid-template-columns:minmax(0,1fr);}
+  .mw-task .mw-timer-control{justify-content:stretch;}
+  .mw-task .mw-timer-control>button[data-schedule-command]{flex:1;}
+}
+@media(prefers-reduced-motion:reduce){#mw-live .float-meter-fill,#mw-live .float-meter-mini-fill{transition:none;}}
+
+.memo-bank-export{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.memo-bank-export .btn{min-height:44px;flex:1 1 150px;white-space:normal;}
+.habit-plan-row>.habit-plan-meta small{max-width:100%;white-space:normal;overflow-wrap:anywhere;}
+.habit-plan-row>.habit-plan-title{font-weight:600;}
+
+/* Mobile bank action must be scrollable past sticky header/nav and the timer. */
+#view-checkin{padding-bottom:max(200px,35dvh);}
+#view-checkin .memo-bank-export{scroll-margin-top:145px;scroll-margin-bottom:145px;}
+#view-checkin .memo-bank-export .btn{scroll-margin-top:145px;scroll-margin-bottom:145px;}
+body[data-view="checkin"] #mw-live{pointer-events:none;}
+body[data-view="checkin"] #mw-live :is(button,summary){pointer-events:auto;}

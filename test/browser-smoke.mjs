@@ -102,6 +102,56 @@ try {
       await page.waitForFunction(()=>App.store.data().checkins[0]?.text==='排序第二项目');
       assert.equal(await page.evaluate(()=>App.store.data().checkins[0].text),'排序第二项目');
 
+      // Floating timer: progress is cumulative, overrun is visible, memo remains editable.
+      await page.evaluate(()=>{
+        const it=App.store.data().checkins.find(x=>x.text==='负积分浏览器测试');
+        it.estimatedMinutes=40;
+        const day=App.memoCore.userDay();
+        const session=App.memoSchedule.startRef({kind:'checkin',id:it.id,day});
+        session.chunks.at(-1).start=Date.now()-26*60000;
+        App.memoSchedule.tick();
+      });
+      await page.locator('#mw-live [data-float-toggle]').click();
+      await page.waitForSelector('#mw-live #float-meter:not([hidden])');
+      assert.match(await page.locator('#float-meter .float-meter-text').innerText(),/65%/);
+      assert.equal(await page.locator('#mw-live.float-overtime').count(),0);
+      await page.evaluate(()=>App.app.switchView('memo'));
+      const editor=page.locator('#memo-editor');
+      await editor.click({position:{x:20,y:30}});
+      await page.keyboard.type('focus memo under floating timer', {delay:5});
+      assert.match(await editor.innerText(),/focus memo under floating timer/);
+      assert.equal(await page.evaluate(()=>document.activeElement?.id),'memo-editor');
+      const focusState=await page.evaluate(()=>({
+        folded:document.querySelector('#mw-live').classList.contains('float-collapsed'),
+        pointer:getComputedStyle(document.querySelector('#mw-live')).pointerEvents,
+        active:App.memoSchedule.state().sessions.some(s=>s.status==='running')
+      }));
+      assert.equal(focusState.folded,true,'memo editing temporarily compacts float');
+      assert.equal(focusState.pointer,'none','floating background does not steal memo touches');
+      assert.equal(focusState.active,true,'memo focus never pauses the running session');
+      await page.evaluate(()=>{
+        const live=App.memoSchedule.state().sessions.find(s=>s.status==='running');
+        live.chunks.at(-1).start=Date.now()-52*60000;
+        App.memoSchedule.tick();
+      });
+      assert.equal(await page.locator('#mw-live.float-overtime').count(),1);
+      assert.match(await page.locator('#float-meter .float-meter-text').innerText(),/超时/);
+      await page.evaluate(()=>App.app.switchView('checkin'));
+      await page.waitForSelector('.memo-bank [data-finance-export]');
+      const exportInfo=await page.evaluate(()=>({
+        count:document.querySelectorAll('[data-finance-export]').length,
+        audit:App.memoFinance.auditPayload(),
+        ledger:App.store.data().ledger.reduce((n,e)=>n+(Number(e.points)||0),0)
+      }));
+      assert.equal(exportInfo.count>0,true,'CSV export is actually visible');
+      assert.equal(exportInfo.audit.schema,'focus-plan-points-audit/v1');
+      assert.equal(exportInfo.audit.balances.points,exportInfo.ledger);
+      await page.locator('.memo-bank [data-finance-export]').click();
+      await page.waitForSelector('#fe-text');
+      assert.equal(await page.locator('.modal [data-act="csv"]').count(),1);
+      await page.evaluate(()=>App.ui.closeModal());
+
+
     }
     await context.close();
   }
