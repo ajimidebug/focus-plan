@@ -28,7 +28,7 @@ try {
     const errors=[];
     page.on('pageerror',error=>errors.push(error.message));
     await page.goto(base+'/',{waitUntil:'domcontentloaded'});
-    await page.waitForFunction(()=>window.App?.store?.data()?.version===1 && !!window.App?.app?.switchView,{timeout:15000});
+    await page.waitForFunction(()=>window.App?.store?.data()?.version===1 && window.App?.app?.ready===true,{timeout:15000});
     await page.evaluate(()=>{document.querySelector('#demo-overlay')?.classList.add('hidden');App.app.switchView('tasks');App.memoWorkspace.showPane('today');});
     await page.waitForSelector('#mw-today .mw-toolbar',{timeout:15000});
     const result=await page.evaluate(()=>({
