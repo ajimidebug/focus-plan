@@ -2264,3 +2264,17 @@ body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-bounty=
 .modal[role="dialog"]:focus{outline:none;}
 @media (max-width:400px){.mw-overview-fold{padding:8px;}.mw-overview-fold .cal-cols{grid-template-columns:1fr!important;}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}}
+
+/* 171.0 task cards: keep high-frequency actions visible and disclose secondary ones. */
+details.mw-task-extras{display:block;margin-top:4px;min-width:0;}
+details.mw-task-extras>summary{font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;padding:7px 0;min-height:36px;}
+details.mw-task-extras .mw-task-secondary{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 0;}
+details.mw-task-extras .mw-task-secondary>details[open]{flex-basis:100%;}
+#stat-memo-execution .stat-value{font-variant-numeric:tabular-nums;}
+@media(max-width:480px){
+  #stat-bar{column-gap:11px;row-gap:5px;padding:7px 12px;}
+  #stat-bar .stat-item{gap:4px;min-width:0;}
+  #stat-bar .stat-label{font-size:11px;}
+  #stat-bar .stat-value{font-size:12px;}
+  .mw-task-secondary .btn{min-height:36px;}
+}
