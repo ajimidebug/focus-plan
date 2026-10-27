@@ -965,3 +965,54 @@ test('import validation rejects broken memo collections without replacing origin
   invalidQueue.queue = { id: 'not-an-array' };
   assert.equal(b.S.validate(invalidQueue), false);
 });
+
+
+test('habit missed-day penalty is prospective, at most once, and refunds exactly on backfill', async () => {
+  const b=browser(); await b.S.load();
+  memoHarness(b);
+  vm.runInContext(source('js/memo-penalty.js'), b.ctx);
+  const P=b.ctx.App.memoPenalty, d=b.S.data(), h={id:'sleep',text:'早睡',target:1,points:0,days:{}};
+  d.checkins=[h];
+  P.configure(h,'miss',5,1,'2026-10-20');
+  const before=Date.parse('2026-10-21T03:59:59+08:00'),after=Date.parse('2026-10-21T04:00:00+08:00');
+  assert.equal(P.hasPending(before),false);
+  assert.equal(P.hasPending(after),true);
+  assert.equal(P.settleCore(after),1);
+  assert.equal(b.S.pointsTotal(),-5);
+  assert.equal(P.settleCore(after),0);
+  assert.equal(d.ledger.filter(x=>x.type==='penalty-habit-miss').length,1);
+  h.days['2026-10-20']=1;
+  assert.equal(P.hasPending(after),true);
+  assert.equal(P.settleCore(after),1);
+  assert.equal(b.S.pointsTotal(),0);
+  assert.equal(P.settleCore(after),0);
+  delete h.days['2026-10-20'];
+  assert.equal(P.settleCore(after),1);
+  assert.equal(b.S.pointsTotal(),-5);
+  await b.S.save();
+  const reloaded=browser({shared:b}); await reloaded.S.load();
+  assert.equal(reloaded.S.pointsTotal(),-5);
+  assert.equal(reloaded.S.data().memoHabitPenalties.length,1);
+});
+test('bad habit negative punch uses the same event and can be undone without giving streak points', async () => {
+  const b=browser(); await b.S.load(); const {A}=actionHarness(b);
+  vm.runInContext(source('js/memo-penalty.js'), b.ctx);
+  const P=b.ctx.App.memoPenalty, h={id:'bad',text:'刷短视频',points:0,target:0,days:{}};
+  b.S.data().checkins=[h];
+  P.configure(h,'punch',7,0,'2026-10-19');
+  b.ctx.App.checkin.memoPoints=(item,day)=>P.policy(item,day).mode==='punch'?-P.policy(item,day).amount:0;
+  const e=A.completeCore({kind:'checkin',id:'bad',day:'2026-10-19',title:h.text},'',actionAt);
+  assert.equal(e.points,-7);
+  assert.equal(b.S.pointsTotal(),-7);
+  assert.equal(b.S.data().ledger.at(-1).type,'penalty-habit-punch');
+  A.undoCore(e.id,'误点',actionAt);
+  assert.equal(b.S.pointsTotal(),0);
+  assert.equal(h.days['2026-10-19'],undefined);
+});
+test('malformed penalty rules are rejected before restoring an old backup', async () => {
+  const b=browser(); await b.S.load();
+  const bad=copy(b.S.data());
+  bad.checkins=[{id:'h',text:'x',days:{},memoPenaltyPolicies:[{mode:'miss',amount:-5,target:1,from:'2026-10-20'}]}];
+  assert.equal(b.S.validate(bad),false);
+  assert.equal(b.S.restoreFrom(bad),false);
+});
