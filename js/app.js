@@ -16,7 +16,7 @@
     const day = S().getDay(dayKey);
     // 📋 v82：队列实体化的副本不进统计 —— 不给队列制造「0/1」这种分母
     // 🧲 v105：来自「今天的基础任务」的副本也不算 —— 它跟队列当前条一个待遇（住在自己那一页）
-    const cnt = function (k, f) { const tasks = day.tasks[k].filter(t => !t.fromQueue && !t.fromDaily && !t.memoMovedTo && !t.memoDismissed && !t.memoProjectId); if (window.__MEMO_MODE) { (App.memoFlow?.assigned(dayKey,k) || []).forEach(t => tasks.push(Object.assign({},t,{done:!!t.doneAt}))); if(k==='extra') (S().data().memoProjects || []).filter(t=>!t.archived && (!t.createdDay || t.createdDay<=dayKey)).forEach(t=>tasks.push(Object.assign({},t,{done:!!t.days?.[dayKey]}))); } return tasks.filter(f).length; };
+    const cnt = function (k, f) { const tasks = day.tasks[k].filter(t => !t.fromQueue && !t.fromDaily && !t.memoMovedTo && !t.memoDismissed && !t.memoProjectId); if (window.__MEMO_MODE) { (App.memoFlow?.assigned(dayKey,k) || []).forEach(t => tasks.push(Object.assign({},t,{done:!!t.doneAt}))); (S().data().memoProjects || []).filter(t=>!t.archived && (!t.createdDay || t.createdDay<=dayKey) && (t.memoCategoryDays?.[dayKey] || 'extra')===k).forEach(t=>tasks.push(Object.assign({},t,{done:!!t.days?.[dayKey]}))); } return tasks.filter(f).length; };
     document.getElementById('stat-req').textContent = cnt('required', function (t) { return t.done; }) + '/' + cnt('required', function () { return true; });
     document.getElementById('stat-ideal').textContent = cnt('ideal', function (t) { return t.done; }) + '/' + cnt('ideal', function () { return true; });
     document.getElementById('stat-extra').textContent = cnt('extra', function (t) { return t.done; }) + '/' + cnt('extra', function () { return true; });
