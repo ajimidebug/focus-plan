@@ -6,28 +6,23 @@ function note(entry){if(entry.memoPassage)return;const day=M().userDay(),at=entr
 function rules(){return S().data().memoHabitPlans||[];}
 function plans(day){return (S().data().checkins||[]).flatMap(it=>{const all=rules().filter(r=>r.habitId===it.id&&r.from<=day&&(!r.until||day<r.until)&&(r.mode==='daily'||r.from===day));const once=all.filter(r=>r.mode==='once').at(-1),r=once||all.filter(r=>r.mode==='daily').sort((a,b)=>a.from.localeCompare(b.from)).at(-1);return r&&(!it.archived||day<(it.memoArchivedDay||M().userDay())||Number(it.days?.[day])>0)?[{it,r,n:Number(it.days?.[day])||0}]:[];});}
 function planned(day,list,completed=null){
- return plans(day).filter(x=>{
-   if(x.r.hidden||x.r.list!==list)return false;
-   const bad=A.memoPenalty?.policy(x.it,day).mode==='punch';
-   const done=!bad&&(x.r.target>0?x.n>=x.r.target:x.n>0);
-   return completed===null||done===completed;
- }).sort((a,b)=>{
-   const badA=A.memoPenalty?.policy(a.it,day).mode==='punch',
-     badB=A.memoPenalty?.policy(b.it,day).mode==='punch';
-   const doneA=!badA&&(a.r.target>0?a.n>=a.r.target:a.n>0),
-     doneB=!badB&&(b.r.target>0?b.n>=b.r.target:b.n>0);
-   return Number(doneA)-Number(doneB);
- }).map(({it,r,n})=>{
-   const mode=A.memoPenalty?.policy(it,day).mode||'reward',bad=mode==='punch',
-     done=!bad&&(r.target>0?n>=r.target:n>0),quote=A.checkin?.memoPoints?.(it,day)??0,
-     points=bad?quote<0?quote:0:quote,
-     label=bad?'发生 '+n+'次':n+'/'+r.target+'次'+(done?' ✓':'');
-   return '<button type="button" class="habit-plan-row '+(done?'habit-plan-done':'')+
+ const goalDone=({it,r,n})=>A.memoPenalty?.policy(it,day).mode!=='punch'&&(r.target>0?n>=r.target:n>0);
+ const folded=x=>goalDone(x)&&x.n>=S().habitRules(x.it).rewardLimit;
+ return plans(day).filter(x=>!x.r.hidden&&x.r.list===list&&(completed===null||folded(x)===completed))
+ .sort((a,b)=>Number(folded(a))-Number(folded(b)))
+ .map(({it,r,n})=>{
+   const mode=A.memoPenalty?.policy(it,day).mode||'reward',bad=mode==='punch';
+   const done=!bad&&(r.target>0?n>=r.target:n>0);
+   const remaining=Math.max(0,S().habitRules(it).rewardLimit-n);
+   const quote=A.checkin?.memoPoints?.(it,day)??0;
+   const label=bad?'发生 '+n+'次':n+'/'+r.target+'次'+(done?' ✓已达标':'')+
+     (remaining?' · 可奖励 '+remaining+'次':' · 仅记录');
+   return '<button type="button" class="habit-plan-row '+(folded({it,r,n})?'habit-plan-done':done?'habit-plan-goal-done':'')+
      '" data-habit-kind="'+mode+'" data-bounty="'+!!A.memoOrganize?.bounty(Number(it.points)||0)+
      '" data-category="'+list+'" data-habit-punch="'+E(it.id)+'" data-habit-day="'+day+
      '"><span>'+E(it.text)+' <small>'+(bad?'坏习惯':mode==='miss'?'漏打卡':'打卡')+
      '</small>'+(A.memoOrganize?.badge(Number(it.points)||0)||'')+
-     '</span><span>'+label+' · '+(points>0?'+':'')+points+'分</span></button>';
+     '</span><span>'+label+' · '+(quote>0?'+':'')+quote+'分</span></button>';
  }).join('');
 }
 function panel(day){
