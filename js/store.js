@@ -412,7 +412,19 @@
   /** 撤销最近一条账本事件（用于"重新选择"） */
   function undoLastLedger(id) {
     const idx = data.ledger.findIndex(function (e) { return e.id === id; });
-    if (idx >= 0) { data.ledger.splice(idx, 1); save(); return true; }
+    if (idx >= 0) {
+      const source=data.ledger[idx];
+      if (App.memoEconomy?.state()) {
+        const operationId='legacy-undo:'+id;
+        if(data.ledger.some(x=>x.operationId===operationId))return false;
+        const at=new Date().toISOString();
+        data.ledger.push({id:uid(),operationId,date:App.memoCore.userDay(at),at,
+          type:'reverse-'+source.type,points:-(Number(source.points)||0),
+          leisure:-(Number(source.leisure)||0),taskId:source.taskId||'',
+          refundOf:id,note:'旧版操作冲正：'+(source.note||source.type)});
+      } else data.ledger.splice(idx,1);
+      save();return true;
+    }
     return false;
   }
 
