@@ -247,7 +247,7 @@
       const t=timing(r),session=t.session?.status!=='ended'?t.session:null;
       const command = (act, text) => '<button type="button" class="btn btn-small" data-schedule-command="' + act + '" data-schedule-ref="' + encoded + '"' + (session ? ' data-session-id="' + esc(session.id) + '"' : '') + '>' + text + '</button>';
       const stats=t.session?'<strong class="schedule-inline-status" data-task-timing="'+encoded+'">'+esc(timingText(t))+'</strong>':'';
-      return '<div class="schedule-row-tools"><span class="mw-plan-control">'+command('plan',summary||'安排时间')+'</span><span class="mw-timer-control">'+stats+(session?command(session.status==='running'?'pause':'start',session.status==='running'?'暂停':'继续')+'<details class="mw-session-menu"><summary>计时操作</summary>'+command('end','结束')+'</details>':isDone({ref:r})?'<small>已完成</small>':command('start','开始计时'))+'</span></div>';
+      return '<div class="schedule-row-tools"><span class="mw-plan-control">'+command('plan',summary||'安排时间')+'</span><span class="mw-timer-control">'+stats+(session?command(session.status==='running'?'pause':'start',session.status==='running'?'Ⅱ 暂停计时':'▶ 继续计时')+'<details class="mw-session-menu"><summary>计时操作</summary>'+command('end','结束')+'</details>':isDone({ref:r})?'<small>已完成</small>':command('start','▶ 开始计时'))+'</span></div>';
 
 
     } catch (_) { return '<small>时间安排暂不可用，请先备份</small>'; }
