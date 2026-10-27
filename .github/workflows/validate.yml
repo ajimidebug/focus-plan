@@ -37,3 +37,28 @@ jobs:
         run: |
           echo "Prepared artifacts are local to this runner."
           git status --short
+  prepare-release:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/audit-171-safety-20261027'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare final 171.0.0 release assets
+        run: node scripts/prepare-release.mjs 171.0.0
+      - name: Verify exact release artifact before upload
+        run: node scripts/check-release.mjs
+      - name: Commit only verified release assets to the review branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html sw.js version.json js/
+          git diff --cached --quiet || git commit -m "build: prepare verified 171.0.0 release artifacts [skip ci]"
+          git push origin HEAD:audit-171-safety-20261027
