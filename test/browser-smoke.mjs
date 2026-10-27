@@ -73,7 +73,7 @@ try {
       await page.locator('#ck-penalty-mode').selectOption('punch');
       await page.locator('#ck-penalty-points').fill('7');
       await page.locator('.modal [data-act="ok"]').click();
-      await page.waitForFunction(()=>App.store.data().checkins.some(x=>x.text==='负积分浏览器测试'));
+      await page.waitForFunction(()=>document.querySelector('#checkin-view')?.textContent.includes('负积分浏览器测试'),{timeout:15000});
       assert.equal(await page.evaluate(()=>App.memoPenalty.policy(App.store.data().checkins.find(x=>x.text==='负积分浏览器测试'),App.memoCore.userDay()).mode),'punch');
       assert.match(await page.locator('#checkin-view').innerText(),/-7分/);
     }
