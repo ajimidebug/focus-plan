@@ -44,7 +44,9 @@
         let day = p.from, count = 0;
         while (day <= yesterday && (!p.until || day < p.until)) {
           if (++count > 5000) throw new Error('习惯结算日期异常，请检查备份');
-          if (!it.archived || !it.memoArchivedDay || day < it.memoArchivedDay) callback(it, p, day);
+          const inactive = (it.memoPenaltyStops || []).some(x => x.from <= day && (!x.until || day < x.until));
+          const archivedNow = it.archived && (!it.memoArchivedDay || day >= it.memoArchivedDay);
+          if (!inactive && !archivedNow) callback(it,p,day);
           day = M().shiftDay(day, 1);
         }
       });
