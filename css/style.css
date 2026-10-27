@@ -2386,3 +2386,10 @@ body #mw-live.float-editor-focus{opacity:.88;}
 .memo-bank-export .btn{min-height:44px;flex:1 1 150px;white-space:normal;}
 .habit-plan-row>.habit-plan-meta small{max-width:100%;white-space:normal;overflow-wrap:anywhere;}
 .habit-plan-row>.habit-plan-title{font-weight:600;}
+
+/* Mobile bank action must be scrollable past sticky header/nav and the timer. */
+#view-checkin{padding-bottom:max(200px,35dvh);}
+#view-checkin .memo-bank-export{scroll-margin-top:145px;scroll-margin-bottom:145px;}
+#view-checkin .memo-bank-export .btn{scroll-margin-top:145px;scroll-margin-bottom:145px;}
+body[data-view="checkin"] #mw-live{pointer-events:none;}
+body[data-view="checkin"] #mw-live :is(button,summary){pointer-events:auto;}
