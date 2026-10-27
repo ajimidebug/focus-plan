@@ -54,11 +54,26 @@
       day.rewards.push({ kind: choice.kind, points, at: event.at, memoLedgerId: id, dependencies });
     });
   }
+  function withdrawLedger(predicate, reason, at = new Date().toISOString()) {
+    const d=S().data();
+    if (!App.memoEconomy?.state()) {
+      d.ledger=d.ledger.filter(l=>!predicate(l));
+      return;
+    }
+    d.ledger.filter(predicate).forEach(l=>{
+      const operationId='economic-reverse:'+l.id;
+      if (d.ledger.some(x=>x.operationId===operationId))return;
+      d.ledger.push({id:S().uid(),operationId,date:M().userDay(at),at,
+        type:'reverse-'+l.type,points:-(Number(l.points)||0),
+        leisure:-(Number(l.leisure)||0),taskId:l.taskId||'',
+        refundOf:l.id,note:reason||'撤销原次积分'});
+    });
+  }
   function withdrawRewards(dayKey) {
     const day = S().data().days[dayKey]; if (!day) return;
     const lost = (day.rewards || []).filter(r => { if (!r.memoLedgerId) return false; if (!r.dependencies) return !eligible(day, r.kind); const all = taskLists(day).flat(); return r.dependencies.some(id => !all.some(t => t.id === id && t.done)); });
     const ids = lost.map(r => r.memoLedgerId);
-    S().data().ledger = S().data().ledger.filter(l => !ids.includes(l.id));
+    withdrawLedger(l=>ids.includes(l.id),'关联整组奖励撤回');
     day.rewards = (day.rewards || []).filter(r => !ids.includes(r.memoLedgerId));
   }
   function completeCore(spec, text, at = new Date().toISOString(), choices = []) {
@@ -277,7 +292,7 @@
     const m = App.ui.openModal('取消旧记录', '<p>这条记录没有关联笔记，取消后保留原有文字。' + (entry ? '撤回原次积分 ' + entry.points + '。' : '没有可确认关联的积分，账目保留。') + '</p><label>取消原因（选填）</label><textarea id="memo-action-text" class="memo-action-text"></textarea><p id="memo-action-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">保留完成</button><button class="btn btn-danger" data-act="commit">确认取消</button>', { lock: true });
     bindCommit(m, () => {
-      if (entry) d.ledger = d.ledger.filter(l => l.id !== entry.id);
+      if (entry) withdrawLedger(l=>l.id===entry.id,'取消旧任务积分');
       if (spec.kind === 'task') { const task = d.days[spec.day].tasks[spec.list].find(t => t.id === spec.id); task.done = false; if (task.summary) task.summary.done = false; }
       else if (spec.kind === 'queue') { const i = d.queueDone.findIndex(t => t.id === spec.id); if (i < 0) throw new Error('任务已移动'); const it = d.queueDone.splice(i, 1)[0]; delete it.doneDay; delete it.doneAt; d.queue.unshift(it); }
       else { const it = (spec.kind === 'checkin' ? d.checkins : d.daily).find(t => t.id === spec.id); if (spec.kind === 'daily' || it.days[spec.day] <= 1) delete it.days[spec.day]; else it.days[spec.day]--; }
@@ -435,7 +450,7 @@
     else {
       // Only withdraw ledger rows whose legacy task ID, date and earning type are explicit.
       const types = spec.kind === 'queue' ? ['earn-queue'] : spec.list === 'ideal' ? ['earn-ideal'] : spec.list === 'extra' ? ['earn-extra'] : [];
-      d.ledger = d.ledger.filter(l => !(l.taskId === spec.id && l.date === (spec.day || payload.doneDay) && types.includes(l.type)));
+      withdrawLedger(l=>l.taskId === spec.id && l.date === (spec.day || payload.doneDay) && types.includes(l.type),'删除任务撤回旧积分',at);
     }
     App.memoSchedule?.stopRef(canonical, Date.parse(at), true);
     if (canonical.kind === 'queue') {
