@@ -1016,3 +1016,16 @@ test('malformed penalty rules are rejected before restoring an old backup', asyn
   assert.equal(b.S.validate(bad),false);
   assert.equal(b.S.restoreFrom(bad),false);
 });
+
+test('archiving a penalty habit pauses deductions and restoring never back-charges inactive days', async () => {
+  const b=browser(); await b.S.load(); memoHarness(b);
+  vm.runInContext(source('js/memo-penalty.js'),b.ctx);
+  const P=b.ctx.App.memoPenalty, h={id:'s',text:'早睡',points:0,target:1,days:{},
+    memoPenaltyStops:[{from:'2026-10-21',until:'2026-10-23'}]};
+  b.S.data().checkins=[h]; P.configure(h,'miss',3,1,'2026-10-20');
+  const now=Date.parse('2026-10-24T04:00:00+08:00');
+  assert.equal(P.settleCore(now),2);
+  assert.deepEqual(Array.from(b.S.data().ledger.map(e=>e.date)),['2026-10-20','2026-10-23']);
+  assert.equal(b.S.pointsTotal(),-6);
+  assert.equal(P.settleCore(now),0);
+});
