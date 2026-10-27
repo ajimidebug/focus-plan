@@ -76,6 +76,31 @@ try {
       await page.waitForFunction(()=>document.querySelector('#checkin-view')?.textContent.includes('负积分浏览器测试'),{timeout:15000});
       assert.equal(await page.evaluate(()=>App.memoPenalty.policy(App.store.data().checkins.find(x=>x.text==='负积分浏览器测试'),App.memoCore.userDay()).mode),'punch');
       assert.match(await page.locator('#checkin-view').innerText(),/-7分/);
+      const id=await page.evaluate(()=>App.store.data().checkins.find(x=>x.text==='负积分浏览器测试').id);
+      await page.evaluate(id=>App.memoFinance.arrange(id),id);
+      await page.locator('.modal [data-mode="daily"]').click();
+      await page.locator('.modal [data-act="save"][data-list="required"]').click();
+      await page.waitForFunction(id=>App.memoFinance.plans(App.memoCore.userDay()).some(x=>x.it.id===id && x.r.list==='required'),id);
+      await page.evaluate(()=>{App.app.switchView('tasks');App.memoWorkspace.showPane('today');});
+      await page.waitForSelector('.mw-overview .habit-plan-row[data-habit-kind="punch"]');
+      assert.match(await page.locator('.mw-overview .habit-plan-row[data-habit-kind="punch"]').innerText(),/-7分/);
+      assert.notEqual(await page.locator('.mw-overview .habit-plan-row[data-habit-kind="punch"]').evaluate(el=>getComputedStyle(el).backgroundImage),'none');
+      await page.evaluate(id=>App.memoFinance.arrange(id),id);
+      await page.locator('.modal [data-mode="daily"]').click();
+      await page.locator('.modal [data-act="save"][data-list="ideal"]').click();
+      await page.waitForFunction(id=>App.memoFinance.plans(App.memoCore.userDay()).some(x=>x.it.id===id && x.r.list==='ideal'),id);
+      assert.equal(await page.evaluate(id=>App.memoFinance.plans(App.memoCore.userDay()).filter(x=>x.it.id===id).length,id),1);
+      assert.equal(await page.locator('.mw-overview [data-overview-list="required"] .habit-plan-row[data-habit-kind="punch"]').count(),0);
+      await page.evaluate(()=>App.app.switchView('checkin'));
+      await page.locator('#checkin-view [data-act="ck-add"]').first().click();
+      await page.locator('#ck-text').fill('排序第二项目');
+      await page.locator('.modal [data-act="ok"]').click();
+      await page.waitForFunction(()=>App.store.data().checkins.some(x=>x.text==='排序第二项目'));
+      await page.locator('#checkin-view [data-act="ck-info"]').filter({hasText:'排序第二项目'}).first().click();
+      await page.locator('.modal [data-act="ck-up"]').click();
+      await page.waitForFunction(()=>App.store.data().checkins[0]?.text==='排序第二项目');
+      assert.equal(await page.evaluate(()=>App.store.data().checkins[0].text),'排序第二项目');
+
     }
     await context.close();
   }
