@@ -77,7 +77,7 @@
     const d = state(), k = key(ref); d.sessions.filter(s => key(s.ref) === k && s.status !== 'ended').forEach(s => stopSession(s, now));
     if (deleted) d.items.filter(p => key(p.ref) === k).forEach(p => { p.deleted = true; });
   }
-  function isDone(item) { const found = resolve(item.ref); if (!found) return false; const t = found.task, r = found.ref; return r.kind==='checkin'?Number(t.days?.[r.day]||0)>=(App.memoFinance?.plans(r.day).find(x=>x.it.id===t.id)?.r.target||S().habitRules(t).target):r.kind === 'queue' ? !!(t.doneAt || t.doneDay) : (r.kind === 'daily' || r.kind === 'project') ? !!t.days?.[r.day] : !!t.done; }
+  function isDone(item) { const found = resolve(item.ref); if (!found) return false; const t = found.task, r = found.ref; return r.kind==='checkin'?Number(t.days?.[r.day]||0)>=Math.max(1,App.memoFinance?.plans(r.day).find(x=>x.it.id===t.id)?.r.target??S().habitRules(t).target):r.kind === 'queue' ? !!(t.doneAt || t.doneDay) : (r.kind === 'daily' || r.kind === 'project') ? !!t.days?.[r.day] : !!t.done; }
   function savePlan(input, id) {
     summaryCache = null;
     const d = state();
