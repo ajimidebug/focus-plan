@@ -1130,3 +1130,37 @@ test('173 legacy ledger undo posts one current-date reversal after bank activati
  assert.equal(b.S.undoLastLedger('prior'),false);
  assert.equal(d.ledger.length,2);
 });
+
+
+test('173 deleting, restoring and deleting a legacy task never erases historical ledger rows',async()=>{
+ const b=browser();await b.S.load();const {A}=actionHarness(b);
+ vm.runInContext(source('js/memo-economy.js'),b.ctx);
+ const d=b.S.data(),day='2026-10-19',at='2026-10-20T10:00:00+08:00';
+ d.days[day]=b.S.getDay(day);
+ d.days[day].tasks.ideal=[{id:'task-x',text:'项目',done:true}];
+ d.ledger.push({id:'legacy-earn',date:day,type:'earn-ideal',taskId:'task-x',points:12,at:'2026-10-19T09:00:00+08:00'});
+ b.ctx.App.memoEconomy.enableCore(Date.parse('2026-10-20T09:00:00+08:00'));
+ const a=A.deleteCore({kind:'task',id:'task-x',day,list:'ideal'},'',at);
+ assert.equal(b.S.pointsTotal(),0);
+ assert.equal(d.ledger.length,2);
+ A.restoreCore(a.id);
+ assert.equal(b.S.pointsTotal(),12);
+ assert.equal(d.ledger.length,3);
+ A.deleteCore({kind:'task',id:'task-x',day,list:'ideal'},'','2026-10-22T10:00:00+08:00');
+ assert.equal(b.S.pointsTotal(),0);
+ assert.equal(d.ledger.length,4);
+ assert.equal(d.ledger[0].points,12);
+});
+test('173 several closed months compound without repeating past interest on revisit',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);vm.runInContext(source('js/memo-economy.js'),b.ctx);
+ const E=b.ctx.App.memoEconomy;
+ b.S.data().ledger.push({id:'base',type:'adjust',at:'2026-10-20T10:00:00Z',points:-1000});
+ E.enableCore(Date.parse('2026-10-27T10:00:00+08:00'));
+ assert.equal(E.settleCore(Date.parse('2027-01-01T04:00:00+08:00')),3);
+ const months=E.state().settlements.map(x=>x.month);
+ assert.deepEqual(Array.from(months),['2026-10','2026-11','2026-12']);
+ assert(E.state().settlements[2].negative < E.state().settlements[1].negative);
+ const count=b.S.data().ledger.length;
+ assert.equal(E.settleCore(Date.parse('2027-01-01T04:00:00+08:00')),0);
+ assert.equal(b.S.data().ledger.length,count);
+});
