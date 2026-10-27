@@ -61,8 +61,8 @@
       return;
     }
     d.ledger.filter(predicate).forEach(l=>{
-      const operationId='economic-reverse:'+l.id;
-      if (d.ledger.some(x=>x.operationId===operationId))return;
+      // A restored task may be deleted again; each committed deletion gets a new reversal.
+      const operationId='economic-reverse:'+l.id+':'+S().uid();
       d.ledger.push({id:S().uid(),operationId,date:M().userDay(at),at,
         type:'reverse-'+l.type,points:-(Number(l.points)||0),
         leisure:-(Number(l.leisure)||0),taskId:l.taskId||'',
