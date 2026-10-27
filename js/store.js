@@ -221,6 +221,30 @@
       if (!Array.isArray(day.timeline) || !Array.isArray(day.sessions)) throw new Error('时间线结构异常');
       clean.days[key] = day;
     });
+    // Reject malformed optional memo modules before a snapshot is accepted.
+    if (clean.memoFlow !== undefined) {
+      const f = clean.memoFlow;
+      if (!f || f.version !== 1 || typeof f.startedDay !== 'string' ||
+          !/^\\d{4}-\\d{2}-\\d{2}$/.test(f.startedDay) ||
+          !Array.isArray(f.settlements) || !f.copies || typeof f.copies !== 'object' ||
+          Array.isArray(f.copies) || !Number.isFinite(f.rate) || f.rate <= 0 ||
+          !Number.isFinite(f.penalty) || f.penalty < 0 ||
+          !Number.isFinite(f.dailyCap) || f.dailyCap < 0) throw new Error('新流程记录结构异常');
+    }
+    if (clean.memoSchedule !== undefined) {
+      const x = clean.memoSchedule;
+      if (!x || x.version !== 1 || !Array.isArray(x.items) || !Array.isArray(x.sessions) ||
+          x.items.some(p => !p || typeof p.id !== 'string' ||
+            !/^\\d{4}-\\d{2}-\\d{2}$/.test(p.day) || !Number.isFinite(p.start) ||
+            !['point', 'span'].includes(p.type) ||
+            (p.type === 'span' && (!Number.isFinite(p.end) || p.end <= p.start))) ||
+          x.sessions.some(s => !s || !Array.isArray(s.chunks) ||
+            !['running', 'paused', 'ended'].includes(s.status) ||
+            s.chunks.some(c => !c || !Number.isFinite(c.start) ||
+              (c.end != null && (!Number.isFinite(c.end) || c.end < c.start))))) {
+        throw new Error('新时间线记录结构异常');
+      }
+    }
     return clean;
   }
   async function load() {
