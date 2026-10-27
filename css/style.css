@@ -2301,3 +2301,36 @@ body[data-theme="purple"] .mw-day-shortcuts [data-mw="today"]:not([aria-pressed=
 #ck-penalty-field .hint{color:var(--muted);line-height:1.55;}
 .ck-punch-main.btn-danger{background:#ad352e;color:#fff;border-color:#ad352e;}
 .ck-punch-main.btn-danger:hover{background:#8c261f;}
+
+/* 173.0: habit policy distinguishes supervision from positive attainment.
+   Texture overlays are independent of bounty categories, without stamps. */
+:is(#checkin-view .ck-row,.habit-plan-row,.task-habit-grid article)[data-habit-kind="miss"]{
+  background-color:#fff6e8!important;
+  background-image:repeating-linear-gradient(135deg,transparent 0,transparent 16px,rgba(175,115,36,.12) 16px,rgba(175,115,36,.12) 18px)!important;
+  border:1px solid #d6aa67!important;color:#593d20;
+}
+:is(#checkin-view .ck-row,.habit-plan-row,.task-habit-grid article)[data-habit-kind="punch"]{
+  background-color:#fff0ee!important;
+  background-image:repeating-linear-gradient(45deg,transparent 0,transparent 21px,rgba(165,56,49,.11) 21px,rgba(165,56,49,.11) 23px),
+    repeating-linear-gradient(135deg,transparent 0,transparent 21px,rgba(165,56,49,.07) 21px,rgba(165,56,49,.07) 23px)!important;
+  border:1px solid #ca817c!important;color:#642e2b;
+}
+body[data-theme="dark"] :is(#checkin-view .ck-row,.habit-plan-row,.task-habit-grid article)[data-habit-kind="miss"],
+body[data-theme="purple"] :is(#checkin-view .ck-row,.habit-plan-row,.task-habit-grid article)[data-habit-kind="miss"]{
+  background-color:#49351d!important;color:#fff1d0;
+  border-color:#d4a056!important;
+}
+body[data-theme="dark"] :is(#checkin-view .ck-row,.habit-plan-row,.task-habit-grid article)[data-habit-kind="punch"],
+body[data-theme="purple"] :is(#checkin-view .ck-row,.habit-plan-row,.task-habit-grid article)[data-habit-kind="punch"]{
+  background-color:#4c262a!important;color:#ffe0de;
+  border-color:#c77b7e!important;
+}
+#checkin-view .ck-row.done .ck-punch-main,#checkin-view .ck-punch-main{
+  opacity:1!important;filter:none!important;pointer-events:auto;
+}
+#checkin-view .ck-row[data-habit-kind="miss"] .ck-cnt,
+#checkin-view .ck-row[data-habit-kind="punch"] .ck-cnt{color:inherit;opacity:.85;}
+.task-habit-grid article[data-habit-kind="punch"] .btn-danger{color:#fff;background:#a72f32;border-color:#a72f32;}
+.habit-plan-row[data-habit-kind="punch"].habit-plan-done{opacity:1;background:#fff0ee;}
+.memo-bank{margin:12px 0;border-top:3px solid var(--primary);padding:14px;}
+.memo-bank p{line-height:1.6;overflow-wrap:anywhere;}
