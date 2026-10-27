@@ -292,7 +292,10 @@
       const b=clean.memoEconomy;
       if (!b || b.version!==1 || !Number.isFinite(Date.parse(b.enabledAt)) ||
           !/^\d{4}-\d{2}-\d{2}$/.test(b.startedDay) ||
-          !Number.isFinite(b.openingBalance) || !Number.isFinite(b.positiveRate) ||
+          !Number.isFinite(b.openingBalance) ||
+          (b.initialAtIds!==undefined && (!Array.isArray(b.initialAtIds) ||
+            b.initialAtIds.some(id=>typeof id!=='string'))) ||
+          !Number.isFinite(b.positiveRate) ||
           !Number.isFinite(b.negativeRate) || b.positiveRate<0 || b.positiveRate>1 ||
           b.negativeRate<0 || b.negativeRate>1 || !Array.isArray(b.settlements) ||
           b.settlements.some(r=>!r || typeof r.month!=='string' || !/^\d{4}-\d{2}$/.test(r.month) ||
