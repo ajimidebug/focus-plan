@@ -19,7 +19,7 @@ function planned(day,list,completed=null){
    return Number(doneA)-Number(doneB);
  }).map(({it,r,n})=>{
    const mode=A.memoPenalty?.policy(it,day).mode||'reward',bad=mode==='punch',
-     done=!bad&&(r.target>0?n>=r.target:n>0),quote=A.checkin.memoPoints(it,day),
+     done=!bad&&(r.target>0?n>=r.target:n>0),quote=A.checkin?.memoPoints?.(it,day)??0,
      points=bad?quote<0?quote:0:quote,
      label=bad?'发生 '+n+'次':n+'/'+r.target+'次'+(done?' ✓':'');
    return '<button type="button" class="habit-plan-row '+(done?'habit-plan-done':'')+
