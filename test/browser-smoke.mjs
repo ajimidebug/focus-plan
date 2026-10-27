@@ -36,7 +36,7 @@ try {
       windowWidth:window.innerWidth,
       taskView:document.querySelector('#view-tasks')?.classList.contains('active'),
       overviewVisible:!!document.querySelector('.mw-overview') && !document.querySelector('.mw-overview-fold'),
-      columnCount:document.querySelectorAll('.mw-overview .cal-col').length,
+      columnCount:document.querySelector('.mw-overview .cal-cols').children.length,
       columnTemplate:getComputedStyle(document.querySelector('.mw-overview .cal-cols')).gridTemplateColumns,
       buttons:[...document.querySelectorAll('.mw-day-shortcuts button')].map(b=>({
         w:b.getBoundingClientRect().width, bg:getComputedStyle(b).backgroundColor, pressed:b.getAttribute('aria-pressed')
