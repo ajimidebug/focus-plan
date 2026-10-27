@@ -111,6 +111,7 @@ try {
         session.chunks.at(-1).start=Date.now()-26*60000;
         App.memoSchedule.tick();
       });
+      await page.locator('#mw-live [data-float-toggle]').click();
       await page.waitForSelector('#mw-live #float-meter:not([hidden])');
       assert.match(await page.locator('#float-meter .float-meter-text').innerText(),/65%/);
       assert.equal(await page.locator('#mw-live.float-overtime').count(),0);
