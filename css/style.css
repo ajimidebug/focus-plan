@@ -2381,3 +2381,8 @@ body #mw-live.float-editor-focus{opacity:.88;}
   .mw-task .mw-timer-control>button[data-schedule-command]{flex:1;}
 }
 @media(prefers-reduced-motion:reduce){#mw-live .float-meter-fill,#mw-live .float-meter-mini-fill{transition:none;}}
+
+.memo-bank-export{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.memo-bank-export .btn{min-height:44px;flex:1 1 150px;white-space:normal;}
+.habit-plan-row>.habit-plan-meta small{max-width:100%;white-space:normal;overflow-wrap:anywhere;}
+.habit-plan-row>.habit-plan-title{font-weight:600;}
