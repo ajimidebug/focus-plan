@@ -284,6 +284,7 @@
     const it = id ? find(id) : null;
     const isNew = !it;
     const v = it || { text: '', points: 5, target: 1, note: '' };
+    const effective = it ? (App.memoPenalty?.policy(it,shiftKey(today(),1)) || {mode:'reward',amount:0}) : {mode:'reward',amount:5};
     // 🔁 v119：编辑已有项时，列最近 6 天补卡勾选（今天除外 —— 今天的卡用页面按钮打）
     let mkHTML = '';
     if (!isNew && !window.__MEMO_MODE) {
@@ -308,17 +309,30 @@
       '<div class="field"><label>打卡项（想坚持的事）</label>' +
       '<input id="ck-text" type="text" value="' + esc(v.text) + '" placeholder="比如：喝水 2000ml / 运动 20 分钟 / 23:30 前躺下" /></div>' +
       '<div class="field-row">' +
-      '<div class="field"><label>打卡一次得多少分</label>' +
+      '<div class="field"><label>打卡奖励分（0＝不奖励）</label>' +
       '<input id="ck-points" type="number" min="0" value="' + (v.points == null ? 5 : v.points) + '" /></div>' +
       '<div class="field"><label>每日目标（0＝选做）</label>' +
       '<input id="ck-target" type="number" min="0" step="1" value="' + targetOf(v) + '" /></div>' +
       '</div>' +
+      '<div class="field"><label>奖惩模式<select id="ck-penalty-mode"><option value="reward">普通打卡：完成加分</option><option value="miss">漏打卡扣分：当天未达标就扣分</option><option value="punch">坏习惯：每记录一次扣分</option></select></label></div>' +
+      '<div class="field" id="ck-penalty-field"><label>扣分额度（1～10000分）<input id="ck-penalty-points" type="number" min="1" max="10000" step="1" value="'+(effective.amount || 5)+'"></label><p class="hint">漏打卡：次日04:00后按上一用户日结算一次；补记达标自动退回。坏习惯：每记录一次扣分。修改现有规则从下一用户日生效。</p></div>' +
       '<div class="field"><label>预计用时（分钟，选填）</label><input id="ck-estimate" type="number" min="0" max="1440" value="' + (v.estimatedMinutes || '') + '"></div>' +
       '<div class="field"><label>每日奖励次数上限（0＝只记录）</label><input id="ck-reward-limit" type="number" min="0" max="10000" step="1" value="' + S().habitRules(v).rewardLimit + '"><p class="hint">选做不要求每日完成；奖励上限与目标独立。达到上限仍可记录。此上限适用于固定基础分模式。</p></div>' +
       '<div class="field"><label>备注（选填，写给自己）</label>' +
       '<input id="ck-note" type="text" value="' + esc(v.note || '') + '" placeholder="比如：分 4 次喝，每次 500ml" /></div>' + mkHTML + '<p id="ck-save-error" role="alert"></p>',
       '<button class="btn btn-primary" data-act="ok">' + (isNew ? '加好' : '保存') + '</button>' +
       '<button class="btn" data-act="cancel">取消</button>', { lock: !!window.__MEMO_MODE });
+    modal.querySelector('#ck-penalty-mode').value = effective.mode;
+    const showPenalty = () => {
+      const mode = modal.querySelector('#ck-penalty-mode').value;
+      modal.querySelector('#ck-penalty-field').hidden = mode === 'reward';
+      modal.querySelector('#ck-points').closest('.field').hidden = mode === 'punch';
+      if (mode === 'miss' && Number(modal.querySelector('#ck-target').value) === 0)
+        modal.querySelector('#ck-target').value = '1';
+      if (mode === 'punch') modal.querySelector('#ck-target').value = '0';
+    };
+    modal.querySelector('#ck-penalty-mode').onchange = showPenalty;
+    showPenalty();
     let rewardLimitEdited = !isNew || v.rewardLimit != null;
     modal.querySelector('#ck-reward-limit').addEventListener('input', () => { rewardLimitEdited = true; });
     modal.querySelector('#ck-target').addEventListener('input', () => { if (!rewardLimitEdited) modal.querySelector('#ck-reward-limit').value = S().habitRules({ target: modal.querySelector('#ck-target').value }).rewardLimit; });
@@ -331,6 +345,11 @@
         const estimatedMinutes = Math.min(1440, Math.max(0, Number(modal.querySelector('#ck-estimate').value) || 0));
         const rewardLimit = S().habitRules({ target: tg, rewardLimit: modal.querySelector('#ck-reward-limit').value }).rewardLimit;
         const nt = (modal.querySelector('#ck-note').value || '').trim();
+        const penaltyMode = modal.querySelector('#ck-penalty-mode').value;
+        const penaltyAmount = Number(modal.querySelector('#ck-penalty-points').value);
+        if (penaltyMode !== 'reward' && (!Number.isSafeInteger(penaltyAmount) || penaltyAmount < 1 || penaltyAmount > 10000))
+          throw new Error('扣分须为1～10000的整数');
+        if (penaltyMode === 'miss' && tg < 1) throw new Error('漏打卡扣分必须设置每日目标');
         const idForNew = isNew ? S().uid() : id;
         const mutate = () => {
         if (isNew) {
