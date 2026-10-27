@@ -46,7 +46,7 @@ try {
     assert.equal(result.taskView,true,'task view visible at '+width);
     assert.equal(result.overviewVisible,true,'three-column overview visible by default at '+width);
     assert.equal(result.columnCount,3,'three task columns at '+width);
-    assert.equal(result.columnTemplate.trim().split(/\\s+/).length,3,'side-by-side grid columns at '+width);
+    assert.equal(result.columnTemplate.trim().split(/\s+/).length,3,'side-by-side grid columns at '+width);
     assert.equal(result.buttons.length,3,'three date shortcuts at '+width);
     assert(Math.max(...result.buttons.map(b=>b.w))-Math.min(...result.buttons.map(b=>b.w))<2,'date shortcut widths match at '+width);
     assert(result.buttons.reduce((n,b)=>n+b.w,0)>result.shortcutWidth*.88,'date shortcuts fill toolbar at '+width);
