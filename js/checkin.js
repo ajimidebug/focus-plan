@@ -405,7 +405,7 @@
       const on = w.times > 0;
       const full = tg > 0 && w.times >= tg;
       // 🔁 v119：过去且没打满的圆点 → 直接点就是补卡（今天/未来不在其列）
-      if (w.k < kToday && (!full || window.__MEMO_MODE)) {
+      if (w.k < kToday && (!full || window.__MEMO_MODE) && (penaltyMode !== 'punch' || App.memoPenalty?.policy(it,w.k).mode === 'punch')) {
         return '<button type="button" class="ck-day makeup" data-act="ck-makeup" data-id="' + it.id + '" data-day="' + w.k +
           '" aria-label="' + esc(it.text+'，'+w.k+'，已有'+w.times+'次，补记一次') + '" title="' + w.k + '：' + (w.times ? w.times + ' 次，点一下再补一次' : '没打，点一下补这张卡') +
           '（按目标和当日次数计算积分，不补发连续奖励）"><span class="ck-dot'+(full?' on':on?' half':'')+'" aria-hidden="true"></span><small>'+w.k.slice(5)+'</small></button>';
@@ -476,7 +476,7 @@
       '<button class="btn btn-small" data-act="ck-add">＋ 加一个打卡项</button>' +
       '</div>';
 
-    if (window.__MEMO_MODE) h = '<div class="card"><div class="ck-titlebar"><h2>积分打卡</h2><button type="button" class="btn btn-primary ck-add-main" data-act="ck-add">＋ 添加</button></div><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续记录；本次可得积分显示在按钮上，积分规则与额外得分次数在设置中查看。</p>';
+    if (window.__MEMO_MODE) h = '<div class="card"><div class="ck-titlebar"><h2>积分打卡</h2><button type="button" class="btn btn-primary ck-add-main" data-act="ck-add">＋ 添加</button></div><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续记录；本次可得积分显示在按钮上，积分规则与额外得分次数在设置中查看。创建打卡项时可选择“漏打卡每日扣分”或“坏习惯每次记录扣分”，两者都保留原次记录及撤销。</p>';
 
     if (window.__MEMO_MODE) {
       const goals = list.filter(it => !it.archived && targetOf(it) > 0), active = list.filter(it => !it.archived);
