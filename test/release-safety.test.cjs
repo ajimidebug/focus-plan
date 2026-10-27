@@ -1177,3 +1177,14 @@ test('173 a goal of one and 99 paid punches stays directly accessible in all thr
  assert.equal(F.planned(day,'required',false),'');
  assert.match(F.planned(day,'required',true),/仅记录/);
 });
+
+
+test('173 activation snapshot does not double count same-millisecond old entries but includes new entries',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);vm.runInContext(source('js/memo-economy.js'),b.ctx);
+ const E=b.ctx.App.memoEconomy,at='2026-10-27T02:00:00.000Z',d=b.S.data();
+ d.ledger.push({id:'already-there',at,points:100,type:'adjust'});
+ E.enableCore(Date.parse(at));
+ assert.equal(E.state().openingBalance,100);
+ d.ledger.push({id:'after-init',at,points:20,type:'adjust'});
+ assert.equal(E.balanceAt(Date.parse('2026-10-29T04:00:00+08:00')),120);
+});
