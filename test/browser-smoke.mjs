@@ -90,7 +90,8 @@ try {
       await page.locator('.modal [data-act="save"][data-list="ideal"]').click();
       await page.waitForFunction(id=>App.memoFinance.plans(App.memoCore.userDay()).some(x=>x.it.id===id && x.r.list==='ideal'),id);
       assert.equal(await page.evaluate(id=>App.memoFinance.plans(App.memoCore.userDay()).filter(x=>x.it.id===id).length,id),1);
-      assert.equal(await page.locator('.mw-overview [data-overview-list="required"] .habit-plan-row[data-habit-kind="punch"]').count(),0);
+      await page.waitForSelector('.mw-overview [data-overview-list="ideal"] .habit-plan-row[data-habit-kind="punch"]');
+      await page.waitForFunction(()=>document.querySelectorAll('.mw-overview [data-overview-list="required"] .habit-plan-row[data-habit-kind="punch"]').length===0);
       await page.evaluate(()=>App.app.switchView('checkin'));
       await page.locator('#checkin-view [data-act="ck-add"]').first().click();
       await page.locator('#ck-text').fill('排序第二项目');
