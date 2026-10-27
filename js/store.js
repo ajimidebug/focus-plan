@@ -225,7 +225,7 @@
     if (clean.memoFlow !== undefined) {
       const f = clean.memoFlow;
       if (!f || f.version !== 1 || typeof f.startedDay !== 'string' ||
-          !/^\\d{4}-\\d{2}-\\d{2}$/.test(f.startedDay) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(f.startedDay) ||
           !Array.isArray(f.settlements) || !f.copies || typeof f.copies !== 'object' ||
           Array.isArray(f.copies) || !Number.isFinite(f.rate) || f.rate <= 0 ||
           !Number.isFinite(f.penalty) || f.penalty < 0 ||
@@ -235,7 +235,7 @@
       const x = clean.memoSchedule;
       if (!x || x.version !== 1 || !Array.isArray(x.items) || !Array.isArray(x.sessions) ||
           x.items.some(p => !p || typeof p.id !== 'string' ||
-            !/^\\d{4}-\\d{2}-\\d{2}$/.test(p.day) || !Number.isFinite(p.start) ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(p.day) || !Number.isFinite(p.start) ||
             !['point', 'span'].includes(p.type) ||
             (p.type === 'span' && (!Number.isFinite(p.end) || p.end <= p.start))) ||
           x.sessions.some(s => !s || !Array.isArray(s.chunks) ||
