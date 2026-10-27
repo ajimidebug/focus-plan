@@ -57,7 +57,7 @@
     if (App.tasks && App.tasks.pipNeedSpace) App.tasks.pipNeedSpace(true);
     root._disposeModal?.();
     root.innerHTML = '';
-    const mask = document.createElement('div');
+    const mask = root.ownerDocument.createElement('div');
     mask.className = 'modal-mask';
     mask.innerHTML =
       '<div class="modal">' +
@@ -101,7 +101,7 @@
     if (opts.wide) modal.style.maxWidth = '680px';
     // 右上角 ✕ 关闭按钮
     if (opts.closeIcon) {
-      const x = document.createElement('button');
+      const x = root.ownerDocument.createElement('button');
       x.className = 'modal-x';
       x.textContent = '✕';
       x.title = '关闭';
@@ -144,7 +144,7 @@
   }
   /** 绑定弹窗内 [data-act] 按钮：map = { act: fn } */
   function bindActions(map) {
-    const list = uiDoc().querySelectorAll('#modal-root [data-act]');
+    const list = currentDoc().querySelectorAll('#modal-root [data-act]');
     for (let i = 0; i < list.length; i++) {
       list[i].onclick = function () {
         const fn = map[this.dataset.act];
@@ -153,8 +153,8 @@
     }
   }
   function confirm(msg, okText, onOk) {
-    openModal('⚠️ 确认', '<p style="font-size:14px">' + msg + '</p>',
-      '<button class="btn btn-danger" data-act="ok">' + (okText || '确认') + '</button>' +
+    openModal('⚠️ 确认', '<p style="font-size:14px">' + App.store.esc(msg) + '</p>',
+      '<button class="btn btn-danger" data-act="ok">' + App.store.esc(okText || '确认') + '</button>' +
       '<button class="btn" data-act="cancel">取消</button>');
     bindActions({
       ok: function () { closeModal(); if (onOk) onOk(); },
@@ -165,7 +165,7 @@
   /* ---------- Toast ---------- */
   function toast(msg, ms) {
     const root = layerEl('toast-root');
-    const el = document.createElement('div');
+    const el = root.ownerDocument.createElement('div');
     el.className = 'toast';
     el.textContent = msg;
     root.appendChild(el);
