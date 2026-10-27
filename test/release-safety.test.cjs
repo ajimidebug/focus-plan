@@ -276,8 +276,9 @@ test('memo additive data and untouched legacy records survive complete backup an
   assert.equal(b.S.data().version, 1);
 });
 test('memo refuses malformed note data and storage protection without discarding unknown original fields', async () => {
-  const b = browser({ initial: data({ memoNotes: 'future-format' }) }); await b.S.load(); const M = memoHarness(b);
-  assert.throws(() => M.write('2026-10-19', 'new'), /格式/); assert.equal(b.S.data().memoNotes, 'future-format');
+  const b = browser({ initial: data({ memoNotes: 'future-format' }) });
+  assert.equal(await b.S.load(), false, 'unknown note structure must block before first write');
+  assert.equal(JSON.parse(b.mem.get('focusPlanData.v1')).memoNotes, 'future-format');
   const c = browser(); await c.S.load(); const C = memoHarness(c);
   c.mem.set('focusPlanData.v1', JSON.stringify(data({ _storageRevision: 100 })));
   await c.S.save(); assert.throws(() => C.write('2026-10-19', 'new'), /保护/);
@@ -937,4 +938,30 @@ test('timer totals retain ended runs while pause resumes the current run across 
 });
 test('timer aggregation prefers running session over a newer paused plan and clips daily boundaries',async()=>{
  const b=browser();await b.S.load();const {P}=flowHarness(b),day='2026-10-26',base=Date.parse(day+'T04:00:00+08:00');b.S.data().memoProjects=[{id:'daily-total',text:'推进',days:{}}];const ref={kind:'project',id:'daily-total',day},s=P.startRef(ref,base-60000);P.pauseCore(s,base+120000);const run=P.startRef(ref,base+180000,'plan-a');P.state().sessions.push({id:'later-paused',ref,itemId:'plan-b',status:'paused',title:'推进',chunks:[{start:base+240000,end:base+300000}]});await b.S.save();const t=P.timing(ref,base+360000);assert.equal(t.session.id,run.id);assert.equal(t.totalMs,360000);assert.equal(t.currentMs,180000);assert.equal(P.timing({...ref,day:'2026-10-27'},base+360000).totalMs,0);
+});
+
+
+test('user-day actual task timing unions overlaps and clips precisely at 04:00', async () => {
+  const b = browser(); await b.S.load(); const { P } = flowHarness(b);
+  const start = Date.parse('2026-10-27T04:00:00+08:00');
+  P.state().sessions.push(
+    { id: 'one', ref: { kind: 'queue', id: 'a' }, title: 'A', status: 'ended', chunks: [{ start: start - 600000, end: start + 1200000 }] },
+    { id: 'two', ref: { kind: 'queue', id: 'b' }, title: 'B', status: 'ended', chunks: [{ start: start + 600000, end: start + 2400000 }] }
+  );
+  assert.equal(P.dayExecutionMs('2026-10-26', start + 3600000), 600000);
+  assert.equal(P.dayExecutionMs('2026-10-27', start + 3600000), 2400000);
+  assert.equal(P.dayExecutionMs('2026-10-27', start + 900000), 900000);
+});
+
+test('import validation rejects broken memo collections without replacing original records', async () => {
+  const b = browser(); await b.S.load();
+  const baseline = JSON.stringify(b.S.data());
+  const invalid = copy(b.S.data());
+  invalid.memoSchedule = { version: 1, items: [], sessions: [{ status: 'running', ref: null, chunks: [{ start: 123, end: null }] }] };
+  assert.equal(b.S.validate(invalid), false);
+  assert.equal(b.S.restoreFrom(invalid), false);
+  assert.equal(JSON.stringify(b.S.data()), baseline);
+  const invalidQueue = copy(b.S.data());
+  invalidQueue.queue = { id: 'not-an-array' };
+  assert.equal(b.S.validate(invalidQueue), false);
 });

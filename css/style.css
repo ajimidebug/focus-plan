@@ -4,10 +4,10 @@
   --bg: #f4f6f8;
   --card: #fff;
   --ink: #1f2328;
-  --muted: #8a919c;
+  --muted: #606975;
   --line: #e5e8ec;
   --brand: #2d3a4a;
-  --primary: #3b82f6;
+  --primary: #1d4ed8;
   --req: #e2545d;
   --ideal: #f59e0b;
   --extra: #22a06b;
@@ -634,26 +634,26 @@ details.ledger-day[open] summary { border-bottom: 1px dashed var(--line); paddin
 /* ============ 🎨 主题系统 ============ */
 /* 浅色三兄弟：只换变量，全局跟走 */
 body[data-theme="ocean"] {
-  --bg: #e9f4fa; --card: #ffffff; --ink: #12303e; --muted: #6b8fa3;
-  --line: #cfe4ee; --brand: #0c4a6e; --primary: #0284c7;
+  --bg: #e9f4fa; --card: #ffffff; --ink: #12303e; --muted: #4b6678;
+  --line: #cfe4ee; --brand: #0c4a6e; --primary: #0369a1;
 }
 body[data-theme="sakura"] {
-  --bg: #fdf2f5; --card: #ffffff; --ink: #43302e; --muted: #a3788a;
-  --line: #f2d8e0; --brand: #8c4a5e; --primary: #e56b8c;
+  --bg: #fdf2f5; --card: #ffffff; --ink: #43302e; --muted: #795268;
+  --line: #f2d8e0; --brand: #8c4a5e; --primary: #a92550;
 }
 body[data-theme="forest"] {
-  --bg: #eff6ee; --card: #ffffff; --ink: #1e3323; --muted: #7d9483;
-  --line: #d5e6d5; --brand: #1d4a30; --primary: #2f9e63;
+  --bg: #eff6ee; --card: #ffffff; --ink: #1e3323; --muted: #536d5b;
+  --line: #d5e6d5; --brand: #1d4a30; --primary: #166534;
 }
 /* 深色双雄：换变量 + 组件硬编码色兜底 */
 body[data-theme="dark"] {
-  --bg: #0f1523; --card: #17203a; --ink: #e8edf7; --muted: #93a0b8;
-  --line: #26314b; --brand: #0a0f1c; --primary: #60a5fa;
+  --bg: #0f1523; --card: #17203a; --ink: #e8edf7; --muted: #acb9d2;
+  --line: #26314b; --brand: #0a0f1c; --primary: #1d4ed8;
   color-scheme: dark;
 }
 body[data-theme="purple"] {
-  --bg: #131024; --card: #1d1836; --ink: #ece7fa; --muted: #a99fc9;
-  --line: #2d2650; --brand: #0d0a1c; --primary: #a78bfa;
+  --bg: #131024; --card: #1d1836; --ink: #ece7fa; --muted: #bcb2db;
+  --line: #2d2650; --brand: #0d0a1c; --primary: #6d28d9;
   color-scheme: dark;
 }
 body[data-theme="dark"] .card, body[data-theme="purple"] .card,
@@ -2252,3 +2252,29 @@ body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-bounty=
 .memo-copy-options{position:absolute;bottom:calc(100% + 6px);right:0;width:min(280px,calc(100vw - 32px));max-height:50dvh;overflow:auto;z-index:102;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;box-shadow:0 3px 12px #18212f20;box-sizing:border-box;}
 .memo-copy-options .btn{width:100%;box-sizing:border-box;white-space:normal;}
 .memo-toolbar>#memo-time{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+/* 171.0: visible keyboard focus, reduced motion, and task hierarchy */
+:is(button, input, select, textarea, summary, [role="button"]):focus-visible{outline:3px solid var(--primary);outline-offset:3px;}
+.mw-overview-fold{margin:8px 0 14px;border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;background:var(--card);}
+.mw-overview-fold>summary{font-weight:600;cursor:pointer;touch-action:manipulation;}
+.mw-overview-fold>.mw-overview{margin-top:12px;}
+.mw-pending-group{padding:10px 0;border-top:1px solid var(--line);}
+.mw-pending-group>h3{font-size:15px;margin:0 0 8px;color:var(--ink);}
+.mw-pending-group+.mw-pending-group{margin-top:6px;}
+.modal[role="dialog"]:focus{outline:none;}
+@media (max-width:400px){.mw-overview-fold{padding:8px;}.mw-overview-fold .cal-cols{grid-template-columns:1fr!important;}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important;}}
+
+/* 171.0 task cards: keep high-frequency actions visible and disclose secondary ones. */
+details.mw-task-extras{display:block;margin-top:4px;min-width:0;}
+details.mw-task-extras>summary{font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;padding:7px 0;min-height:36px;}
+details.mw-task-extras .mw-task-secondary{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 0;}
+details.mw-task-extras .mw-task-secondary>details[open]{flex-basis:100%;}
+#stat-memo-execution .stat-value{font-variant-numeric:tabular-nums;}
+@media(max-width:480px){
+  #stat-bar{column-gap:11px;row-gap:5px;padding:7px 12px;}
+  #stat-bar .stat-item{gap:4px;min-width:0;}
+  #stat-bar .stat-label{font-size:11px;}
+  #stat-bar .stat-value{font-size:12px;}
+  .mw-task-secondary .btn{min-height:36px;}
+}

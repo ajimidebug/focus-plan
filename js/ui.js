@@ -57,22 +57,51 @@
     if (App.tasks && App.tasks.pipNeedSpace) App.tasks.pipNeedSpace(true);
     root._disposeModal?.();
     root.innerHTML = '';
-    const mask = document.createElement('div');
+    const mask = root.ownerDocument.createElement('div');
     mask.className = 'modal-mask';
     mask.innerHTML =
       '<div class="modal">' +
-      (title ? '<h3>' + title + '</h3>' : '') +
+      (title ? '<h3 class="modal-heading"></h3>' : '') +
       '<div class="modal-body">' + (bodyHTML || '') + '</div>' +
       '<div class="modal-actions">' + (actionsHTML || '') + '</div>' +
       (opts.rechoose ? '<button class="rechoose-btn" data-act="rechoose">重新选择</button>' : '') +
       '</div>';
     root.appendChild(mask);
     const modal = mask.querySelector('.modal');
+    // The title is plain text, including task names originating from imported data.
+    if (title) modal.querySelector('.modal-heading').textContent = String(title);
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('tabindex', '-1');
+    if (title) {
+      const heading = modal.querySelector('.modal-heading');
+      heading.id = 'focus-plan-modal-title';
+      modal.setAttribute('aria-labelledby', heading.id);
+    }
+    // Keep keyboard focus inside the active modal; clean listeners on replacement.
+    const modalDoc = root.ownerDocument;
+    const previousFocus = modalDoc.activeElement;
+    const focusables = () => [...modal.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter(el => el.getClientRects().length && !el.closest('[hidden]'));
+    const onModalKey = e => {
+      if (e.key !== 'Tab') return;
+      const items = focusables();
+      if (!items.length) { e.preventDefault(); modal.focus(); return; }
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && (modalDoc.activeElement === first || modalDoc.activeElement === modal)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && modalDoc.activeElement === last) { e.preventDefault(); first.focus(); }
+      else if (!modal.contains(modalDoc.activeElement)) { e.preventDefault(); first.focus(); }
+    };
+    modalDoc.addEventListener('keydown', onModalKey);
+    const disposeFocus = () => {
+      modalDoc.removeEventListener('keydown', onModalKey);
+      if (previousFocus?.isConnected && previousFocus !== modalDoc.body) previousFocus.focus({ preventScroll: true });
+    };
     // 宽弹窗（公告/长内容用）
     if (opts.wide) modal.style.maxWidth = '680px';
     // 右上角 ✕ 关闭按钮
     if (opts.closeIcon) {
-      const x = document.createElement('button');
+      const x = root.ownerDocument.createElement('button');
       x.className = 'modal-x';
       x.textContent = '✕';
       x.title = '关闭';
@@ -101,9 +130,10 @@
       }
     });};
     viewport?.addEventListener('resize',layout);viewport?.addEventListener('scroll',layout);win.addEventListener('resize',layout);modal.addEventListener('focusin',layout);
-    root._disposeModal=()=>{alive=false;win.cancelAnimationFrame(frame);viewport?.removeEventListener('resize',layout);viewport?.removeEventListener('scroll',layout);win.removeEventListener('resize',layout);modal.removeEventListener('focusin',layout);};
+    root._disposeModal=()=>{disposeFocus();alive=false;win.cancelAnimationFrame(frame);viewport?.removeEventListener('resize',layout);viewport?.removeEventListener('scroll',layout);win.removeEventListener('resize',layout);modal.removeEventListener('focusin',layout);};
     layout();
     if (opts.onOpen) opts.onOpen(modal);
+    if (modal.isConnected && !modal.contains(modalDoc.activeElement)) modal.focus({ preventScroll: true });
     return modal;
   }
   function closeModal() {
@@ -114,7 +144,7 @@
   }
   /** 绑定弹窗内 [data-act] 按钮：map = { act: fn } */
   function bindActions(map) {
-    const list = uiDoc().querySelectorAll('#modal-root [data-act]');
+    const list = currentDoc().querySelectorAll('#modal-root [data-act]');
     for (let i = 0; i < list.length; i++) {
       list[i].onclick = function () {
         const fn = map[this.dataset.act];
@@ -123,8 +153,8 @@
     }
   }
   function confirm(msg, okText, onOk) {
-    openModal('⚠️ 确认', '<p style="font-size:14px">' + msg + '</p>',
-      '<button class="btn btn-danger" data-act="ok">' + (okText || '确认') + '</button>' +
+    openModal('⚠️ 确认', '<p style="font-size:14px">' + App.store.esc(msg) + '</p>',
+      '<button class="btn btn-danger" data-act="ok">' + App.store.esc(okText || '确认') + '</button>' +
       '<button class="btn" data-act="cancel">取消</button>');
     bindActions({
       ok: function () { closeModal(); if (onOk) onOk(); },
@@ -135,7 +165,7 @@
   /* ---------- Toast ---------- */
   function toast(msg, ms) {
     const root = layerEl('toast-root');
-    const el = document.createElement('div');
+    const el = root.ownerDocument.createElement('div');
     el.className = 'toast';
     el.textContent = msg;
     root.appendChild(el);

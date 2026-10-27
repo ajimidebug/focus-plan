@@ -16,7 +16,7 @@
     const day = S().getDay(dayKey);
     // 📋 v82：队列实体化的副本不进统计 —— 不给队列制造「0/1」这种分母
     // 🧲 v105：来自「今天的基础任务」的副本也不算 —— 它跟队列当前条一个待遇（住在自己那一页）
-    const cnt = function (k, f) { const tasks = day.tasks[k].filter(t => !t.fromQueue && !t.fromDaily && !t.memoMovedTo && !t.memoDismissed && !t.memoProjectId); if (window.__MEMO_MODE) { (App.memoFlow?.assigned(dayKey,k) || []).forEach(t => tasks.push(Object.assign({},t,{done:!!t.doneAt}))); if(k==='extra') (S().data().memoProjects || []).filter(t=>!t.archived && (!t.createdDay || t.createdDay<=dayKey)).forEach(t=>tasks.push(Object.assign({},t,{done:!!t.days?.[dayKey]}))); } return tasks.filter(f).length; };
+    const cnt = function (k, f) { const tasks = day.tasks[k].filter(t => !t.fromQueue && !t.fromDaily && !t.memoMovedTo && !t.memoDismissed && !t.memoProjectId); if (window.__MEMO_MODE) { (App.memoFlow?.assigned(dayKey,k) || []).forEach(t => tasks.push(Object.assign({},t,{done:!!t.doneAt}))); (S().data().memoProjects || []).filter(t=>!t.archived && (!t.createdDay || t.createdDay<=dayKey) && (t.memoCategoryDays?.[dayKey] || 'extra')===k).forEach(t=>tasks.push(Object.assign({},t,{done:!!t.days?.[dayKey]}))); } return tasks.filter(f).length; };
     document.getElementById('stat-req').textContent = cnt('required', function (t) { return t.done; }) + '/' + cnt('required', function () { return true; });
     document.getElementById('stat-ideal').textContent = cnt('ideal', function (t) { return t.done; }) + '/' + cnt('ideal', function () { return true; });
     document.getElementById('stat-extra').textContent = cnt('extra', function (t) { return t.done; }) + '/' + cnt('extra', function () { return true; });
@@ -41,6 +41,28 @@
     document.getElementById('stat-extend').textContent = S().fmtDur(extMs / 60000);
     document.getElementById('stat-aux').textContent = S().fmtDur(auxMs / 60000);
 
+    // Separate observed task timing from legacy timeline totals until provenance
+    // and overlap are reconciled. Do not silently add both sources together.
+    if (window.__MEMO_MODE && App.memoSchedule?.dayExecutionMs) {
+      const host = document.getElementById('stat-main')?.closest('.stat-item');
+      if (host) {
+        let el = document.getElementById('stat-memo-execution');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'stat-memo-execution';
+          el.className = 'stat-item';
+          el.title = '按北京时间04:00分日的实际任务计时；与旧时间线分开，避免重复累计';
+          const label = document.createElement('span');
+          label.className = 'stat-label';
+          label.textContent = '任务计时';
+          const value = document.createElement('span');
+          value.className = 'stat-value';
+          el.append(label, value);
+          host.parentElement.appendChild(el);
+        }
+        el.querySelector('.stat-value').textContent = S().fmtDur(App.memoSchedule.dayExecutionMs(dayKey) / 60000);
+      }
+    }
     // 📋 v77：任务页顶部那条「现在做这条」跟着一起刷新
     if (App.queue && App.queue.refreshBar) App.queue.refreshBar();
     if (App.ms && App.ms.refresh) App.ms.refresh();
@@ -483,6 +505,7 @@
     // 开机自检：本机笔记服务在不在？在 → 亮出「🎙 笔记」入口；不在 → 藏起来
     notesPing(true);
     if (App.updates) App.updates.appReady();
+    App.app.ready = true;
   }
 
   App.app = {
