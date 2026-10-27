@@ -43,9 +43,9 @@ function eventsAfterEnable(){
    return Number.isFinite(t)&&t>cutoff;
  }).map(e=>({points:Number(e.points)||0,when:Date.parse(e.effectiveAt||e.at)}));
 }
-function balanceAt(end){
+function balanceAt(end,inclusive=true){
  const x=state();if(!x)return S().pointsTotal();
- return x.openingBalance+eventsAfterEnable().reduce((n,e)=>n+(e.when<=end?e.points:0),0);
+ return x.openingBalance+eventsAfterEnable().reduce((n,e)=>n+((e.when<end||(inclusive&&e.when===end))?e.points:0),0);
 }
 function closedMonths(now=Date.now()){
  const x=state();if(!x)return [];
@@ -61,7 +61,7 @@ function settleCore(now=Date.now()){
    let day=month===ym(x.startedDay)?x.startedDay:first(month);
    let positive=0,negative=0;
    while(day<first(endMonth)){
-     const bal=balanceAt(start(shift(day,1)));
+     const bal=balanceAt(start(shift(day,1)),false);
      if(bal>=0)positive+=bal*x.positiveRate/denominator;
      else negative+=bal*x.negativeRate/denominator;
      day=shift(day,1);
