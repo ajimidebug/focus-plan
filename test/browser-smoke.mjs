@@ -137,7 +137,7 @@ try {
       assert.equal(await page.locator('#mw-live.float-overtime').count(),1);
       assert.match(await page.locator('#float-meter .float-meter-text').innerText(),/超时/);
       await page.evaluate(()=>App.app.switchView('checkin'));
-      await page.waitForSelector('[data-finance-export]');
+      await page.waitForSelector('.memo-bank [data-finance-export]');
       const exportInfo=await page.evaluate(()=>({
         count:document.querySelectorAll('[data-finance-export]').length,
         audit:App.memoFinance.auditPayload(),
@@ -146,7 +146,7 @@ try {
       assert.equal(exportInfo.count>0,true,'CSV export is actually visible');
       assert.equal(exportInfo.audit.schema,'focus-plan-points-audit/v1');
       assert.equal(exportInfo.audit.balances.points,exportInfo.ledger);
-      await page.locator('[data-finance-export]').click();
+      await page.locator('.memo-bank [data-finance-export]').click();
       await page.waitForSelector('#fe-text');
       assert.equal(await page.locator('.modal [data-act="csv"]').count(),1);
       await page.evaluate(()=>App.ui.closeModal());
