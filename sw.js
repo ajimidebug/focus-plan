@@ -87,7 +87,7 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-finance.js?v=173.0.0",
-    "sha256": "8cfefe7c7aeb114240e052c60107631c1a0a0ecfdf6b81e4141d04263b4e13fb"
+    "sha256": "ac6a9908574f49412709befa212aa77c4fcc9d439e6391da9ece1f3348f04088"
   },
   {
     "url": "./js/memo-float.js?v=173.0.0",
@@ -131,7 +131,7 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-workspace.js?v=173.0.0",
-    "sha256": "f7487045067273686c8f8171de4e43cf126ded62b4b6a28f75361c47960447e0"
+    "sha256": "4dca2ea5a056496aca93001d1d71036b61c5c1d679ff825503cb1c7c91febc37"
   },
   {
     "url": "./js/memo.js?v=173.0.0",
