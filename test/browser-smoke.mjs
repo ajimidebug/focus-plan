@@ -1,4 +1,6 @@
-import { chromium } from 'playwright';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { chromium } = require(require.resolve('playwright', { paths:[process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES || '', process.cwd()] }));
 import { createServer } from 'node:http';
 import { readFileSync, statSync } from 'node:fs';
 import { resolve, extname, sep } from 'node:path';
@@ -20,7 +22,7 @@ const server = createServer((req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const base = 'http://127.0.0.1:'+server.address().port;
-const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+const browser=await chromium.launch({headless:true,executablePath:process.env.FOCUS_BROWSER_EXECUTABLE || undefined,args:JSON.parse(process.env.FOCUS_BROWSER_ARGS || '["--no-sandbox"]')});
 try {
   for (const width of [320,350,550,770,1280]) {
     const context=await browser.newContext({viewport:{width,height:width===550?350:Math.max(550,Math.round(width*.8))},serviceWorkers:'block'});
@@ -113,7 +115,7 @@ try {
       });
       await page.locator('#mw-live [data-float-toggle]').click();
       await page.waitForSelector('#mw-live #float-meter:not([hidden])');
-      assert.match(await page.locator('#float-meter .float-meter-text').innerText(),/65%/);
+      assert.match(await page.locator('#float-meter .float-meter-text').innerText(),/今日预计 40分钟 · 剩余/);
       assert.equal(await page.locator('#mw-live.float-overtime').count(),0);
       await page.evaluate(()=>App.app.switchView('memo'));
       const editor=page.locator('#memo-editor');

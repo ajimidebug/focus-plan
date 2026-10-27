@@ -62,6 +62,16 @@
     const r = s.getRangeAt(0), pre = document.createRange(); pre.selectNodeContents(root); pre.setEnd(r.startContainer, r.startOffset);
     return { start: pre.toString().length, end: pre.toString().length + r.toString().length };
   }
+  let stickBottom = true, tailFrame = 0, pointer = null;
+  function revealEnd() {
+    stickBottom = true;
+    cancelAnimationFrame(tailFrame);
+    tailFrame = requestAnimationFrame(() => { root.scrollTop = root.scrollHeight; });
+  }
+  function layoutChanged() {
+    if (document.activeElement === root) followCaret();
+    else if (stickBottom) revealEnd();
+  }
   let followFrame = false;
   function followCaret() {
     if (followFrame || !root || document.activeElement !== root) return;
@@ -75,6 +85,11 @@
       const visibleTop = viewport ? viewport.offsetTop : 0;
       const visibleBottom = visibleTop + (viewport ? viewport.height : window.innerHeight);
       root.style.maxHeight = Math.max(120, Math.min(420, (visibleBottom - visibleTop) * .55)) + 'px';
+      // Preserve long-press/range selection. Only a collapsed caret follows the keyboard.
+      if (!selected.isCollapsed) return;
+      const tail = selection()?.end === textOf(blocks).length;
+      stickBottom = tail;
+      if (tail) root.scrollTop = root.scrollHeight;
       const range = selected.getRangeAt(0).cloneRange(); range.collapse(false);
       let rect = range.getBoundingClientRect();
       if (!rect.height && range.startContainer.nodeType === 3 && range.startOffset > 0) {
@@ -169,7 +184,22 @@
     root = element; changed = onChange;
     ['input', 'keyup', 'click', 'focus', 'compositionupdate', 'compositionend'].forEach(type => root.addEventListener(type, followCaret));
     document.addEventListener('selectionchange', followCaret);
-    if (window.visualViewport) { window.visualViewport.addEventListener('resize', followCaret); window.visualViewport.addEventListener('scroll', followCaret); }
+    root.addEventListener('pointerdown', e => {
+      pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, at: Date.now(), first: document.activeElement !== root, moved: false };
+    });
+    root.addEventListener('pointermove', e => { if (pointer?.id === e.pointerId && Math.hypot(e.clientX-pointer.x, e.clientY-pointer.y)>8) pointer.moved = true; });
+    root.addEventListener('pointercancel', () => { pointer = null; });
+    root.addEventListener('contextmenu', () => { pointer = null; });
+    root.addEventListener('click', e => {
+      const p = pointer; pointer = null;
+      if (!p?.first || p.moved || Date.now()-p.at>450 || e.detail>1 || composing || root.contentEditable==='false' || e.target.closest('.memo-continue')) return;
+      const range = selection(); if (range && range.start !== range.end) return;
+      select(textOf(blocks).length); revealEnd();
+    });
+    root.addEventListener('scroll', () => { stickBottom = root.scrollHeight-root.clientHeight-root.scrollTop < 8; }, { passive: true });
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(layoutChanged).observe(root);
+    window.addEventListener('resize', layoutChanged);
+    if (window.visualViewport) { window.visualViewport.addEventListener('resize', layoutChanged); window.visualViewport.addEventListener('scroll', layoutChanged); }
     root.addEventListener('compositionstart', () => { remember(); composing = true; });
     root.addEventListener('compositionend', () => { composing = false; input(); paint(selection()); changed(); });
     root.addEventListener('beforeinput', e => {
@@ -195,6 +225,6 @@
       e.preventDefault(); e.clipboardData.setData('text/plain', textOf(blocks).slice(s.start, s.end)); insert('');
     });
   }
-  function show(list, readOnly) { blocks = clone(list); undo = []; redo = []; root.contentEditable = readOnly ? 'false' : 'true'; paint(); root.scrollTop = root.scrollHeight; }
-  App.memoEditor = { init, show, read: () => clone(blocks), text: () => textOf(blocks), selection, insert, busy: () => composing, select, textOf, splice, diff, normalize };
+  function show(list, readOnly) { blocks = clone(list); undo = []; redo = []; root.contentEditable = readOnly ? 'false' : 'true'; paint(); root.scrollTop = root.scrollHeight; revealEnd(); }
+  App.memoEditor = { init, show, read: () => clone(blocks), text: () => textOf(blocks), selection, insert, busy: () => composing, select, revealEnd, textOf, splice, diff, normalize };
 })();

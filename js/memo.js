@@ -105,7 +105,7 @@
       const editor = $('memo-editor');
       if (document.activeElement === editor && key === previousDay && App.memoEditor.text() === (n ? n.text : '')) return;
       App.memoEditor.show(segments(n), S().status().readOnly);
-      requestAnimationFrame(() => { if (selected === key) editor.scrollTop = editor.scrollHeight; });
+      requestAnimationFrame(() => { if (selected === key) App.memoEditor.revealEnd(); });
       $('memo-heading').textContent = key === userDay() ? '今天的笔记' : key + ' 的笔记';
       $('memo-day-hint').textContent = '北京时间 · ' + key + ' 04:00 至 ' + shiftDay(key, 1) + ' 03:59';
       $('memo-editor').dataset.day = key;

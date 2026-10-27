@@ -903,14 +903,14 @@ test('habit timing resolves original habit and separates day estimates',async()=
 test('editor save-and-start retries each persistence stage without duplicate tasks or sessions',async()=>{
  for(const failAt of [1,2]){
   const b=browser();await b.S.load();const {A,P,M}=flowHarness(b);b.ctx.App.memo.flush=async()=>true;P.render=()=>{};let handlers,closed=false;const nodes={};const make=()=>({value:'',disabled:false,hidden:false,textContent:'',isConnected:true,focus(){},addEventListener(){}});['#mw-title','#mw-note-edit','#mw-points','#mw-estimate','#mw-start','#mw-end','#mw-form-error'].forEach(k=>nodes[k]=make());const buttons={};['cancel','save','save-start','convert','delete'].forEach(k=>buttons[k]=make());const modal={querySelector:s=>nodes[s]||buttons[s.match(/^\[data-act="([^"]+)"\]$/)?.[1]]||null,querySelectorAll:s=>s==='.modal-actions button'?Object.values(buttons):Object.values(nodes)};
-  b.ctx.App.ui={openModal:()=>modal,bindActions:h=>handlers=h,closeModal:()=>{closed=true;},toast:()=>{}};vm.runInContext(source('js/memo-workspace.js'),b.ctx);b.ctx.App.memoWorkspace.editor(null,'ideal');nodes['#mw-title'].value='只创建一次';nodes['#mw-estimate'].value='25';const original=b.S.save;let calls=0;b.S.save=async()=>++calls===failAt?false:original();
+  b.ctx.App.ui={dateContext(){},openModal:()=>modal,bindActions:h=>handlers=h,closeModal:()=>{closed=true;},toast:()=>{}};vm.runInContext(source('js/memo-workspace.js'),b.ctx);b.ctx.App.memoWorkspace.editor(null,'ideal');nodes['#mw-title'].value='只创建一次';nodes['#mw-estimate'].value='25';const original=b.S.save;let calls=0;b.S.save=async()=>++calls===failAt?false:original();
   await handlers['save-start'](buttons['save-start']);assert.equal(closed,false);assert.equal(A.busy(),true);assert.equal(b.S.getDay(M.userDay()).tasks.ideal.filter(t=>t.text==='只创建一次').length,1);
   await handlers['save-start'](buttons['save-start']);assert.equal(closed,true);assert.equal(A.busy(),false);assert.equal(b.S.getDay(M.userDay()).tasks.ideal.filter(t=>t.text==='只创建一次').length,1);assert.equal(P.state().sessions.filter(s=>s.status==='running').length,1);
  }
 });
 test('editor validation rollback can retry changes to the current stored task',async()=>{
  const b=browser();await b.S.load();const {A,P,M}=flowHarness(b);b.ctx.App.memo.flush=async()=>true;P.render=()=>{};let handlers,closed=false;const nodes={};const make=()=>({value:'',disabled:false,hidden:false,textContent:'',isConnected:true,focus(){},addEventListener(){}});['#mw-title','#mw-note-edit','#mw-points','#mw-estimate','#mw-start','#mw-end','#mw-form-error'].forEach(k=>nodes[k]=make());const buttons={};['cancel','save','save-start','convert','delete'].forEach(k=>buttons[k]=make());const modal={querySelector:s=>nodes[s]||buttons[s.match(/^\[data-act="([^"]+)"\]$/)?.[1]]||null,querySelectorAll:s=>s==='.modal-actions button'?Object.values(buttons):Object.values(nodes)};
- const day=M.userDay(),ref={kind:'task',id:'retry-edit',day,list:'ideal'};b.S.getDay(day).tasks.ideal.push({id:ref.id,text:'原名称',points:5});b.ctx.App.ui={openModal:()=>modal,bindActions:h=>handlers=h,closeModal:()=>closed=true,toast:()=>{}};vm.runInContext(source('js/memo-workspace.js'),b.ctx);b.ctx.App.memoWorkspace.editor(ref);nodes['#mw-title'].value='第一次修改';nodes['#mw-end'].value='14:00';await handlers.save(buttons.save);assert.equal(closed,false);assert.equal(P.find(ref).text,'原名称');assert.equal(A.busy(),false);nodes['#mw-end'].value='';nodes['#mw-title'].value='修正后的名称';await handlers.save(buttons.save);assert.equal(closed,true);assert.equal(P.find(ref).text,'修正后的名称');
+ const day=M.userDay(),ref={kind:'task',id:'retry-edit',day,list:'ideal'};b.S.getDay(day).tasks.ideal.push({id:ref.id,text:'原名称',points:5});b.ctx.App.ui={dateContext(){},openModal:()=>modal,bindActions:h=>handlers=h,closeModal:()=>closed=true,toast:()=>{}};vm.runInContext(source('js/memo-workspace.js'),b.ctx);b.ctx.App.memoWorkspace.editor(ref);nodes['#mw-title'].value='第一次修改';nodes['#mw-end'].value='14:00';await handlers.save(buttons.save);assert.equal(closed,false);assert.equal(P.find(ref).text,'原名称');assert.equal(A.busy(),false);nodes['#mw-end'].value='';nodes['#mw-title'].value='修正后的名称';await handlers.save(buttons.save);assert.equal(closed,true);assert.equal(P.find(ref).text,'修正后的名称');
 });
 
 test('same-day category change preserves running timer, task identity and historical ledger',async()=>{
@@ -1174,8 +1174,9 @@ test('173 a goal of one and 99 paid punches stays directly accessible in all thr
  assert.match(F.planned(day,'required',false),/可奖励 98次/);
  assert.equal(F.planned(day,'required',true),'');
  b.S.data().checkins[0].days[day]=99;
- assert.equal(F.planned(day,'required',false),'');
- assert.match(F.planned(day,'required',true),/仅记录/);
+ assert.match(F.planned(day,'required',false),/habit-plan-goal-done/);
+ assert.match(F.planned(day,'required',false),/仅记录/);
+ assert.equal(F.planned(day,'required',true),'');
 });
 
 
@@ -1187,4 +1188,37 @@ test('173 activation snapshot does not double count same-millisecond old entries
  assert.equal(E.state().openingBalance,100);
  d.ledger.push({id:'after-init',at,points:20,type:'adjust'});
  assert.equal(E.balanceAt(Date.parse('2026-10-29T04:00:00+08:00')),120);
+});
+
+test('173.2 one session crossing 04:00 splits daily time and retains full current duration', async () => {
+ const b=browser();await b.S.load();const {P,M}=flowHarness(b),day='2026-10-26',next=M.shiftDay(day,1),edge=Date.parse(next+'T04:00:00+08:00');
+ b.S.data().queue=[{id:'cross-day',text:'分日执行'}];const ref={kind:'queue',id:'cross-day'};
+ const run=P.startRef(ref,edge-20*60000);P.pauseCore(run,edge+20*60000);
+ const before=JSON.stringify(b.S.data().ledger),t=P.timing(ref,edge+30*60000);
+ assert.equal(t.todayMs,20*60000);assert.equal(t.allMs,40*60000);assert.equal(t.currentMs,40*60000);
+ assert.equal(P.dayExecutionMs(day,edge+30*60000),20*60000);assert.equal(P.dayExecutionMs(next,edge+30*60000),20*60000);
+ assert.equal(P.startRef(ref,edge+60*60000).id,run.id);P.pauseCore(run,edge+70*60000);
+ assert.equal(P.timing(ref,edge+80*60000).currentMs,50*60000);assert.equal(JSON.stringify(b.S.data().ledger),before);
+ await b.S.save();const again=browser({shared:b});await again.S.load();const h=flowHarness(again);
+ assert.equal(h.P.timing(ref,edge+80*60000).allMs,50*60000);
+});
+
+test('173.2 dated repeat references share time statistics without moving completion or ledger dates', async () => {
+ const b=browser();await b.S.load();const {P,M}=flowHarness(b),day='2026-10-26',next=M.shiftDay(day,1),edge=Date.parse(next+'T04:00:00+08:00');
+ b.S.data().memoProjects=[{id:'daily-cross',text:'每日推进原规则',days:{}}];const old={kind:'project',id:'daily-cross',day},today={...old,day:next};
+ const run=P.startRef(old,edge-20*60000);assert.equal(P.startRef(today,edge+10*60000).id,run.id);
+ const before=JSON.stringify(b.S.data().memoProjects),t=P.timing(today,edge+20*60000);
+ assert.equal(t.totalMs,20*60000);assert.equal(t.allMs,40*60000);assert.equal(t.currentMs,40*60000);
+ assert.equal(P.timing(old,edge+20*60000).totalMs,20*60000);assert.notEqual(P.key(old),P.key(today));
+ P.stopRef(today,edge+20*60000);assert.equal(run.status,'ended');assert.equal(run.ref.day,day);
+ assert.equal(JSON.stringify(b.S.data().memoProjects),before);assert.equal(b.S.data().ledger.length,0);
+});
+
+test('173.2 explicit rescheduling retains timer totals while same-title copies remain independent', async () => {
+ const b=browser();await b.S.load();const {P,M,F}=flowHarness(b),day=M.userDay(),next=M.shiftDay(day,1),base=Date.now()-3600000;
+ b.S.getDay(day).tasks.ideal=[{id:'move-clock',text:'相同标题',points:3}];const ref={kind:'task',id:'move-clock',day,list:'ideal'};
+ const run=P.startRef(ref,base);P.stopRef(ref,base+600000);assert.equal(P.timing(ref).allMs,600000);
+ F.moveCore(ref,next,'ideal');b.S.getDay(next).tasks.ideal.push({id:'copy-clock',text:'相同标题',points:3});await b.S.save();
+ assert.equal(P.timing({...ref,day:next}).allMs,600000);assert.equal(P.timing({kind:'task',id:'copy-clock',day:next,list:'ideal'}).allMs,0);
+ assert.equal(P.timing(ref).allMs,600000);assert.equal(run.ref.day,day);assert.equal(b.S.data().ledger.length,0);
 });

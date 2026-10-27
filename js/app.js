@@ -368,6 +368,7 @@
     const unifiedTimeline = window.__MEMO_MODE && v === 'timeline';
     if (unifiedTimeline) v = 'memo-timeaxis';
     if (window.__MEMO_MODE && v === 'queue') v = 'tasks';
+    if (currentView === 'memo' && v !== 'memo') document.getElementById('memo-editor')?.blur();
     currentView = v;
     document.body.dataset.view = v;
     if (v === 'memo-history' && App.memo) App.memo.history();
@@ -380,7 +381,7 @@
     document.querySelectorAll('.view').forEach(function (sec) {
       sec.classList.toggle('active', sec.id === 'view-' + v);
     });
-    if (v === 'memo') requestAnimationFrame(function () { const editor = document.getElementById('memo-editor'); if (editor) editor.scrollTop = editor.scrollHeight; });
+    if (v === 'memo') requestAnimationFrame(function () { const editor = document.getElementById('memo-editor'); if (editor) App.memoEditor?.revealEnd(); });
     if (v === 'timeline') App.timeline.render();
     if (v === 'memo-timeaxis') App.memoSchedule.open({ workspace: true });
     if (unifiedTimeline) document.querySelectorAll('[data-view="timeline"]').forEach(b => b.classList.add('active'));

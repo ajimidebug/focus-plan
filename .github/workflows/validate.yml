@@ -32,7 +32,9 @@ jobs:
           npm install --no-save --no-audit --no-fund playwright@1.57.0
           npx playwright install --with-deps chromium
       - name: Run real-browser responsive and dialog checks
-        run: node test/browser-smoke.mjs
+        run: |
+          node test/browser-smoke.mjs
+          node test/interaction-1732.browser.cjs
       - name: Ensure validation does not publish or mutate source branch
         run: |
           echo "Prepared artifacts are local to this runner."

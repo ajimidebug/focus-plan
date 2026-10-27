@@ -6,10 +6,8 @@ function note(entry){if(entry.memoPassage)return;const day=M().userDay(),at=entr
 function rules(){return S().data().memoHabitPlans||[];}
 function plans(day){return (S().data().checkins||[]).flatMap(it=>{const all=rules().filter(r=>r.habitId===it.id&&r.from<=day&&(!r.until||day<r.until)&&(r.mode==='daily'||r.from===day));const once=all.filter(r=>r.mode==='once').at(-1),r=once||all.filter(r=>r.mode==='daily').sort((a,b)=>a.from.localeCompare(b.from)).at(-1);return r&&(!it.archived||day<(it.memoArchivedDay||M().userDay())||Number(it.days?.[day])>0)?[{it,r,n:Number(it.days?.[day])||0}]:[];});}
 function planned(day,list,completed=null){
- const goalDone=({it,r,n})=>A.memoPenalty?.policy(it,day).mode!=='punch'&&(r.target>0?n>=r.target:n>0);
- const folded=x=>goalDone(x)&&x.n>=S().habitRules(x.it).rewardLimit;
- return plans(day).filter(x=>!x.r.hidden&&x.r.list===list&&(completed===null||folded(x)===completed))
- .sort((a,b)=>Number(folded(a))-Number(folded(b)))
+ if(completed===true)return '';
+ return plans(day).filter(x=>!x.r.hidden&&x.r.list===list)
  .map(({it,r,n})=>{
    const mode=A.memoPenalty?.policy(it,day).mode||'reward',bad=mode==='punch';
    const done=!bad&&(r.target>0?n>=r.target:n>0);
@@ -17,7 +15,7 @@ function planned(day,list,completed=null){
    const quote=A.checkin?.memoPoints?.(it,day)??0;
    const label=bad?'发生 '+n+'次':n+'/'+r.target+'次'+(done?' ✓已达标':'')+
      (remaining?' · 可奖励 '+remaining+'次':' · 仅记录');
-   return '<button type="button" class="habit-plan-row '+(folded({it,r,n})?'habit-plan-done':done?'habit-plan-goal-done':'')+
+   return '<button type="button" class="habit-plan-row '+(done?'habit-plan-goal-done':'')+
      '" data-habit-kind="'+mode+'" data-bounty="'+!!A.memoOrganize?.bounty(Number(it.points)||0)+
      '" data-category="'+list+'" data-habit-punch="'+E(it.id)+'" data-habit-day="'+day+
      '"><span class="habit-plan-title">'+E(it.text)+' <small>'+(bad?'坏习惯':mode==='miss'?'漏打卡':'打卡')+
@@ -31,15 +29,16 @@ function panel(day){
  if(!remaining.length)return '';
  return '<details class="task-habit-panel" '+(localStorage.getItem('focusPlanHabitFold')==='1'?'':'open')+'><summary>未安排的积分习惯（'+remaining.length+'）</summary><div class="task-habit-grid">'+
  remaining.map(it=>{
- const mode=A.memoPenalty?.policy(it,M().userDay()).mode||'reward',
-   points=A.checkin.memoPoints(it,M().userDay());
- return '<article data-habit-kind="'+mode+'"><button class="habit-info" data-habit-info="'+E(it.id)+'">'+E(it.text)+' ›</button><small>今日 '+
- (Number(it.days?.[M().userDay()])||0)+' 次</small><button class="btn '+(mode==='punch'?'btn-danger':'btn-primary')+
- '" data-habit-punch="'+E(it.id)+'" data-habit-day="'+M().userDay()+'">'+(mode==='punch'?'记录':'打卡')+' '+(points>0?'+':'')+
+ const habitDay=M().userDay();
+ const mode=A.memoPenalty?.policy(it,habitDay).mode||'reward', n=Number(it.days?.[habitDay])||0, target=S().habitRules(it).target,done=mode!=='punch'&&target>0&&n>=target,
+   points=A.checkin.memoPoints(it,habitDay);
+ return '<article class="'+(done?'habit-plan-goal-done':'')+'" data-habit-kind="'+mode+'"><button class="habit-info" data-habit-info="'+E(it.id)+'">'+E(it.text)+' ›</button><small>'+ '今日'+' '+
+ n+' 次'+(done?' · 已达标':'')+'</small><button class="btn '+(mode==='punch'?'btn-danger':'btn-primary')+
+ '" data-habit-punch="'+E(it.id)+'" data-habit-day="'+habitDay+'">'+(mode==='punch'?'记录':'打卡')+' '+(points>0?'+':'')+
  points+'分</button><button class="btn" data-habit-arrange="'+E(it.id)+'">安排到任务</button></article>';
  }).join('')+'</div></details>';
 }
-function arrange(id){const it=(S().data().checkins||[]).find(x=>x.id===id);if(!it)return;const today=M().userDay(),m=A.ui.openModal('安排打卡 · '+it.text,'<input type="hidden" id="hp-mode" value="once"><div class="habit-mode"><button class="btn" data-mode="once" aria-pressed="true">单日安排</button><button class="btn" data-mode="daily" aria-pressed="false">每日固定</button></div><label>日期／生效日期<input type="date" id="hp-day" value="'+today+'"></label><p>每日固定安排从所选日期起覆盖旧规则；单日安排只覆盖指定日期。</p><input type="hidden" id="hp-list" value="required"><div class="mw-assign-choices"><button class="btn" data-act="save" data-list="required">必做</button><button class="btn" data-act="save" data-list="ideal">理想</button><button class="btn" data-act="save" data-list="extra">长期拓展</button></div><label>计划次数<input type="number" min="1" max="10000" id="hp-target" value="'+Math.max(1,S().habitRules(it).target)+'"></label><p>只改变安排，不改变奖励上限或整组奖励。</p><p role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn" data-act="remove">取消所选日安排</button><button class="btn" data-act="stop">停止每日安排</button>',{lock:true});const q=x=>m.querySelector('#hp-'+x);m.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{q('mode').value=b.dataset.mode;m.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));q('mode').dispatchEvent(new Event('change'));});q('mode').onchange=()=>{};async function save(b,remove){if(A.memoActions.busy())return;if(b.dataset.list)q('list').value=b.dataset.list;b.disabled=true;try{await A.memoActions.commit(()=>{let day=q('day').value,mode=q('mode').value,target=Number(q('target').value);if(!M().validDate(day)||day<today||!Number.isInteger(target)||target<1||target>10000)throw Error('请选择今天或未来日期和有效次数');const d=S().data();d.memoHabitPlans=d.memoHabitPlans||[];if(mode==='daily'){// The latest fixed rule wins from its effective day; no conflict prompt.
+function arrange(id){const it=(S().data().checkins||[]).find(x=>x.id===id);if(!it)return;const today=M().userDay(),m=A.ui.openModal('安排打卡 · '+it.text,'<input type="hidden" id="hp-mode" value="once"><div class="habit-mode"><button class="btn" data-mode="once" aria-pressed="true">单日安排</button><button class="btn" data-mode="daily" aria-pressed="false">每日固定</button></div><label>日期／生效日期<input type="date" id="hp-day" value="'+today+'"></label><p>每日固定安排从所选日期起覆盖旧规则；单日安排只覆盖指定日期。</p><input type="hidden" id="hp-list" value="required"><div class="mw-assign-choices"><button class="btn" data-act="save" data-list="required">必做</button><button class="btn" data-act="save" data-list="ideal">理想</button><button class="btn" data-act="save" data-list="extra">长期拓展</button></div><label>计划次数<input type="number" min="1" max="10000" id="hp-target" value="'+Math.max(1,S().habitRules(it).target)+'"></label><p>只改变安排，不改变奖励上限或整组奖励。</p><p role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn" data-act="remove">取消所选日安排</button><button class="btn" data-act="stop">停止每日安排</button>',{lock:true});const q=x=>m.querySelector('#hp-'+x);A.ui.dateContext(m,{getDay:()=>q('day').value,label:'安排／生效日期',choiceSelector:'[data-act=save]'});m.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{q('mode').value=b.dataset.mode;m.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));q('mode').dispatchEvent(new Event('change'));});q('mode').onchange=()=>{};async function save(b,remove){if(A.memoActions.busy())return;if(b.dataset.list)q('list').value=b.dataset.list;b.disabled=true;try{await A.memoActions.commit(()=>{let day=q('day').value,mode=q('mode').value,target=Number(q('target').value);if(!M().validDate(day)||day<today||!Number.isInteger(target)||target<1||target>10000)throw Error('请选择今天或未来日期和有效次数');const d=S().data();d.memoHabitPlans=d.memoHabitPlans||[];if(mode==='daily'){// The latest fixed rule wins from its effective day; no conflict prompt.
   for(let i=rules().length-1;i>=0;i--){
     const old=rules()[i];if(old.habitId!==id)continue;
     if(old.mode==='daily'){

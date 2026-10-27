@@ -36,6 +36,9 @@
   function find(ref) { return resolve(ref)?.task; }
   function canonical(ref) { return resolve(ref)?.ref || ref; }
   function key(ref) { const r = canonical(ref); return JSON.stringify([r.kind, r.id, r.kind === 'queue' ? '' : r.day || '']); }
+  const repeats = ref => ['project', 'daily', 'checkin'].includes(ref.kind);
+  // Statistics can span dates; completion and ledger identities remain dated.
+  function timerKey(ref) { const r = canonical(ref); return repeats(r) ? JSON.stringify([r.kind, r.id]) : key(r); }
   function sources(forDay) {
     const d = S().data(), out = [], dayKey = forDay || selectedDay || M().userDay();
     (d.queue || []).filter(t=>!t.memoDismissed&&!t.archived&&(!t.assignment||t.assignment.day===dayKey)).forEach(t => out.push({ ref: { kind: 'queue', id: t.id }, title: t.text, label: '队列 · ' + t.text }));
@@ -68,22 +71,28 @@
     return total;
   }
   function elapsed(session, now = Date.now()) { return session.chunks.reduce((sum, c) => sum + Math.max(0, (c.end == null ? now : c.end) - c.start), 0); }
-  function timing(ref,now=Date.now()) {
-    const r=canonical(ref);planSummary(r);const sessions=summaryCache&&summaryCache.schedule===S().data().memoSchedule?summaryCache.sessionIndex?.get(key(r))||[]:[];
-    const bounds=['project','daily','checkin'].includes(r.kind)&&r.day?[dayStart(r.day),dayStart(M().shiftDay(r.day,1))]:[-Infinity,now];
-    const effective=s=>s.chunks.reduce((n,c)=>n+Math.max(0,Math.min(c.end??now,now,bounds[1])-Math.max(c.start,bounds[0])),0);
-    const rank=s=>s.status==='running'?2:s.status==='paused'?1:0,last=s=>s.chunks.at(-1)?.end??s.chunks.at(-1)?.start??0;
-    const session=sessions.slice().sort((a,b)=>rank(b)-rank(a)||last(b)-last(a))[0]||null;
-    return {totalMs:sessions.reduce((n,s)=>n+effective(s),0),currentMs:session?effective(session):0,session};
+  function timing(ref, now = Date.now()) {
+    const r = canonical(ref); planSummary(r);
+    const sessions = summaryCache?.timerIndex?.get(timerKey(r)) || [];
+    const today = M().userDay(now), day = repeats(r) && r.day ? r.day : today;
+    const within = (s, start = -Infinity, end = now) => s.chunks.reduce((n, c) => n + Math.max(0, Math.min(c.end ?? now, now, end) - Math.max(c.start, start)), 0);
+    const inDay = (s, d) => within(s, dayStart(d), dayStart(M().shiftDay(d, 1)));
+    const allMs = sessions.reduce((n, s) => n + within(s), 0), dayMs = sessions.reduce((n, s) => n + inDay(s, day), 0);
+    const todayMs = day === today ? dayMs : sessions.reduce((n, s) => n + inDay(s, today), 0);
+    const rank = s => s.status === 'running' ? 2 : s.status === 'paused' ? 1 : 0, last = s => s.chunks.at(-1)?.end ?? s.chunks.at(-1)?.start ?? 0;
+    const eligible = repeats(r) && day !== today ? sessions.filter(s => s.ref.day === day || inDay(s, day) > 0) : sessions;
+    const session = eligible.slice().sort((a, b) => rank(b) - rank(a) || last(b) - last(a))[0] || null;
+    // Keep totalMs compatible with existing completion snapshots: repeats use their target day.
+    return { totalMs: repeats(r) ? dayMs : allMs, allMs, dayMs, todayMs, day, currentMs: session ? within(session) : 0, session };
   }
-  function timingText(t){return '累计 '+duration(t.totalMs)+'\n'+(t.session?.status==='ended'?'上次 ':'本次 ')+duration(t.currentMs);}
+  function timingText(t) { return (t.day === M().userDay() ? '今日 ' : t.day + ' ') + duration(t.dayMs) + ' · 累计 ' + duration(t.allMs) + '\n' + (t.session?.status === 'ended' ? '上次 ' : '本次 ') + duration(t.currentMs); }
   function duration(ms) { const sec = Math.floor(Math.max(0, ms) / 1000); return Math.floor(sec / 3600) + ':' + String(Math.floor(sec / 60) % 60).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); }
   function active() { return state().sessions.find(s => s.status === 'running'); }
   function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
   function startRef(ref, now = Date.now(), itemId = null) {
     summaryCache = null; const d = state(), found = resolve(ref); if (!found || found.task.archived) throw new Error('任务已删除或停用，请重新选择');
     if (isDone({ ref: found.ref })) throw new Error('任务已完成；取消完成后再计时');
-    const running = active(); if (running && key(running.ref) === key(found.ref) && (itemId == null || running.itemId === itemId)) return running;
+    const running = active(); if (running && timerKey(running.ref) === timerKey(found.ref) && (itemId == null || running.itemId === itemId)) return running;
     if (running) pauseCore(running, now);
     let session = d.sessions.slice().reverse().find(s => key(s.ref) === key(found.ref) && s.status === 'paused' && (s.itemId || null) === itemId);
     if (session) { session.status = 'running'; session.chunks.push({ start: now, end: null }); }
@@ -95,7 +104,8 @@
   function stopCore(id, now = Date.now()) { state().sessions.filter(s => s.itemId === id && s.status !== 'ended').forEach(s => stopSession(s, now)); }
   function pause(id, now = Date.now()) { const s = state().sessions.find(s => s.itemId === id && s.status === 'running'); if (s) pauseCore(s, now); }
   function stopRef(ref, now = Date.now(), deleted = false) {
-    const d = state(), k = key(ref); d.sessions.filter(s => key(s.ref) === k && s.status !== 'ended').forEach(s => stopSession(s, now));
+    const d = state(), k = key(ref), r = canonical(ref);
+    d.sessions.filter(s => s.status !== 'ended' && (key(s.ref) === k || repeats(r) && timerKey(s.ref) === timerKey(r) && s.chunks.some(c => c.start < dayStart(M().shiftDay(r.day, 1)) && (c.end ?? now) > dayStart(r.day)))).forEach(s => stopSession(s, now));
     if (deleted) d.items.filter(p => key(p.ref) === k).forEach(p => { p.deleted = true; });
   }
   function isDone(item) { const found = resolve(item.ref); if (!found) return false; const t = found.task, r = found.ref; return r.kind==='checkin'?(App.memoPenalty?.policy(t,r.day).mode==='punch'?false:Number(t.days?.[r.day]||0)>=Math.max(1,App.memoFinance?.plans(r.day).find(x=>x.it.id===t.id)?.r.target??S().habitRules(t).target)):r.kind === 'queue' ? !!(t.doneAt || t.doneDay) : (r.kind === 'daily' || r.kind === 'project') ? !!t.days?.[r.day] : !!t.done; }
@@ -143,6 +153,7 @@
     const q = s => m.querySelector(s), ref = old?.ref || preset;
     q('#sp-source').value = ref ? String(all.findIndex(x => key(x.ref) === key(ref))) : 'new';
     q('#sp-day').value = old?.day || selectedDay;
+    App.ui.dateContext(m,{getDay:()=>q('#sp-day').value,label:'安排到',sourceDay:old?.day,saveSelector:'[data-act=save]'});
     q('#sp-start').value = old ? time(old.start) : M().clock();
     q('#sp-end').value = old?.end ? time(old.end) : '';
     q('#sp-next').checked = old?.end ? M().naturalDay(old.end) !== old.day : false;
@@ -235,8 +246,8 @@
       const index = new Map();
       schedule.items.filter(p => !p.deleted).forEach(p => { const k = key(p.ref); if (!index.has(k)) index.set(k, []); index.get(k).push(p); });
       index.forEach(list => list.sort((a, b) => a.start - b.start));
-      const activeIndex=new Map(),sessionIndex=new Map();(schedule.sessions||[]).forEach(s=>{const k=key(s.ref);if(!sessionIndex.has(k))sessionIndex.set(k,[]);sessionIndex.get(k).push(s);if(s.status!=='ended'&&activeIndex.get(k)?.status!=='running')activeIndex.set(k,s);});
-      summaryCache = { schedule, revision: data._storageRevision, index, activeIndex, sessionIndex };
+      const activeIndex=new Map(),sessionIndex=new Map(),timerIndex=new Map();(schedule.sessions||[]).forEach(s=>{const k=key(s.ref);if(!sessionIndex.has(k))sessionIndex.set(k,[]);sessionIndex.get(k).push(s);const tk=timerKey(s.ref);if(!timerIndex.has(tk))timerIndex.set(tk,[]);timerIndex.get(tk).push(s);if(s.status!=='ended'&&activeIndex.get(k)?.status!=='running')activeIndex.set(k,s);});
+      summaryCache = { schedule, revision: data._storageRevision, index, activeIndex, sessionIndex, timerIndex };
     }
     const targetDay = find(ref)?.assignment?.day || ref.day;
     const plans = (summaryCache.index.get(key(ref)) || []).filter(p => !targetDay || p.day === targetDay);
@@ -245,7 +256,7 @@
   function rowControls(ref) {
     try { const r = canonical(ref), encoded = esc(JSON.stringify(r)), summary = planSummary(r);
       const t=timing(r),session=t.session?.status!=='ended'?t.session:null;
-      const command = (act, text) => '<button type="button" class="btn btn-small" data-schedule-command="' + act + '" data-schedule-ref="' + encoded + '"' + (session ? ' data-session-id="' + esc(session.id) + '"' : '') + '>' + text + '</button>';
+      const command = (act, text) => '<button type="button" class="btn btn-small" data-schedule-command="' + act + '" data-schedule-ref="' + (session && act !== 'plan' ? esc(JSON.stringify(session.ref)) : encoded) + '"' + (session ? ' data-session-id="' + esc(session.id) + '"' : '') + '>' + text + '</button>';
       const stats=t.session?'<strong class="schedule-inline-status" data-task-timing="'+encoded+'">'+esc(timingText(t))+'</strong>':'';
       return '<div class="schedule-row-tools"><span class="mw-plan-control">'+command('plan',summary||'安排时间')+'</span><span class="mw-timer-control">'+stats+(session?command(session.status==='running'?'pause':'start',session.status==='running'?'Ⅱ 暂停计时':'▶ 继续计时')+'<details class="mw-session-menu"><summary>计时操作</summary>'+command('end','结束')+'</details>':isDone({ref:r})?'<small>已完成</small>':command('start','▶ 开始计时'))+'</span></div>';
 
@@ -389,5 +400,5 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } }); window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();
   }
-  App.memoSchedule = { setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
+  App.memoSchedule = { setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
 })();

@@ -136,6 +136,39 @@
     if (modal.isConnected && !modal.contains(modalDoc.activeElement)) modal.focus({ preventScroll: true });
     return modal;
   }
+  // A fixed target day is never silently changed when the user-day boundary passes.
+  function dateContext(modal, options = {}) {
+    const M = App.memoCore, doc = modal.ownerDocument, win = doc.defaultView;
+    const banner = doc.createElement('div'); banner.className = 'modal-date-context';
+    banner.setAttribute('role', 'status');
+    modal.querySelector('.modal-heading')?.after(banner);
+    const update = () => {
+      const day = options.getDay ? options.getDay() : options.day;
+      const today = M.userDay(), valid = M.validDate(day);
+      const relative = !valid ? 'undated' : day === today ? 'today' : day < today ? 'past' : 'future';
+      modal.dataset.dateContext = relative;
+      const relation = day === today ? '今天' : day === M.shiftDay(today, 1) ? '明天' : day === M.shiftDay(today, -1) ? '昨天' : day < today ? '往日' : '未来';
+      const weekday = valid ? '周' + '日一二三四五六'[new Date(day + 'T12:00:00+08:00').getUTCDay()] : '';
+      const signature = [day, today, options.sourceDay].join('|');
+      if (banner.dataset.signature !== signature) {
+        banner.dataset.signature = signature;
+        banner.textContent = valid ? (options.label || '归属日期') + '：' + relation + ' · ' + day + ' · ' + weekday : '尚未安排日期';
+        if (valid) {
+          const detail = doc.createElement('small');
+          detail.textContent = (relative === 'past' ? '正在修改往日记录 · ' : '') + (options.sourceDay && options.sourceDay !== day ? '原日期 ' + options.sourceDay + ' · ' : '') + '北京时间04:00至次日04:00';
+          banner.append(detail);
+        }
+      }
+      if (options.choiceSelector) modal.querySelectorAll(options.choiceSelector).forEach(button => { if (!button.dataset.dateLabel) button.dataset.dateLabel = button.textContent; if (!button.disabled) button.textContent = button.dataset.dateLabel + (valid ? ' · ' + day.slice(5) : ''); });
+      const save = options.saveSelector && modal.querySelector(options.saveSelector);
+      if (save && !save.disabled && !/重试|重新/.test(save.textContent)) save.textContent = valid ? (options.saveLabel || '保存到') + day : '保存';
+      modal.querySelector('[data-act="save-start"]')?.toggleAttribute('hidden', valid && day !== today || !!options.noStart);
+    };
+    modal.addEventListener('input', update); modal.addEventListener('change', update);
+    const timer = win.setInterval(update, 1000), layer = modal.closest('#modal-root'), dispose = layer?._disposeModal;
+    if (layer) layer._disposeModal = () => { win.clearInterval(timer); dispose?.(); };
+    update(); return update;
+  }
   function closeModal() {
     const clear = function (d) { if (!d) return; const r = d.getElementById('modal-root'); if (r) {r._disposeModal?.();r._disposeModal=null;r.innerHTML = '';} };
     clear(document);
@@ -318,7 +351,7 @@
   }
 
   App.ui = {
-    openModal: openModal, closeModal: closeModal, bindActions: bindActions, confirm: confirm,
+    openModal: openModal, closeModal: closeModal, bindActions: bindActions, confirm: confirm, dateContext: dateContext,
     toast: toast, floatText: floatText, floatAt: floatAt,
     // 弹窗"开在哪个文档"这套：给 tasks.js 用（拆解界面等要按弹窗所在文档查元素）
     query: query, markFloatAction: markFloatAction, willUsePip: willUsePip, uiDoc: uiDoc,

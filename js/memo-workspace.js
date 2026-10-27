@@ -51,7 +51,7 @@
         (t.groups||[]).forEach(g=>{const subs=g.subs||[];html+='<div class="t-ctx grp">🧩 '+esc(g.name||'任务组')+(subs.length?'（'+subs.filter(x=>x.done===true).length+'/'+subs.length+'）':'')+'</div>';subs.forEach(x=>{html+='<div class="t-ctx sub"><span>· '+esc(x.text)+(x.done===true?' ✓':x.done===false?' ✗':'')+'</span></div>';});});
         (t.subs||[]).forEach(x=>{html+='<div class="t-ctx sub"><span>· '+esc(x.text)+'（限'+esc(x.minutes)+'分）'+(x.done===true?' ✓':x.done===false?' ✗':'')+'</span></div>';});
         html+='</div>';
-      });return html;}const open=items.filter(x=>!doneFor(x.task,x.ref)),done=items.filter(x=>doneFor(x.task,x.ref));html+=(list==='extra'&&A.memoOrganize?A.memoOrganize.grouped(open,rows,true):rows(open))+(A.memoFinance?.planned(day,list,false)||'');const habits=A.memoFinance?.plans(day).filter(x=>!x.r.hidden&&x.r.list===list&&A.memoPenalty?.policy(x.it,day).mode!=='punch'&&x.r.target>0&&x.n>=x.r.target&&x.n>=S().habitRules(x.it).rewardLimit)||[];html+=A.memoOrganize?.fold('overview:'+day+':'+list,rows(done)+(A.memoFinance?.planned(day,list,true)||''),done.length+habits.length)||'';if(list==='required')html+=A.memoGoals?.html(day,true)||'';html+='</div>';
+      });return html;}const open=items.filter(x=>!doneFor(x.task,x.ref)),done=items.filter(x=>doneFor(x.task,x.ref));html+=(list==='extra'&&A.memoOrganize?A.memoOrganize.grouped(open,rows,true):rows(open))+(A.memoFinance?.planned(day,list,false)||'');html+=A.memoOrganize?.fold('overview:'+day+':'+list,rows(done),done.length)||'';if(list==='required')html+=A.memoGoals?.html(day,true)||'';html+='</div>';
     });return html+'</div></section>';
   }
   function overviewClick(e,day){
@@ -61,7 +61,7 @@
     const task=e.target.closest('[data-overview-ref]'),col=e.target.closest('[data-overview-list]');if(!col)return;
     e.preventDefault();e.stopImmediatePropagation();if(task)complete(JSON.parse(task.dataset.overviewRef));else{taskDay=day;const group=e.target.closest('[data-family-id]');if(group)A.memoOrganize.add(group.dataset.familyId);else editor(null,col.dataset.overviewList);}
   }
-  function categoryBody(items,day,list){const open=items.filter(x=>!doneFor(x.task,x.ref)),done=items.filter(x=>doneFor(x.task,x.ref)),habits=A.memoFinance?.plans(day).filter(x=>!x.r.hidden&&x.r.list===list&&A.memoPenalty?.policy(x.it,day).mode!=='punch'&&x.r.target>0&&x.n>=x.r.target&&x.n>=S().habitRules(x.it).rewardLimit)||[];return (list==='extra'&&A.memoOrganize?A.memoOrganize.grouped(open,rows=>rows.map(x=>card(x.task,x.ref)).join('')):open.map(x=>card(x.task,x.ref)).join(''))+(A.memoFinance?.planned(day,list,false)||'')+(A.memoOrganize?.fold('full:'+day+':'+list,done.map(x=>'<small>'+esc((S().data().memoTaskGroups||[]).find(g=>g.id===x.task.memoGroup)?.name||'')+'</small>'+card(x.task,x.ref)).join('')+(A.memoFinance?.planned(day,list,true)||''),done.length+habits.length)||'');}
+  function categoryBody(items,day,list){const open=items.filter(x=>!doneFor(x.task,x.ref)),done=items.filter(x=>doneFor(x.task,x.ref));return (list==='extra'&&A.memoOrganize?A.memoOrganize.grouped(open,rows=>rows.map(x=>card(x.task,x.ref)).join('')):open.map(x=>card(x.task,x.ref)).join(''))+(A.memoFinance?.planned(day,list,false)||'')+(A.memoOrganize?.fold('full:'+day+':'+list,done.map(x=>'<small>'+esc((S().data().memoTaskGroups||[]).find(g=>g.id===x.task.memoGroup)?.name||'')+'</small>'+card(x.task,x.ref)).join(''),done.length)||'');}
   function renderTasks() {
     taskDay = taskDay || M().userDay(); const day = S().getDay(taskDay), occurrenceDay = taskDay === M().userDay() ? M().userDay() : taskDay;
     const root = $('mw-today');
@@ -127,6 +127,7 @@
     const running=existing&&A.memoSchedule.state().sessions.slice().reverse().find(s=>A.memoSchedule.key(s.ref)===A.memoSchedule.key(ref)&&s.status!=='ended');
     immediate.hidden=day!==M().userDay()||!!(existing&&(existing.archived||doneFor(existing,ref)));
     immediate.textContent=running?.status==='running'?'保存并返回':running?'保存并继续计时':'保存并立即开始';
+    A.ui.dateContext(m, { day: kind==='queue'?(existing?.assignment?.day||null):day, saveSelector:'[data-act=save]', noStart:!!(existing&&(existing.archived||doneFor(existing,ref))) || day!==M().userDay() });
     let submitting=false,savedRef=null,taskSaved=false;
     async function save(b, convert = false, begin = false) {
       if(submitting)return;submitting=true;const actions=[...m.querySelectorAll('.modal-actions button')];actions.forEach(x=>x.disabled=true);
@@ -203,7 +204,8 @@
     if (A.memoActions.busy()) return A.ui.toast('请先重试保存当前操作');
     const t = A.memoSchedule.find(ref); if (!t) return;
     const m = A.ui.openModal('安排 · '+t.text, '<p id="ma-target">安排到今天 · '+M().userDay()+'</p><div class="mw-assign-choices">'+['required','ideal','extra'].map((list,i)=>'<button class="btn" data-act="pick" data-list="'+list+'">'+['必做','理想','长期'][i]+'</button>').join('')+'</div><details><summary>更多设置</summary><label>安排日期<input type="date" id="ma-day" value="'+M().userDay()+'"></label><p>具体时间与预计用时</p>'+'<button class="btn" data-act="time-settings">安排时间与预计用时</button><button class="btn" data-act="edit-task">编辑名称、备注与积分</button><button class="btn" data-act="queue">暂不安排</button>'+(t.overdueEventId?'<button class="btn" data-act="forgive">纠正错误扣分</button>':'')+'</details><p id="ma-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button>', {lock:true});
-    const date=m.querySelector('#ma-day');date.oninput=()=>{m.querySelector('#ma-target').textContent='安排到 '+date.value;};
+    const date=m.querySelector('#ma-day'); m.querySelector('#ma-target').hidden=true;
+    A.ui.dateContext(m,{getDay:()=>date.value,label:'安排到',sourceDay:ref.day||t.assignment?.day,choiceSelector:'[data-act=pick]'});
     async function save(b,target,list){if(A.memoActions.busy())return;const buttons=m.querySelectorAll('[data-act="pick"],[data-act="queue"]');buttons.forEach(x=>x.disabled=true);try{if(await A.memoActions.commit(()=>A.memoFlow.moveCore(ref,date.value,list||t.assignment?.list||ref.list||'ideal',target))){A.ui.closeModal();render();A.memoSchedule.render();A.ui.toast('已安排');}}catch(e){m.querySelector('#ma-error').textContent=e.message;}finally{buttons.forEach(x=>x.disabled=false);}}
     A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},pick:b=>save(b,'task',b.dataset.list),queue:b=>save(b,'queue'),'time-settings':()=>{if(!A.memoActions.busy()){A.ui.closeModal();A.memoSchedule.arrange(ref);}},'edit-task':()=>{if(!A.memoActions.busy()){A.ui.closeModal();editor(ref);}},forgive:()=>{if(A.memoActions.busy()||m.querySelector('#ma-reason'))return;const reason=document.createElement('input');reason.id='ma-reason';reason.placeholder='说明错误原因';m.querySelector('#ma-error').before(reason);const b=m.querySelector('[data-act="forgive"]');b.textContent='确认纠正';b.onclick=async()=>{try{if(await A.memoActions.commit(()=>A.memoFlow.forgiveCore(ref,reason.value))){A.ui.closeModal();render();A.app.refreshStats();}}catch(e){m.querySelector('#ma-error').textContent=e.message;}};}});
   }
