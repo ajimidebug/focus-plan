@@ -193,6 +193,11 @@
   function tick() {
     try {
       const d = state(), now = Date.now(), current = d.sessions.find(s => s.status === 'running'), paused = d.sessions.filter(s => s.status === 'paused').sort((a,b)=>(b.chunks.at(-1)?.end||b.chunks.at(-1)?.start||0)-(a.chunks.at(-1)?.end||a.chunks.at(-1)?.start||0));
+      const stat = $('stat-memo-execution');
+      if (stat) {
+        const value = stat.querySelector('.stat-value');
+        if (value) value.textContent = S().fmtDur(dayExecutionMs(M().userDay(now), now) / 60000);
+      }
       const live = $('schedule-live'); if (live) live.textContent = current ? '执行中 · ' + current.title + ' ' + duration(elapsed(current, now)) : paused.length ? '有 ' + paused.length + ' 项计时已暂停' : '';
       const controls = $('mw-live-controls'), shown = current || paused[0];
       if (controls) { const signature = shown ? shown.id + ':' + shown.status : ''; if (controls.dataset.session !== signature) { controls.dataset.session = signature; const ref = shown && esc(JSON.stringify(shown.ref)); controls.innerHTML = shown ? (shown.status === 'running' ? '<button class="btn btn-small" data-schedule-command="pause" data-schedule-ref="' + ref + '">暂停</button>' : '<button class="btn btn-small" data-schedule-command="start" data-session-id="' + esc(shown.id) + '" data-schedule-ref="' + ref + '">继续</button>') + '<button class="btn btn-small" data-schedule-command="end" data-schedule-ref="' + ref + '">结束</button>' : ''; } }
