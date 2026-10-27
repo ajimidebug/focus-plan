@@ -272,6 +272,12 @@
     }
     (clean.checkins || []).forEach(it => {
       if (!it || typeof it !== 'object') throw new Error('打卡项结构异常');
+      if (it.memoPenaltyStops !== undefined &&
+          (!Array.isArray(it.memoPenaltyStops) || it.memoPenaltyStops.some(x => !x ||
+            typeof x.from !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(x.from) ||
+            (x.until !== null && x.until !== undefined && (typeof x.until !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(x.until)))))) {
+        throw new Error('习惯停用区间异常');
+      }
       const policies = it.memoPenaltyPolicies;
       if (policies !== undefined && (!Array.isArray(policies) || policies.some(p => !p ||
           !['reward','miss','punch'].includes(p.mode) ||
