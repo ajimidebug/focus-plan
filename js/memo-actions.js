@@ -430,6 +430,21 @@
       prepared.push([change, null]);
     }
     prepared.forEach(([change, note]) => {
+      if (change.path[0]==='ledger' && App.memoEconomy?.state()) {
+        if (change.op!=='entity') throw Error('带利息的历史账本暂不支持覆盖修改，已保留原数据');
+        const original=change.before,changed=change.after;
+        const difference=(Number(original?.points)||0)-(Number(changed?.points)||0);
+        const leisure=(Number(original?.leisure)||0)-(Number(changed?.leisure)||0);
+        if(difference||leisure){
+          const at=new Date().toISOString();
+          const operationId='restore-delete:'+entry.id+':'+(changed?.id||original?.id);
+          if(!d.ledger.some(x=>x.operationId===operationId))
+            d.ledger.push({id:S().uid(),operationId,date:M().userDay(at),at,
+              type:'reverse-restored-deletion',points:difference,leisure,
+              refundOf:changed?.id||'',note:'恢复删除记录，冲正历史积分变动'});
+        }
+        return;
+      }
       if (change.op === 'note') { M().write(change.path[1], note.text, new Date().toISOString(), note.blocks); return; }
       if (change.op === 'entity') {
         const list = pathValue(d, change.path), index = list.findIndex(x => x.id === change.id); if (index >= 0) list.splice(index, 1);
