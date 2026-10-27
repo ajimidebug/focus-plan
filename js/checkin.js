@@ -81,7 +81,7 @@
     D().forEach(function (it) {
       Object.keys(it.days || {}).forEach(function (k) {
         const n = it.days[k] || 0;
-        if (n > 0) s[k] = (s[k] || 0) + n;
+        if (n > 0 && App.memoPenalty?.policy(it,k).mode !== 'punch') s[k] = (s[k] || 0) + n;
       });
     });
     return s;
@@ -99,7 +99,7 @@
     const s = dayMap();
     return s[today()] ? streakAll() : streakAll() + 1;
   }
-  function timesTodayAll() { let n = 0; D().forEach(function (it) { n += timesToday(it); }); return n; }
+  function timesTodayAll() { let n = 0; D().forEach(function (it) { if (App.memoPenalty?.policy(it,today()).mode !== 'punch') n += timesToday(it); }); return n; }
   /** 下一次打卡能拿到的倍率（今天已经打过就只剩 ×1） */
   function nextMult() { return timesTodayAll() > 0 ? 1 : multOf(streakWithToday()); }
   /** 倍率说明（给界面用）：下一档还差几天 */
@@ -357,8 +357,10 @@
             id: idForNew, text: t, points: pts, target: tg, rewardLimit, estimatedMinutes, note: nt,
             days: {}, createdAt: new Date().toISOString()
           });
+          if (penaltyMode !== 'reward') App.memoPenalty.configure(D().at(-1), penaltyMode, penaltyAmount, tg, today());
         } else {
           it.text = t; it.points = pts; it.target = tg; it.estimatedMinutes = estimatedMinutes; it.rewardLimit = rewardLimit; it.note = nt;
+          App.memoPenalty.configure(it, penaltyMode, penaltyMode === 'reward' ? 0 : penaltyAmount, tg, shiftKey(today(),1));
         }
         };
         if (window.__MEMO_MODE && App.memoActions) {
@@ -396,6 +398,7 @@
     const firstToday = timesTodayAll() === 0;
     const mult = [2, 3].includes(S().data().memoCurrency?.version) ? 1 : firstToday ? multOf(streakWithToday()) : 1;
     const gain = window.__MEMO_MODE ? memoPoints(it, today()) : Math.max(0, +it.points || 0) * mult;
+    const penaltyMode = window.__MEMO_MODE ? (App.memoPenalty?.policy(it,today()).mode || 'reward') : 'reward';
     const kToday = today();
     const wk = weekOf(it).map(function (w) {
       const on = w.times > 0;
@@ -410,9 +413,9 @@
     }).join('');
     if(window.__MEMO_MODE){
       const count=tg===0?'选做 · 今日已做 '+n+' 次':'今日 '+n+'/'+tg+' 次'+(n>tg?' · 超额 '+(n-tg)+' 次':'');
-      const detail = '<button class="btn" data-act="ck-plan" data-id="'+esc(it.id)+'">安排到任务</button><div class="ck-item-information">'+(it.note?'<p class="ck-note">'+esc(it.note)+'</p>':'')+'<p>'+count+'</p><p>每日目标 '+tg+' 次 · 本次可得 '+gain+' 分</p><h3>近七日记录与补卡</h3><p class="hint">日期按北京时间04:00划分，点击过去的日期补记一次。</p><div class="ck-week">'+wk+'</div><p>连续有记录 '+st+' 天 · 今年 '+yearDaysOf(it)+' 天</p><div class="ck-acts">'+(n>0?'<button type="button" class="btn" data-act="ck-undo" data-id="'+esc(it.id)+'">撤销最近一次</button>':'')+'<button type="button" class="btn" data-act="ck-history" data-id="'+esc(it.id)+'">打卡记录</button><button type="button" class="btn" data-act="ck-edit" data-id="'+esc(it.id)+'">编辑项目</button><button type="button" class="btn" data-act="ck-del" data-id="'+esc(it.id)+'">停用项目</button></div></div>';
+      const detail = '<button class="btn" data-act="ck-plan" data-id="'+esc(it.id)+'">安排到任务</button><div class="ck-item-information">'+(it.note?'<p class="ck-note">'+esc(it.note)+'</p>':'')+'<p>'+count+'</p><p>每日目标 '+tg+' 次 · 本次积分 '+(gain>0?'+':'')+gain+' 分</p><h3>近七日记录与补卡</h3><p class="hint">日期按北京时间04:00划分，点击过去的日期补记一次。</p><div class="ck-week">'+wk+'</div><p>连续有记录 '+st+' 天 · 今年 '+yearDaysOf(it)+' 天</p><div class="ck-acts">'+(n>0?'<button type="button" class="btn" data-act="ck-undo" data-id="'+esc(it.id)+'">撤销最近一次</button>':'')+'<button type="button" class="btn" data-act="ck-history" data-id="'+esc(it.id)+'">打卡记录</button><button type="button" class="btn" data-act="ck-edit" data-id="'+esc(it.id)+'">编辑项目</button><button type="button" class="btn" data-act="ck-del" data-id="'+esc(it.id)+'">停用项目</button></div></div>';
       if(detailsOnly)return detail;
-      return '<div class="ck-row'+(done?' done':'')+'" data-id="'+esc(it.id)+'"><div class="ck-main"><button type="button" class="ck-name ck-info-entry" data-act="ck-info" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text)+'，更多信息">'+esc(it.text)+'<span aria-hidden="true"> ›</span></button><div class="ck-cnt">'+count+(done?' · 已达标':'')+'</div></div><button type="button" class="btn btn-primary ck-punch-main" data-act="ck-punch" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text+'，打卡，本次可得'+gain+'分')+'">'+(n>0?'再记一次':'打卡')+' +'+gain+'分</button></div>';
+      return '<div class="ck-row'+(done?' done':'')+'" data-id="'+esc(it.id)+'"><div class="ck-main"><button type="button" class="ck-name ck-info-entry" data-act="ck-info" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text)+'，更多信息">'+esc(it.text)+'<span aria-hidden="true"> ›</span></button><div class="ck-cnt">'+count+(done?' · 已达标':'')+'</div></div><button type="button" class="btn btn-primary ck-punch-main" data-act="ck-punch" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text+'，打卡，本次积分'+(gain>0?'+':'')+gain+'分')+'">'+(penaltyMode==='punch'?'记录坏习惯':n>0?'再记一次':'打卡')+' '+(gain>0?'+':'')+gain+'分</button></div>';
     }
     return '<div class="ck-row' + (done ? ' done' : '') + '" data-id="' + it.id + '">' +
       '<div class="ck-main">' +
@@ -539,6 +542,8 @@
 
   function memoPoints(it, day) {
     if (!it) return 0;
+    const policy = App.memoPenalty?.policy(it,day);
+    if (policy?.mode === 'punch') return -policy.amount;
     const award = App.memoCurrency?.quote(it, day); if (award) return award.total;
     const h = S().habitRules(it); if (h.optional && (Number(it.days?.[day]) || 0) >= h.rewardLimit) return 0;
     const mult = day === today() && timesTodayAll() === 0 ? multOf(streakWithToday()) : 1;
