@@ -75,11 +75,11 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-currency.js?v=173.0.0",
-    "sha256": "aeda9eda63dee3588aad44d3fe06d630f425f0aefe148068c5dc31b2ba226574"
+    "sha256": "a61042d1d1375cc0735aa496cfc0dd1e2a28daf67a19383774a7ba4053a11cb4"
   },
   {
     "url": "./js/memo-economy.js?v=173.0.0",
-    "sha256": "73adc1b329ca86c3976a4348438ca050303dfaf2cad7b715e8ed4459af010478"
+    "sha256": "cf5cee899e8a0a4500cd2653230a1695ec4bbecba334de50cd3f7253ce9018d2"
   },
   {
     "url": "./js/memo-editor.js?v=173.0.0",
@@ -95,7 +95,7 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-flow.js?v=173.0.0",
-    "sha256": "3eb544bf8fa8eeb7e812ea53566d33948448445efccda7dc2f84b144b504bec1"
+    "sha256": "7d778cd08fc225ee8b87f05e0c39a0ca766fbcedb9653bbff9609d865c11ccef"
   },
   {
     "url": "./js/memo-goals.js?v=173.0.0",
@@ -167,7 +167,7 @@ const ASSETS = [
   },
   {
     "url": "./js/store.js?v=173.0.0",
-    "sha256": "604a715b470d19d08e18afe1765605d0d71b1ac06efc3919eaba73df32240510"
+    "sha256": "1aced6639e709e737fa219f719eecfef5c8308a06b4a7d695db6557b78fafb74"
   },
   {
     "url": "./js/tasks.js?v=173.0.0",
