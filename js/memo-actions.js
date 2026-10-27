@@ -466,12 +466,17 @@
     App.ui.bindActions({ close: () => { if (!committing && !unsettled) App.ui.closeModal(); }, restore: b => restore(b, false), unfinished: b => restore(b, true) });
   }
   async function restoreHabit(id) {
-    try { if (await transaction(() => { const it = S().data().checkins.find(x => x.id === id); if (it) it.archived = false; })) refresh(); } catch (e) { recover(e); }
+    try { if (await transaction(() => { const it = S().data().checkins.find(x => x.id === id); if (it) { it.archived = false;
+        const open = (it.memoPenaltyStops || []).findLast(x=>!x.until);
+        if (open) open.until = M().userDay();
+      } })) refresh(); } catch (e) { recover(e); }
   }
   function archiveHabit(id) {
     const it = (S().data().checkins || []).find(x => x.id === id); if (!it) return;
     App.ui.confirm('停用“' + E(it.text) + '”？历史次数、积分和笔记保留，可在打卡页的“已停用习惯”恢复。', '停用习惯', async () => {
-      try { if (await transaction(() => { it.archived = true;it.memoArchivedDay=M().userDay(); })) refresh(); } catch (e) { recover(e); }
+      try { if (await transaction(() => { it.archived = true; it.memoArchivedDay=M().userDay();
+        const stops=it.memoPenaltyStops||(it.memoPenaltyStops=[]);
+        if (!stops.some(x=>!x.until)) stops.push({from:M().userDay(),until:null}); })) refresh(); } catch (e) { recover(e); }
     });
   }
 
