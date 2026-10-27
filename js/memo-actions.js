@@ -135,12 +135,31 @@
     if (event.kind === 'checkin' && event.sourceDay < M().userDay(at)) App.memoPenalty?.settleCore(Date.parse(at));
     if(event.penaltyCorrection){
       const f=d.memoFlow, e=f.settlements.find(x=>x.id===event.penaltyCorrection);
-      if(e){d.ledger=d.ledger.filter(x=>x.operationId!=='forgive:'+e.id);delete e.forgivenAt;delete e.reason;}
+      if(e){const original=d.ledger.find(x=>x.operationId==='forgive:'+e.id);
+        if(original&&App.memoEconomy?.state()){
+          const operationId='undo-forgive:'+e.id;
+          if(!d.ledger.some(x=>x.operationId===operationId))d.ledger.push({
+            id:S().uid(),operationId,date:M().userDay(at),at,type:'reverse-refund-penalty',
+            points:-(Number(original.points)||0),leisure:0,refundOf:original.id,
+            note:'撤销逾期罚分豁免'});
+        }else d.ledger=d.ledger.filter(x=>x.operationId!=='forgive:'+e.id);
+        delete e.forgivenAt;delete e.reason;}
     }
     const backfilled=event.kind==='task'?locateTask({kind:'task',id:event.sourceId,day:event.sourceDay,list:event.sourceList}):(d.queue||[]).find(t=>t.id===event.sourceId);
     if(backfilled)delete backfilled.backfillDay;
     (d.memoFinanceAudit||(d.memoFinanceAudit=[])).push({id:S().uid(),eventId:event.id,day:M().userDay(at),at,title:event.title,points:event.points,reason:reason||'撤销完成'});
-    d.ledger = d.ledger.filter(l => !event.ledgerIds.includes(l.id));
+    if (App.memoEconomy?.state()) {
+      // Interest-bearing ledgers are append-only: cancelling a past event posts
+      // its inverse now instead of changing an already closed daily balance.
+      d.ledger.filter(l => event.ledgerIds.includes(l.id)).forEach(l => {
+        const operationId = 'undo-event:'+event.id+':'+l.id;
+        if (!d.ledger.some(x => x.operationId === operationId)) {
+          d.ledger.push({id:S().uid(),operationId,date:M().userDay(at),at,
+            type:'reverse-'+l.type,points:-(Number(l.points)||0),leisure:-(Number(l.leisure)||0),
+            taskId:event.sourceId,refundOf:l.id,note:'撤销原次积分：'+event.title});
+        }
+      });
+    } else d.ledger = d.ledger.filter(l => !event.ledgerIds.includes(l.id));
     const kept = []; let removedLine = false;
     blocks.forEach(block => {
       if (block.eventId === id) { removedLine = removedLine || block.text.includes('\n'); return; }
