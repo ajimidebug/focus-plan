@@ -623,7 +623,7 @@ test('redemption revalidates price and balance, is idempotent, and keeps origina
   const b = browser(); await b.S.load(); const { C } = currencyHarness(b);
   b.S.settings().redeemTable = [{ item: '游戏', points: 30 }]; b.S.data().ledger = [{ id: 'income', points: 50 }];
   C.redeemCore('游戏', 30, 'operation'); C.redeemCore('游戏', 30, 'operation'); assert.equal(b.S.pointsTotal(), 20);
-  C.redeemCore('游戏',30,'second');assert.equal(b.S.pointsTotal(),-10); b.S.settings().redeemTable[0].points = 10;
+  assert.throws(()=>C.redeemCore('游戏',30,'second'),/积分不足/);assert.equal(b.S.pointsTotal(),20); b.S.settings().redeemTable[0].points = 10;
   assert.throws(() => C.redeemCore('游戏', 30, 'stale-price')); assert.equal(b.S.data().ledger[1].itemSnapshot.price, 30);
 });
 test('clearing a plan end switches to a named point and midnight execution is not counted twice', async () => {
@@ -1114,4 +1114,19 @@ test('173 supervised bad habit appears in a three-column plan but is never compl
  assert.match(F.planned(day,'required',false),/刷视频/);
  assert.match(F.planned(day,'required',false),/-7分/);
  assert.equal(F.planned(day,'required',true),'');
+});
+
+
+test('173 legacy ledger undo posts one current-date reversal after bank activation',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);vm.runInContext(source('js/memo-economy.js'),b.ctx);
+ const E=b.ctx.App.memoEconomy, d=b.S.data();
+ d.ledger.push({id:'prior',date:'2026-10-20',at:'2026-10-20T05:00:00Z',type:'earn-ideal',points:70});
+ E.enableCore(Date.parse('2026-10-27T10:00:00+08:00'));
+ assert.equal(b.S.undoLastLedger('prior'),true);
+ assert.equal(b.S.pointsTotal(),0);
+ assert.equal(d.ledger.length,2);
+ assert.equal(d.ledger[0].points,70);
+ assert.equal(d.ledger[1].points,-70);
+ assert.equal(b.S.undoLastLedger('prior'),false);
+ assert.equal(d.ledger.length,2);
 });
