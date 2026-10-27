@@ -46,6 +46,27 @@
     App.memoFinance?.plans(dayKey).filter(x=>!x.r.hidden&&!x.it.archived).forEach(x=>out.push({ref:{kind:'checkin',id:x.it.id,day:dayKey},title:x.it.text,label:'打卡 · '+x.it.text}));const seen = new Set(); return out.filter(x => { const k = key(x.ref); if (seen.has(k)) return false; seen.add(k); return true; });
   }
   function unscheduled(day=selectedDay||M().userDay()){const base=dayStart(day),keys=new Set(state().items.filter(p=>!p.deleted&&!p.suspendedByArchive&&p.start<base+86400000&&(p.type==='point'?p.start>=base:p.end>base)).map(p=>key(p.ref)));return sources(day).filter(x=>!keys.has(key(x.ref))&&!isDone({ref:x.ref}));}
+  // Execution time is calculated from actual timer chunks, never planned spans.
+  // Keep it separate from legacy timeline minutes until overlap reconciliation.
+  function dayExecutionMs(day, now = Date.now()) {
+    const x = S().data().memoSchedule;
+    if (!x || !Array.isArray(x.sessions)) return 0;
+    const start = dayStart(day), end = start + 86400000;
+    const intervals = [];
+    x.sessions.forEach(session => (session.chunks || []).forEach(chunk => {
+      const a = Math.max(start, Number(chunk.start));
+      const b = Math.min(end, Number(chunk.end == null ? now : chunk.end), now);
+      if (Number.isFinite(a) && Number.isFinite(b) && b > a) intervals.push([a, b]);
+    }));
+    intervals.sort((a, b) => a[0] - b[0]);
+    let total = 0, left = -Infinity, right = -Infinity;
+    intervals.forEach(([a, b]) => {
+      if (a > right) { if (right > left) total += right - left; left = a; right = b; }
+      else right = Math.max(right, b);
+    });
+    if (right > left) total += right - left;
+    return total;
+  }
   function elapsed(session, now = Date.now()) { return session.chunks.reduce((sum, c) => sum + Math.max(0, (c.end == null ? now : c.end) - c.start), 0); }
   function timing(ref,now=Date.now()) {
     const r=canonical(ref);planSummary(r);const sessions=summaryCache&&summaryCache.schedule===S().data().memoSchedule?summaryCache.sessionIndex?.get(key(r))||[]:[];
@@ -363,5 +384,5 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } }); window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();
   }
-  App.memoSchedule = { setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
+  App.memoSchedule = { setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
 })();
