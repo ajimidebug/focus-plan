@@ -245,6 +245,24 @@
         throw new Error('新时间线记录结构异常');
       }
     }
+    // Guard all optional top-level collections used directly by memo modules.
+    ['queue','queueDone','daily','memoProjects','memoEvents','memoHabitPlans','memoTaskGroups','checkins'].forEach(function (field) {
+      if (clean[field] !== undefined && !Array.isArray(clean[field])) throw new Error(field + ' 记录结构异常');
+    });
+    if (clean.memoNotes !== undefined && (!clean.memoNotes || typeof clean.memoNotes !== 'object' || Array.isArray(clean.memoNotes)))
+      throw new Error('笔记记录结构异常');
+    if (clean.memoFlow !== undefined) {
+      const f = clean.memoFlow;
+      if (f.settlements.some(x => !x || typeof x !== 'object') ||
+          Object.values(f.copies).some(x => x == null || typeof x !== 'object'))
+        throw new Error('新流程子记录异常');
+    }
+    if (clean.memoSchedule !== undefined) {
+      const x = clean.memoSchedule;
+      if (x.items.some(p => !p.ref || typeof p.ref !== 'object') ||
+          x.sessions.some(e => !e.ref || typeof e.ref !== 'object'))
+        throw new Error('时间线关联结构异常');
+    }
     return clean;
   }
   async function load() {
