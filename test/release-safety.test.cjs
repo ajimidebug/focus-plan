@@ -1164,3 +1164,16 @@ test('173 several closed months compound without repeating past interest on revi
  assert.equal(E.settleCore(Date.parse('2027-01-01T04:00:00+08:00')),0);
  assert.equal(b.S.data().ledger.length,count);
 });
+
+
+test('173 a goal of one and 99 paid punches stays directly accessible in all three-column views',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b),day=b.ctx.App.memoCore.userDay();
+ b.ctx.App.checkin={memoPoints:()=>2};
+ b.S.data().checkins=[{id:'reset',text:'重置',points:2,target:1,rewardLimit:99,days:{[day]:1}}];
+ b.S.data().memoHabitPlans=[{id:'daily',habitId:'reset',mode:'daily',from:day,list:'required',target:1}];
+ assert.match(F.planned(day,'required',false),/可奖励 98次/);
+ assert.equal(F.planned(day,'required',true),'');
+ b.S.data().checkins[0].days[day]=99;
+ assert.equal(F.planned(day,'required',false),'');
+ assert.match(F.planned(day,'required',true),/仅记录/);
+});
