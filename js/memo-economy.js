@@ -45,7 +45,7 @@ function eventsAfterEnable(){
 }
 function balanceAt(end){
  const x=state();if(!x)return S().pointsTotal();
- return x.openingBalance+eventsAfterEnable().reduce((n,e)=>n+(e.when<end?e.points:0),0);
+ return x.openingBalance+eventsAfterEnable().reduce((n,e)=>n+(e.when<=end?e.points:0),0);
 }
 function closedMonths(now=Date.now()){
  const x=state();if(!x)return [];
