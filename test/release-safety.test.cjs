@@ -276,8 +276,9 @@ test('memo additive data and untouched legacy records survive complete backup an
   assert.equal(b.S.data().version, 1);
 });
 test('memo refuses malformed note data and storage protection without discarding unknown original fields', async () => {
-  const b = browser({ initial: data({ memoNotes: 'future-format' }) }); await b.S.load(); const M = memoHarness(b);
-  assert.throws(() => M.write('2026-10-19', 'new'), /格式/); assert.equal(b.S.data().memoNotes, 'future-format');
+  const b = browser({ initial: data({ memoNotes: 'future-format' }) });
+  assert.equal(await b.S.load(), false, 'unknown note structure must block before first write');
+  assert.equal(JSON.parse(b.mem.get('focusPlanData.v1')).memoNotes, 'future-format');
   const c = browser(); await c.S.load(); const C = memoHarness(c);
   c.mem.set('focusPlanData.v1', JSON.stringify(data({ _storageRevision: 100 })));
   await c.S.save(); assert.throws(() => C.write('2026-10-19', 'new'), /保护/);
