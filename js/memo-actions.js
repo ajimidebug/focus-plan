@@ -54,11 +54,26 @@
       day.rewards.push({ kind: choice.kind, points, at: event.at, memoLedgerId: id, dependencies });
     });
   }
+  function withdrawLedger(predicate, reason, at = new Date().toISOString()) {
+    const d=S().data();
+    if (!App.memoEconomy?.state()) {
+      d.ledger=d.ledger.filter(l=>!predicate(l));
+      return;
+    }
+    d.ledger.filter(predicate).forEach(l=>{
+      // A restored task may be deleted again; each committed deletion gets a new reversal.
+      const operationId='economic-reverse:'+l.id+':'+S().uid();
+      d.ledger.push({id:S().uid(),operationId,date:M().userDay(at),at,
+        type:'reverse-'+l.type,points:-(Number(l.points)||0),
+        leisure:-(Number(l.leisure)||0),taskId:l.taskId||'',
+        refundOf:l.id,note:reason||'撤销原次积分'});
+    });
+  }
   function withdrawRewards(dayKey) {
     const day = S().data().days[dayKey]; if (!day) return;
     const lost = (day.rewards || []).filter(r => { if (!r.memoLedgerId) return false; if (!r.dependencies) return !eligible(day, r.kind); const all = taskLists(day).flat(); return r.dependencies.some(id => !all.some(t => t.id === id && t.done)); });
     const ids = lost.map(r => r.memoLedgerId);
-    S().data().ledger = S().data().ledger.filter(l => !ids.includes(l.id));
+    withdrawLedger(l=>ids.includes(l.id),'关联整组奖励撤回');
     day.rewards = (day.rewards || []).filter(r => !ids.includes(r.memoLedgerId));
   }
   function completeCore(spec, text, at = new Date().toISOString(), choices = []) {
@@ -135,12 +150,31 @@
     if (event.kind === 'checkin' && event.sourceDay < M().userDay(at)) App.memoPenalty?.settleCore(Date.parse(at));
     if(event.penaltyCorrection){
       const f=d.memoFlow, e=f.settlements.find(x=>x.id===event.penaltyCorrection);
-      if(e){d.ledger=d.ledger.filter(x=>x.operationId!=='forgive:'+e.id);delete e.forgivenAt;delete e.reason;}
+      if(e){const original=d.ledger.find(x=>x.operationId==='forgive:'+e.id);
+        if(original&&App.memoEconomy?.state()){
+          const operationId='undo-forgive:'+e.id;
+          if(!d.ledger.some(x=>x.operationId===operationId))d.ledger.push({
+            id:S().uid(),operationId,date:M().userDay(at),at,type:'reverse-refund-penalty',
+            points:-(Number(original.points)||0),leisure:0,refundOf:original.id,
+            note:'撤销逾期罚分豁免'});
+        }else d.ledger=d.ledger.filter(x=>x.operationId!=='forgive:'+e.id);
+        delete e.forgivenAt;delete e.reason;}
     }
     const backfilled=event.kind==='task'?locateTask({kind:'task',id:event.sourceId,day:event.sourceDay,list:event.sourceList}):(d.queue||[]).find(t=>t.id===event.sourceId);
     if(backfilled)delete backfilled.backfillDay;
     (d.memoFinanceAudit||(d.memoFinanceAudit=[])).push({id:S().uid(),eventId:event.id,day:M().userDay(at),at,title:event.title,points:event.points,reason:reason||'撤销完成'});
-    d.ledger = d.ledger.filter(l => !event.ledgerIds.includes(l.id));
+    if (App.memoEconomy?.state()) {
+      // Interest-bearing ledgers are append-only: cancelling a past event posts
+      // its inverse now instead of changing an already closed daily balance.
+      d.ledger.filter(l => event.ledgerIds.includes(l.id)).forEach(l => {
+        const operationId = 'undo-event:'+event.id+':'+l.id;
+        if (!d.ledger.some(x => x.operationId === operationId)) {
+          d.ledger.push({id:S().uid(),operationId,date:M().userDay(at),at,
+            type:'reverse-'+l.type,points:-(Number(l.points)||0),leisure:-(Number(l.leisure)||0),
+            taskId:event.sourceId,refundOf:l.id,note:'撤销原次积分：'+event.title});
+        }
+      });
+    } else d.ledger = d.ledger.filter(l => !event.ledgerIds.includes(l.id));
     const kept = []; let removedLine = false;
     blocks.forEach(block => {
       if (block.eventId === id) { removedLine = removedLine || block.text.includes('\n'); return; }
@@ -258,7 +292,7 @@
     const m = App.ui.openModal('取消旧记录', '<p>这条记录没有关联笔记，取消后保留原有文字。' + (entry ? '撤回原次积分 ' + entry.points + '。' : '没有可确认关联的积分，账目保留。') + '</p><label>取消原因（选填）</label><textarea id="memo-action-text" class="memo-action-text"></textarea><p id="memo-action-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">保留完成</button><button class="btn btn-danger" data-act="commit">确认取消</button>', { lock: true });
     bindCommit(m, () => {
-      if (entry) d.ledger = d.ledger.filter(l => l.id !== entry.id);
+      if (entry) withdrawLedger(l=>l.id===entry.id,'取消旧任务积分');
       if (spec.kind === 'task') { const task = d.days[spec.day].tasks[spec.list].find(t => t.id === spec.id); task.done = false; if (task.summary) task.summary.done = false; }
       else if (spec.kind === 'queue') { const i = d.queueDone.findIndex(t => t.id === spec.id); if (i < 0) throw new Error('任务已移动'); const it = d.queueDone.splice(i, 1)[0]; delete it.doneDay; delete it.doneAt; d.queue.unshift(it); }
       else { const it = (spec.kind === 'checkin' ? d.checkins : d.daily).find(t => t.id === spec.id); if (spec.kind === 'daily' || it.days[spec.day] <= 1) delete it.days[spec.day]; else it.days[spec.day]--; }
@@ -396,6 +430,21 @@
       prepared.push([change, null]);
     }
     prepared.forEach(([change, note]) => {
+      if (change.path[0]==='ledger' && App.memoEconomy?.state()) {
+        if (change.op!=='entity') throw Error('带利息的历史账本暂不支持覆盖修改，已保留原数据');
+        const original=change.before,changed=change.after;
+        const difference=(Number(original?.points)||0)-(Number(changed?.points)||0);
+        const leisure=(Number(original?.leisure)||0)-(Number(changed?.leisure)||0);
+        if(difference||leisure){
+          const at=new Date().toISOString();
+          const operationId='restore-delete:'+entry.id+':'+(changed?.id||original?.id);
+          if(!d.ledger.some(x=>x.operationId===operationId))
+            d.ledger.push({id:S().uid(),operationId,date:M().userDay(at),at,
+              type:'reverse-restored-deletion',points:difference,leisure,
+              refundOf:changed?.id||'',note:'恢复删除记录，冲正历史积分变动'});
+        }
+        return;
+      }
       if (change.op === 'note') { M().write(change.path[1], note.text, new Date().toISOString(), note.blocks); return; }
       if (change.op === 'entity') {
         const list = pathValue(d, change.path), index = list.findIndex(x => x.id === change.id); if (index >= 0) list.splice(index, 1);
@@ -416,7 +465,7 @@
     else {
       // Only withdraw ledger rows whose legacy task ID, date and earning type are explicit.
       const types = spec.kind === 'queue' ? ['earn-queue'] : spec.list === 'ideal' ? ['earn-ideal'] : spec.list === 'extra' ? ['earn-extra'] : [];
-      d.ledger = d.ledger.filter(l => !(l.taskId === spec.id && l.date === (spec.day || payload.doneDay) && types.includes(l.type)));
+      withdrawLedger(l=>l.taskId === spec.id && l.date === (spec.day || payload.doneDay) && types.includes(l.type),'删除任务撤回旧积分',at);
     }
     App.memoSchedule?.stopRef(canonical, Date.parse(at), true);
     if (canonical.kind === 'queue') {

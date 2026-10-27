@@ -140,9 +140,9 @@
   let settling = false;
   async function settle() {
     if (settling || A.memoEditor?.busy() || A.memoActions.busy() || S().status().readOnly) return;
-    if (S().data().memoFlow && !overdue().length && !longOverdue().length && !A.memoPenalty?.hasPending()) return;
+    if (S().data().memoFlow && A.memoEconomy?.state() && !overdue().length && !longOverdue().length && !A.memoPenalty?.hasPending() && !A.memoEconomy?.hasPending()) return;
     settling = true;
-    try { if (await A.memoActions.commit(() => { enableCore(); settleCore(); A.memoPenalty?.settleCore(); })) { A.memoWorkspace?.render(); A.app?.refreshStats(); } }
+    try { if (await A.memoActions.commit(() => { enableCore(); settleCore(); A.memoPenalty?.settleCore(); A.memoEconomy?.enableCore(); A.memoEconomy?.settleCore(); })) { A.memoWorkspace?.render(); A.app?.refreshStats(); } }
     catch (e) { A.ui.toast(e.message); const el = document.getElementById('flow-save-error'); if (el) { el.hidden = false; el.textContent = '跨日处理尚未保存 · 点此重试'; el.onclick = async () => { try { if (await A.memoActions.commit(() => {})) { el.hidden = true; await settle(); A.memoWorkspace.render(); } } catch (err) { A.ui.toast(err.message); } }; } }
     finally { settling = false; }
   }
