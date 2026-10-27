@@ -17,7 +17,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,6 +27,12 @@ jobs:
         run: node scripts/prepare-release.mjs ci-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Run release and regression checks
         run: node scripts/check-release.mjs
+      - name: Install headless Chromium smoke-test dependencies
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.57.0
+          npx playwright install --with-deps chromium
+      - name: Run real-browser responsive and dialog checks
+        run: node test/browser-smoke.mjs
       - name: Ensure validation does not publish or mutate source branch
         run: |
           echo "Prepared artifacts are local to this runner."
