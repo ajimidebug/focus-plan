@@ -4,8 +4,9 @@
   const A = window.App, S = () => A.store, M = () => A.memoCore, esc = x => S().esc(String(x ?? ''));
   function rules() { return S().data().memoCurrency; }
   function fixedBonus(streak) { return streak >= 90 ? 5 : streak >= 60 ? 3 : streak >= 30 ? 2 : streak >= 7 ? 1 : 0; }
-  function ruleLabel() { return rules()?.version === 3 ? '固定基础分' : rules()?.version === 2 ? '基础分＋固定连续奖励' : '旧连续倍率'; }
+  function ruleLabel() { if(A.memoEconomy?.state())return '独立习惯连胜：50% → 75% → 100%'; return rules()?.version === 3 ? '固定基础分' : rules()?.version === 2 ? '基础分＋固定连续奖励' : '旧连续倍率'; }
   function quote(it, day) {
+    const fresh=A.memoEconomy?.quote(it,day); if(fresh)return fresh;
     const r = rules(); if (!r || ![2, 3].includes(r.version)) return null;
     const h = S().habitRules(it), count = Math.max(0, Number(it.days?.[day]) || 0);
     const limit = r.version === 3 || h.optional ? h.rewardLimit : h.target + Math.max(0, Number(r.extraPaidCount) || 0);
