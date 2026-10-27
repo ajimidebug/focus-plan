@@ -488,7 +488,7 @@
     if (window.__MEMO_MODE) h = '<div class="card"><div class="ck-titlebar"><h2>积分打卡</h2><button type="button" class="btn btn-primary ck-add-main" data-act="ck-add">＋ 添加</button></div><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续记录；本次可得积分显示在按钮上，积分规则与额外得分次数在设置中查看。创建打卡项时可选择“漏打卡每日扣分”或“坏习惯每次记录扣分”，两者都保留原次记录及撤销。</p>';
 
     if (window.__MEMO_MODE) {
-      const goals = list.filter(it => !it.archived && targetOf(it) > 0), active = list.filter(it => !it.archived);
+      const goals = list.filter(it => !it.archived && targetOf(it) > 0 && App.memoPenalty?.policy(it,k).mode!=='punch'), active = list.filter(it => !it.archived && App.memoPenalty?.policy(it,k).mode!=='punch');
       h += '<p class="ck-goal-status">' + (goals.length ? '今日目标达标 ' + goals.filter(doneToday).length + '/' + goals.length + ' 项' : '无每日目标') + ' · 选做 ' + (active.length - goals.length) + ' 项 · 连续有记录 ' + streakAll() + ' 天</p><p class="hint">目标0表示选做，不计入目标达标比例；有记录天数不等于全勤。当前积分：' + (App.memoCurrency?.ruleLabel?.() || '旧连续倍率') + '。</p>';
     }
     if (!(window.__MEMO_MODE?list.filter(x=>!x.archived):list).length) {
