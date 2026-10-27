@@ -872,7 +872,7 @@ test('rest retry persists one stamp and focuses its actual day before the traili
 });
 test('habit cards keep active items in a grid and native makeup buttons with habit labels',async()=>{
  const b=browser();await b.S.load();memoHarness(b);b.ctx.__MEMO_MODE=true;vm.runInContext(source('js/checkin.js'),b.ctx);b.S.data().checkins=[{id:'visible',text:'喝水测试',points:5,target:1,days:{}},{id:'second',text:'第二项目',points:1,target:1,days:{}},{id:'archived',text:'已停用测试',archived:true,days:{}}];
- const html=b.ctx.App.checkin.pageHTML();assert.match(html,/class="ck-grid"/);assert(!html.includes('class="ck-week"'));const details=b.ctx.App.checkin.detailHTML('visible');assert.match(details,/<button type="button" class="ck-day makeup"/);assert.match(details,/补卡/);assert.match(html,/data-act="ck-info"/);assert.match(html,/aria-label="喝水测试，打卡，本次可得5分"/);assert.match(html,/<div class="ck-secondary"><details>/);assert.equal((html.match(/class="ck-row/g)||[]).length,2);assert(!html.includes('<span class="ck-dot makeup"'));
+ const html=b.ctx.App.checkin.pageHTML();assert.match(html,/class="ck-grid"/);assert(!html.includes('class="ck-week"'));const details=b.ctx.App.checkin.detailHTML('visible');assert.match(details,/<button type="button" class="ck-day makeup"/);assert.match(details,/补卡/);assert.match(html,/data-act="ck-info"/);assert.match(html,/aria-label="喝水测试，打卡，本次积分\+5分"/);assert.match(html,/<div class="ck-secondary"><details>/);assert.equal((html.match(/class="ck-row/g)||[]).length,2);assert(!html.includes('<span class="ck-dot makeup"'));
 });
 test('overview point labels and category rails use actual score for both assigned and project tasks',async()=>{
  const b=browser();await b.S.load();const {M}=flowHarness(b),day=M.userDay();b.S.getDay(day).tasks.ideal=[{id:'zero',text:'零分',points:0}];b.S.data().queue=[{id:'queue',text:'队列分',points:10,assignment:{day,list:'ideal'}}];b.S.data().memoProjects=[{id:'project',text:'推进分',points:5,days:{}}];vm.runInContext(source('js/memo-workspace.js'),b.ctx);const html=b.ctx.App.memoWorkspace.overviewHTML(day);assert.match(html,/data-category="ideal" data-bounty="false" data-score="zero"/);assert.match(html,/data-category="ideal" data-bounty="false" data-score="high"/);assert.match(html,/data-category="extra" data-bounty="false" data-score="medium"/);assert.match(html,/class="mw-score">\+0分/);assert.match(html,/class="mw-score">\+10分/);
@@ -964,4 +964,68 @@ test('import validation rejects broken memo collections without replacing origin
   const invalidQueue = copy(b.S.data());
   invalidQueue.queue = { id: 'not-an-array' };
   assert.equal(b.S.validate(invalidQueue), false);
+});
+
+
+test('habit missed-day penalty is prospective, at most once, and refunds exactly on backfill', async () => {
+  const b=browser(); await b.S.load();
+  memoHarness(b);
+  vm.runInContext(source('js/memo-penalty.js'), b.ctx);
+  const P=b.ctx.App.memoPenalty, d=b.S.data(), h={id:'sleep',text:'早睡',target:1,points:0,days:{}};
+  d.checkins=[h];
+  P.configure(h,'miss',5,1,'2026-10-20');
+  const before=Date.parse('2026-10-21T03:59:59+08:00'),after=Date.parse('2026-10-21T04:00:00+08:00');
+  assert.equal(P.hasPending(before),false);
+  assert.equal(P.hasPending(after),true);
+  assert.equal(P.settleCore(after),1);
+  assert.equal(b.S.pointsTotal(),-5);
+  assert.equal(P.settleCore(after),0);
+  assert.equal(d.ledger.filter(x=>x.type==='penalty-habit-miss').length,1);
+  h.days['2026-10-20']=1;
+  assert.equal(P.hasPending(after),true);
+  assert.equal(P.settleCore(after),1);
+  assert.equal(b.S.pointsTotal(),0);
+  assert.equal(P.settleCore(after),0);
+  delete h.days['2026-10-20'];
+  assert.equal(P.settleCore(after),1);
+  assert.equal(b.S.pointsTotal(),-5);
+  await b.S.save();
+  const reloaded=browser({shared:b}); await reloaded.S.load();
+  assert.equal(reloaded.S.pointsTotal(),-5);
+  assert.equal(reloaded.S.data().memoHabitPenalties.length,1);
+});
+test('bad habit negative punch uses the same event and can be undone without giving streak points', async () => {
+  const b=browser(); await b.S.load(); const {A}=actionHarness(b);
+  vm.runInContext(source('js/memo-penalty.js'), b.ctx);
+  const P=b.ctx.App.memoPenalty, h={id:'bad',text:'刷短视频',points:0,target:0,days:{}};
+  b.S.data().checkins=[h];
+  P.configure(h,'punch',7,0,'2026-10-19');
+  b.ctx.App.checkin.memoPoints=(item,day)=>P.policy(item,day).mode==='punch'?-P.policy(item,day).amount:0;
+  const e=A.completeCore({kind:'checkin',id:'bad',day:'2026-10-19',title:h.text},'',actionAt);
+  assert.equal(e.points,-7);
+  assert.equal(b.S.pointsTotal(),-7);
+  assert.equal(b.S.data().ledger.at(-1).type,'penalty-habit-punch');
+  A.undoCore(e.id,'误点',actionAt);
+  assert.equal(b.S.pointsTotal(),0);
+  assert.equal(h.days['2026-10-19'],undefined);
+});
+test('malformed penalty rules are rejected before restoring an old backup', async () => {
+  const b=browser(); await b.S.load();
+  const bad=copy(b.S.data());
+  bad.checkins=[{id:'h',text:'x',days:{},memoPenaltyPolicies:[{mode:'miss',amount:-5,target:1,from:'2026-10-20'}]}];
+  assert.equal(b.S.validate(bad),false);
+  assert.equal(b.S.restoreFrom(bad),false);
+});
+
+test('archiving a penalty habit pauses deductions and restoring never back-charges inactive days', async () => {
+  const b=browser(); await b.S.load(); memoHarness(b);
+  vm.runInContext(source('js/memo-penalty.js'),b.ctx);
+  const P=b.ctx.App.memoPenalty, h={id:'s',text:'早睡',points:0,target:1,days:{},
+    memoPenaltyStops:[{from:'2026-10-21',until:'2026-10-23'}]};
+  b.S.data().checkins=[h]; P.configure(h,'miss',3,1,'2026-10-20');
+  const now=Date.parse('2026-10-24T04:00:00+08:00');
+  assert.equal(P.settleCore(now),2);
+  assert.deepEqual(Array.from(b.S.data().ledger.map(e=>e.date)),['2026-10-20','2026-10-23']);
+  assert.equal(b.S.pointsTotal(),-6);
+  assert.equal(P.settleCore(now),0);
 });

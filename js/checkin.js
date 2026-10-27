@@ -81,7 +81,7 @@
     D().forEach(function (it) {
       Object.keys(it.days || {}).forEach(function (k) {
         const n = it.days[k] || 0;
-        if (n > 0) s[k] = (s[k] || 0) + n;
+        if (n > 0 && App.memoPenalty?.policy(it,k).mode !== 'punch') s[k] = (s[k] || 0) + n;
       });
     });
     return s;
@@ -99,7 +99,7 @@
     const s = dayMap();
     return s[today()] ? streakAll() : streakAll() + 1;
   }
-  function timesTodayAll() { let n = 0; D().forEach(function (it) { n += timesToday(it); }); return n; }
+  function timesTodayAll() { let n = 0; D().forEach(function (it) { if (App.memoPenalty?.policy(it,today()).mode !== 'punch') n += timesToday(it); }); return n; }
   /** 下一次打卡能拿到的倍率（今天已经打过就只剩 ×1） */
   function nextMult() { return timesTodayAll() > 0 ? 1 : multOf(streakWithToday()); }
   /** 倍率说明（给界面用）：下一档还差几天 */
@@ -284,6 +284,7 @@
     const it = id ? find(id) : null;
     const isNew = !it;
     const v = it || { text: '', points: 5, target: 1, note: '' };
+    const effective = it ? (App.memoPenalty?.policy(it,shiftKey(today(),1)) || {mode:'reward',amount:0}) : {mode:'reward',amount:5};
     // 🔁 v119：编辑已有项时，列最近 6 天补卡勾选（今天除外 —— 今天的卡用页面按钮打）
     let mkHTML = '';
     if (!isNew && !window.__MEMO_MODE) {
@@ -308,17 +309,30 @@
       '<div class="field"><label>打卡项（想坚持的事）</label>' +
       '<input id="ck-text" type="text" value="' + esc(v.text) + '" placeholder="比如：喝水 2000ml / 运动 20 分钟 / 23:30 前躺下" /></div>' +
       '<div class="field-row">' +
-      '<div class="field"><label>打卡一次得多少分</label>' +
+      '<div class="field"><label>打卡奖励分（0＝不奖励）</label>' +
       '<input id="ck-points" type="number" min="0" value="' + (v.points == null ? 5 : v.points) + '" /></div>' +
       '<div class="field"><label>每日目标（0＝选做）</label>' +
       '<input id="ck-target" type="number" min="0" step="1" value="' + targetOf(v) + '" /></div>' +
       '</div>' +
+      '<div class="field"><label>奖惩模式<select id="ck-penalty-mode"><option value="reward">普通打卡：完成加分</option><option value="miss">漏打卡扣分：当天未达标就扣分</option><option value="punch">坏习惯：每记录一次扣分</option></select></label></div>' +
+      '<div class="field" id="ck-penalty-field"><label>扣分额度（1～10000分）<input id="ck-penalty-points" type="number" min="1" max="10000" step="1" value="'+(effective.amount || 5)+'"></label><p class="hint">漏打卡：次日04:00后按上一用户日结算一次；补记达标自动退回。坏习惯：每记录一次扣分。修改现有规则从下一用户日生效。</p></div>' +
       '<div class="field"><label>预计用时（分钟，选填）</label><input id="ck-estimate" type="number" min="0" max="1440" value="' + (v.estimatedMinutes || '') + '"></div>' +
       '<div class="field"><label>每日奖励次数上限（0＝只记录）</label><input id="ck-reward-limit" type="number" min="0" max="10000" step="1" value="' + S().habitRules(v).rewardLimit + '"><p class="hint">选做不要求每日完成；奖励上限与目标独立。达到上限仍可记录。此上限适用于固定基础分模式。</p></div>' +
       '<div class="field"><label>备注（选填，写给自己）</label>' +
       '<input id="ck-note" type="text" value="' + esc(v.note || '') + '" placeholder="比如：分 4 次喝，每次 500ml" /></div>' + mkHTML + '<p id="ck-save-error" role="alert"></p>',
       '<button class="btn btn-primary" data-act="ok">' + (isNew ? '加好' : '保存') + '</button>' +
       '<button class="btn" data-act="cancel">取消</button>', { lock: !!window.__MEMO_MODE });
+    modal.querySelector('#ck-penalty-mode').value = effective.mode;
+    const showPenalty = () => {
+      const mode = modal.querySelector('#ck-penalty-mode').value;
+      modal.querySelector('#ck-penalty-field').hidden = mode === 'reward';
+      modal.querySelector('#ck-points').closest('.field').hidden = mode === 'punch';
+      if (mode === 'miss' && Number(modal.querySelector('#ck-target').value) === 0)
+        modal.querySelector('#ck-target').value = '1';
+      if (mode === 'punch') modal.querySelector('#ck-target').value = '0';
+    };
+    modal.querySelector('#ck-penalty-mode').onchange = showPenalty;
+    showPenalty();
     let rewardLimitEdited = !isNew || v.rewardLimit != null;
     modal.querySelector('#ck-reward-limit').addEventListener('input', () => { rewardLimitEdited = true; });
     modal.querySelector('#ck-target').addEventListener('input', () => { if (!rewardLimitEdited) modal.querySelector('#ck-reward-limit').value = S().habitRules({ target: modal.querySelector('#ck-target').value }).rewardLimit; });
@@ -331,6 +345,11 @@
         const estimatedMinutes = Math.min(1440, Math.max(0, Number(modal.querySelector('#ck-estimate').value) || 0));
         const rewardLimit = S().habitRules({ target: tg, rewardLimit: modal.querySelector('#ck-reward-limit').value }).rewardLimit;
         const nt = (modal.querySelector('#ck-note').value || '').trim();
+        const penaltyMode = modal.querySelector('#ck-penalty-mode').value;
+        const penaltyAmount = Number(modal.querySelector('#ck-penalty-points').value);
+        if (penaltyMode !== 'reward' && (!Number.isSafeInteger(penaltyAmount) || penaltyAmount < 1 || penaltyAmount > 10000))
+          { App.ui.toast('扣分须为1～10000的整数'); return; }
+        if (penaltyMode === 'miss' && tg < 1) { App.ui.toast('漏打卡扣分必须设置每日目标'); return; }
         const idForNew = isNew ? S().uid() : id;
         const mutate = () => {
         if (isNew) {
@@ -338,8 +357,10 @@
             id: idForNew, text: t, points: pts, target: tg, rewardLimit, estimatedMinutes, note: nt,
             days: {}, createdAt: new Date().toISOString()
           });
+          if (penaltyMode !== 'reward') App.memoPenalty.configure(D().at(-1), penaltyMode, penaltyAmount, tg, today());
         } else {
           it.text = t; it.points = pts; it.target = tg; it.estimatedMinutes = estimatedMinutes; it.rewardLimit = rewardLimit; it.note = nt;
+          App.memoPenalty.configure(it, penaltyMode, penaltyMode === 'reward' ? 0 : penaltyAmount, tg, shiftKey(today(),1));
         }
         };
         if (window.__MEMO_MODE && App.memoActions) {
@@ -377,12 +398,14 @@
     const firstToday = timesTodayAll() === 0;
     const mult = [2, 3].includes(S().data().memoCurrency?.version) ? 1 : firstToday ? multOf(streakWithToday()) : 1;
     const gain = window.__MEMO_MODE ? memoPoints(it, today()) : Math.max(0, +it.points || 0) * mult;
+    const penaltyMode = window.__MEMO_MODE ? (App.memoPenalty?.policy(it,today()).mode || 'reward') : 'reward';
+    const penaltyInfo = penaltyMode === 'miss' ? ' · 未达标扣分 ' + (App.memoPenalty?.policy(it,today()).amount || 0) + '分/日' : penaltyMode === 'punch' ? ' · 负积分记录' : '';
     const kToday = today();
     const wk = weekOf(it).map(function (w) {
       const on = w.times > 0;
       const full = tg > 0 && w.times >= tg;
       // 🔁 v119：过去且没打满的圆点 → 直接点就是补卡（今天/未来不在其列）
-      if (w.k < kToday && (!full || window.__MEMO_MODE)) {
+      if (w.k < kToday && (!full || window.__MEMO_MODE) && (penaltyMode !== 'punch' || App.memoPenalty?.policy(it,w.k).mode === 'punch')) {
         return '<button type="button" class="ck-day makeup" data-act="ck-makeup" data-id="' + it.id + '" data-day="' + w.k +
           '" aria-label="' + esc(it.text+'，'+w.k+'，已有'+w.times+'次，补记一次') + '" title="' + w.k + '：' + (w.times ? w.times + ' 次，点一下再补一次' : '没打，点一下补这张卡') +
           '（按目标和当日次数计算积分，不补发连续奖励）"><span class="ck-dot'+(full?' on':on?' half':'')+'" aria-hidden="true"></span><small>'+w.k.slice(5)+'</small></button>';
@@ -391,9 +414,9 @@
     }).join('');
     if(window.__MEMO_MODE){
       const count=tg===0?'选做 · 今日已做 '+n+' 次':'今日 '+n+'/'+tg+' 次'+(n>tg?' · 超额 '+(n-tg)+' 次':'');
-      const detail = '<button class="btn" data-act="ck-plan" data-id="'+esc(it.id)+'">安排到任务</button><div class="ck-item-information">'+(it.note?'<p class="ck-note">'+esc(it.note)+'</p>':'')+'<p>'+count+'</p><p>每日目标 '+tg+' 次 · 本次可得 '+gain+' 分</p><h3>近七日记录与补卡</h3><p class="hint">日期按北京时间04:00划分，点击过去的日期补记一次。</p><div class="ck-week">'+wk+'</div><p>连续有记录 '+st+' 天 · 今年 '+yearDaysOf(it)+' 天</p><div class="ck-acts">'+(n>0?'<button type="button" class="btn" data-act="ck-undo" data-id="'+esc(it.id)+'">撤销最近一次</button>':'')+'<button type="button" class="btn" data-act="ck-history" data-id="'+esc(it.id)+'">打卡记录</button><button type="button" class="btn" data-act="ck-edit" data-id="'+esc(it.id)+'">编辑项目</button><button type="button" class="btn" data-act="ck-del" data-id="'+esc(it.id)+'">停用项目</button></div></div>';
+      const detail = '<button class="btn" data-act="ck-plan" data-id="'+esc(it.id)+'">安排到任务</button><div class="ck-item-information">'+(it.note?'<p class="ck-note">'+esc(it.note)+'</p>':'')+'<p>'+count+'</p><p>每日目标 '+tg+' 次 · 本次积分 '+(gain>0?'+':'')+gain+' 分</p><h3>近七日记录与补卡</h3><p class="hint">日期按北京时间04:00划分，点击过去的日期补记一次。</p><div class="ck-week">'+wk+'</div><p>连续有记录 '+st+' 天 · 今年 '+yearDaysOf(it)+' 天</p><div class="ck-acts">'+(n>0?'<button type="button" class="btn" data-act="ck-undo" data-id="'+esc(it.id)+'">撤销最近一次</button>':'')+'<button type="button" class="btn" data-act="ck-history" data-id="'+esc(it.id)+'">打卡记录</button><button type="button" class="btn" data-act="ck-edit" data-id="'+esc(it.id)+'">编辑项目</button><button type="button" class="btn" data-act="ck-del" data-id="'+esc(it.id)+'">停用项目</button></div></div>';
       if(detailsOnly)return detail;
-      return '<div class="ck-row'+(done?' done':'')+'" data-id="'+esc(it.id)+'"><div class="ck-main"><button type="button" class="ck-name ck-info-entry" data-act="ck-info" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text)+'，更多信息">'+esc(it.text)+'<span aria-hidden="true"> ›</span></button><div class="ck-cnt">'+count+(done?' · 已达标':'')+'</div></div><button type="button" class="btn btn-primary ck-punch-main" data-act="ck-punch" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text+'，打卡，本次可得'+gain+'分')+'">'+(n>0?'再记一次':'打卡')+' +'+gain+'分</button></div>';
+      return '<div class="ck-row'+(done?' done':'')+'" data-id="'+esc(it.id)+'"><div class="ck-main"><button type="button" class="ck-name ck-info-entry" data-act="ck-info" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text)+'，更多信息">'+esc(it.text)+'<span aria-hidden="true"> ›</span></button><div class="ck-cnt">'+count+penaltyInfo+(done?' · 已达标':'')+'</div></div><button type="button" class="btn '+(penaltyMode==='punch'?'btn-danger':'btn-primary')+' ck-punch-main" data-act="ck-punch" data-id="'+esc(it.id)+'" aria-label="'+esc(it.text+'，打卡，本次积分'+(gain>0?'+':'')+gain+'分')+'">'+(penaltyMode==='punch'?'记录坏习惯':n>0?'再记一次':'打卡')+' '+(gain>0?'+':'')+gain+'分</button></div>';
     }
     return '<div class="ck-row' + (done ? ' done' : '') + '" data-id="' + it.id + '">' +
       '<div class="ck-main">' +
@@ -453,7 +476,7 @@
       '<button class="btn btn-small" data-act="ck-add">＋ 加一个打卡项</button>' +
       '</div>';
 
-    if (window.__MEMO_MODE) h = '<div class="card"><div class="ck-titlebar"><h2>积分打卡</h2><button type="button" class="btn btn-primary ck-add-main" data-act="ck-add">＋ 添加</button></div><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续记录；本次可得积分显示在按钮上，积分规则与额外得分次数在设置中查看。</p>';
+    if (window.__MEMO_MODE) h = '<div class="card"><div class="ck-titlebar"><h2>积分打卡</h2><button type="button" class="btn btn-primary ck-add-main" data-act="ck-add">＋ 添加</button></div><p class="hint">重复做的事情放在这里。打卡时可写入笔记，撤销会删除对应文段并退回原次积分。北京时间04:00分日；点击过去六天的小圆点可补卡，达到目标后可继续记录；本次可得积分显示在按钮上，积分规则与额外得分次数在设置中查看。创建打卡项时可选择“漏打卡每日扣分”或“坏习惯每次记录扣分”，两者都保留原次记录及撤销。</p>';
 
     if (window.__MEMO_MODE) {
       const goals = list.filter(it => !it.archived && targetOf(it) > 0), active = list.filter(it => !it.archived);
@@ -520,6 +543,8 @@
 
   function memoPoints(it, day) {
     if (!it) return 0;
+    const policy = App.memoPenalty?.policy(it,day);
+    if (policy?.mode === 'punch') return -policy.amount;
     const award = App.memoCurrency?.quote(it, day); if (award) return award.total;
     const h = S().habitRules(it); if (h.optional && (Number(it.days?.[day]) || 0) >= h.rewardLimit) return 0;
     const mult = day === today() && timesTodayAll() === 0 ? multOf(streakWithToday()) : 1;

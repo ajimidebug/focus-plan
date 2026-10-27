@@ -23,7 +23,7 @@
   }
   function passage(event) { return noteBlocks(event.noteDay).filter(x => x.eventId === event.id).map(x => x.text).join(''); }
   function ledger(event, type, points, note, day = event.sourceDay) {
-    if (!(points > 0)) return;
+    if (!Number.isFinite(points) || points === 0) return;
     const entry = { id: S().uid(), date: day, type, points, leisure: 0, taskId: event.sourceId, memoEventId: event.id, note, at: event.at };
     S().data().ledger.push(entry); event.ledgerIds.push(entry.id); event.points += points;
   }
@@ -98,11 +98,12 @@
       it.days = it.days || {}; const n = Number(it.days[event.sourceDay]) || 0;
       const target = spec.kind === 'daily' ? 1 : S().habitRules(it).target;
       if (spec.kind === 'daily' && n >= target) throw new Error('这一天已经勾选完成');
-      const award = spec.kind === 'checkin' ? App.memoCurrency?.quote(it, event.sourceDay) : null;
+      const award = spec.kind === 'checkin' && App.memoPenalty?.policy(it, event.sourceDay).mode !== 'punch' ? App.memoCurrency?.quote(it, event.sourceDay) : null;
       const amount = spec.kind === 'checkin' ? App.checkin.memoPoints(it, event.sourceDay) : Math.max(0, Number(it.points ?? S().settings().dailyPoints ?? 2));
       if (award) App.memoCurrency.claim(event, award);
       it.days[event.sourceDay] = spec.kind === 'daily' ? Date.parse(at) : n + 1;
-      ledger(event, spec.kind === 'checkin' ? 'earn-checkin' : 'earn-daily', amount, (spec.kind === 'checkin' ? '打卡：' : '今日基础任务：') + it.text);
+      ledger(event, spec.kind === 'checkin' ? (amount < 0 ? 'penalty-habit-punch' : 'earn-checkin') : 'earn-daily', amount, (spec.kind === 'checkin' ? (amount < 0 ? '坏习惯记录：' : '打卡：') : '今日基础任务：') + it.text);
+      if (spec.kind === 'checkin' && event.sourceDay < M().userDay(at)) App.memoPenalty?.settleCore(Date.parse(at));
     } else throw new Error('无法识别勾选来源');
     event.ruleVersion = d.memoCurrency?.version || 1;
     App.memoSchedule?.stopRef({ kind: spec.kind, id: spec.id, day: (spec.kind === 'task' || spec.kind === 'daily' || spec.kind === 'project' || spec.kind === 'checkin') ? spec.day : undefined, list: spec.kind === 'task' ? spec.list : undefined }, Date.parse(at));
@@ -131,6 +132,7 @@
       if (event.kind === 'daily' || event.kind === 'project' || it.days[event.sourceDay] <= 1) delete it.days[event.sourceDay];
       else it.days[event.sourceDay]--;
     }
+    if (event.kind === 'checkin' && event.sourceDay < M().userDay(at)) App.memoPenalty?.settleCore(Date.parse(at));
     if(event.penaltyCorrection){
       const f=d.memoFlow, e=f.settlements.find(x=>x.id===event.penaltyCorrection);
       if(e){d.ledger=d.ledger.filter(x=>x.operationId!=='forgive:'+e.id);delete e.forgivenAt;delete e.reason;}
@@ -225,7 +227,7 @@
     if (spec.kind === 'daily') { const it = S().data().daily.find(x => x.id === spec.id); previewPoints = Number(it?.points ?? settings.dailyPoints ?? 2); }
     if (spec.kind === 'project') previewPoints = Number((S().data().memoProjects || []).find(x => x.id === spec.id)?.points || 0);
     if (spec.kind === 'task') { const it = S().getDay(spec.day).tasks[spec.list].find(x => x.id === spec.id); previewPoints = ['ideal', 'extra'].includes(spec.list) ? Number(it.points ?? (spec.list === 'ideal' ? settings.idealPoints : settings.extPoints)) : 0; }
-    m.querySelector('#memo-action-info').textContent = '本次任务积分 +' + Math.max(0, previewPoints || 0) + '；写入 ' + day + ' 的笔记（04:00分日）。';
+    m.querySelector('#memo-action-info').textContent = '本次积分 ' + (previewPoints > 0 ? '+' : '') + (previewPoints || 0) + '；写入 ' + day + ' 的笔记（04:00分日）。';
     if (spec.kind === 'checkin') m.querySelector('#memo-action-info').textContent += '（' + (App.memoCurrency?.ruleLabel?.() || '旧连续倍率') + '）';
     bindCommit(m, () => {saveEstimate();const submittedAt=new Date().toISOString();const currentDay=M().userDay(submittedAt);if(currentDay!==day)throw Error('已跨过用户日，请关闭后重新打开任务');const finalText=textarea.value===initialText?stamp(submittedAt,currentDay)+'【'+label+'】'+spec.title+suffix+'\n'+timingSnapshot(spec,Date.parse(submittedAt)).text:textarea.value;applyCategory();return completeCore(spec,finalText,submittedAt,[...m.querySelectorAll('[data-reward]:checked')].map(x=>({kind:x.dataset.reward,points:m.querySelector('[data-reward-points="'+x.dataset.reward+'"]').value})));}, spec.kind==='checkin'?()=>App.checkin?.focusItem?.(spec.id):null);
   }
@@ -298,7 +300,7 @@
   }
   function checkinHistory(id) {
     const list = events(S().data()).filter(e => e.kind === 'checkin' && e.sourceId === id && e.active).slice(-50).reverse();
-    const m = App.ui.openModal('打卡记录', '<p class="hint">可取消本版生成的某一次打卡，包括补卡。</p>' + (list.length ? list.map(e => '<div class="memo-queue-row"><p>' + E(e.sourceDay + ' · ' + e.title) + '</p><small>勾选于 ' + E(M().naturalDay(e.at) + ' ' + M().clock(e.at)) + ' · 原次积分 +' + e.points + '</small><p class="memo-queue-note">' + E(passage(e).trim().slice(0, 120) || '未写入文段') + '</p><button class="btn btn-small" data-act="undo-event" data-event="' + E(e.id) + '">取消这次打卡</button></div>').join('') : '<p>暂无本版打卡记录。旧版当天打卡仍可用“撤销”处理。</p>'), '<button class="btn" data-act="close">关闭</button>');
+    const m = App.ui.openModal('打卡记录', '<p class="hint">可取消本版生成的某一次打卡，包括补卡。</p>' + (list.length ? list.map(e => '<div class="memo-queue-row"><p>' + E(e.sourceDay + ' · ' + e.title) + '</p><small>勾选于 ' + E(M().naturalDay(e.at) + ' ' + M().clock(e.at)) + ' · 原次积分 ' + (e.points>0?'+':'') + e.points + '</small><p class="memo-queue-note">' + E(passage(e).trim().slice(0, 120) || '未写入文段') + '</p><button class="btn btn-small" data-act="undo-event" data-event="' + E(e.id) + '">取消这次打卡</button></div>').join('') : '<p>暂无本版打卡记录。旧版当天打卡仍可用“撤销”处理。</p>'), '<button class="btn" data-act="close">关闭</button>');
     App.ui.bindActions({ close: App.ui.closeModal, 'undo-event': b => { const e = list.find(x => x.id === b.dataset.event); if (e) cancelEvent(e); } });
   }
   function recover(error) {
@@ -464,12 +466,17 @@
     App.ui.bindActions({ close: () => { if (!committing && !unsettled) App.ui.closeModal(); }, restore: b => restore(b, false), unfinished: b => restore(b, true) });
   }
   async function restoreHabit(id) {
-    try { if (await transaction(() => { const it = S().data().checkins.find(x => x.id === id); if (it) it.archived = false; })) refresh(); } catch (e) { recover(e); }
+    try { if (await transaction(() => { const it = S().data().checkins.find(x => x.id === id); if (it) { it.archived = false;
+        const open = (it.memoPenaltyStops || []).findLast(x=>!x.until);
+        if (open) open.until = M().userDay();
+      } })) refresh(); } catch (e) { recover(e); }
   }
   function archiveHabit(id) {
     const it = (S().data().checkins || []).find(x => x.id === id); if (!it) return;
     App.ui.confirm('停用“' + E(it.text) + '”？历史次数、积分和笔记保留，可在打卡页的“已停用习惯”恢复。', '停用习惯', async () => {
-      try { if (await transaction(() => { it.archived = true;it.memoArchivedDay=M().userDay(); })) refresh(); } catch (e) { recover(e); }
+      try { if (await transaction(() => { it.archived = true; it.memoArchivedDay=M().userDay();
+        const stops=it.memoPenaltyStops||(it.memoPenaltyStops=[]);
+        if (!stops.some(x=>!x.until)) stops.push({from:M().userDay(),until:null}); })) refresh(); } catch (e) { recover(e); }
     });
   }
 

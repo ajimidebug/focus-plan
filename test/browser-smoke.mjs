@@ -35,10 +35,22 @@ try {
       docWidth:document.documentElement.scrollWidth,
       windowWidth:window.innerWidth,
       taskView:document.querySelector('#view-tasks')?.classList.contains('active'),
-      overviewCollapsed:!document.querySelector('.mw-overview-fold')?.open
+      overviewVisible:!!document.querySelector('.mw-overview') && !document.querySelector('.mw-overview-fold'),
+      columnCount:document.querySelector('.mw-overview .cal-cols').children.length,
+      columnTemplate:getComputedStyle(document.querySelector('.mw-overview .cal-cols')).gridTemplateColumns,
+      buttons:[...document.querySelectorAll('.mw-day-shortcuts button')].map(b=>({
+        w:b.getBoundingClientRect().width, bg:getComputedStyle(b).backgroundColor, pressed:b.getAttribute('aria-pressed')
+      })),
+      shortcutWidth:document.querySelector('.mw-day-shortcuts').getBoundingClientRect().width
     }));
     assert.equal(result.taskView,true,'task view visible at '+width);
-    assert.equal(result.overviewCollapsed,true,'task overview collapsed by default at '+width);
+    assert.equal(result.overviewVisible,true,'three-column overview visible by default at '+width);
+    assert.equal(result.columnCount,3,'three task columns at '+width);
+    assert.equal(result.columnTemplate.trim().split(/\s+/).length,3,'side-by-side grid columns at '+width);
+    assert.equal(result.buttons.length,3,'three date shortcuts at '+width);
+    assert(Math.max(...result.buttons.map(b=>b.w))-Math.min(...result.buttons.map(b=>b.w))<2,'date shortcut widths match at '+width);
+    assert(result.buttons.reduce((n,b)=>n+b.w,0)>result.shortcutWidth*.88,'date shortcuts fill toolbar at '+width);
+    assert.notEqual(result.buttons[1].bg,result.buttons[0].bg,'today stands out at '+width);
     assert(result.docWidth<=result.windowWidth+8,'horizontal page overflow at '+width+': '+JSON.stringify(result));
     assert.deepEqual(errors,[],'no runtime errors at '+width);
 
@@ -54,6 +66,17 @@ try {
     assert.equal(inside,true,'modal focus stays inside at '+width);
     await page.evaluate(()=>App.ui.closeModal());
     assert.equal(await page.locator('.modal').count(),0);
+    if (width===350) {
+      await page.evaluate(()=>App.app.switchView('checkin'));
+      await page.locator('#checkin-view [data-act="ck-add"]').first().click();
+      await page.locator('#ck-text').fill('负积分浏览器测试');
+      await page.locator('#ck-penalty-mode').selectOption('punch');
+      await page.locator('#ck-penalty-points').fill('7');
+      await page.locator('.modal [data-act="ok"]').click();
+      await page.waitForFunction(()=>document.querySelector('#checkin-view')?.textContent.includes('负积分浏览器测试'),{timeout:15000});
+      assert.equal(await page.evaluate(()=>App.memoPenalty.policy(App.store.data().checkins.find(x=>x.text==='负积分浏览器测试'),App.memoCore.userDay()).mode),'punch');
+      assert.match(await page.locator('#checkin-view').innerText(),/-7分/);
+    }
     await context.close();
   }
 } finally {
