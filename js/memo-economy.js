@@ -16,7 +16,9 @@ function enableCore(now=Date.now()){
  if(state())return state();
  const current=M().userDay(now),startedDay=shift(current,1);
  S().data().memoEconomy={version:1,enabledAt:new Date(now).toISOString(),startedDay,
-   openingBalance:S().pointsTotal(), positiveRate:.02,negativeRate:.04,settlements:[]};
+   openingBalance:S().pointsTotal(),
+   initialAtIds:S().data().ledger.filter(e=>e.at===new Date(now).toISOString()||e.effectiveAt===new Date(now).toISOString()).map(e=>e.id),
+   positiveRate:.02,negativeRate:.04,settlements:[]};
  return state();
 }
 function previousStreak(it,day) {
@@ -40,7 +42,7 @@ function eventsAfterEnable(){
  const x=state(),cutoff=Date.parse(x.enabledAt);
  return S().data().ledger.filter(e=>{
    const t=Date.parse(e.effectiveAt||e.at||'');
-   return Number.isFinite(t)&&t>cutoff;
+   return Number.isFinite(t)&&t>=cutoff && !(x.initialAtIds||[]).includes(e.id);
  }).map(e=>({points:Number(e.points)||0,when:Date.parse(e.effectiveAt||e.at)}));
 }
 function balanceAt(end,inclusive=true){
