@@ -505,6 +505,7 @@
     // 开机自检：本机笔记服务在不在？在 → 亮出「🎙 笔记」入口；不在 → 藏起来
     notesPing(true);
     if (App.updates) App.updates.appReady();
+    App.app.ready = true;
   }
 
   App.app = {
