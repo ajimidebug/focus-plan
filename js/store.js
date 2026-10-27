@@ -288,6 +288,19 @@
         throw new Error('习惯奖惩设置结构异常');
       }
     });
+    if (clean.memoEconomy !== undefined) {
+      const b=clean.memoEconomy;
+      if (!b || b.version!==1 || !Number.isFinite(Date.parse(b.enabledAt)) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(b.startedDay) ||
+          !Number.isFinite(b.openingBalance) || !Number.isFinite(b.positiveRate) ||
+          !Number.isFinite(b.negativeRate) || b.positiveRate<0 || b.positiveRate>1 ||
+          b.negativeRate<0 || b.negativeRate>1 || !Array.isArray(b.settlements) ||
+          b.settlements.some(r=>!r || typeof r.month!=='string' || !/^\d{4}-\d{2}$/.test(r.month) ||
+            !Number.isFinite(r.positive) || !Number.isFinite(r.negative) ||
+            !Number.isFinite(Date.parse(r.effectiveAt)) || !Number.isFinite(Date.parse(r.postedAt))) ||
+          new Set(b.settlements.map(r=>r.month)).size!==b.settlements.length)
+        throw new Error('积分银行记录结构异常');
+    }
     return clean;
   }
   async function load() {
