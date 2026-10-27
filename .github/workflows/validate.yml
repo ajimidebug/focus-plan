@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [feat-172-habit-penalties-layout]
+    branches: [main, feat-172-habit-penalties-layout]
   workflow_dispatch:
 
 permissions:
