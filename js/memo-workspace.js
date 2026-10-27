@@ -180,7 +180,14 @@
     return '<details class="mw-backlog"><summary>往日未完成（' + rows.length + '）</summary>' + rows.sort((a,b) => (a.day || a.ref.day).localeCompare(b.day || b.ref.day)).map(historyRow).join('') + '</details>';
   }
   function pendingRows(){return datedTasks().filter(x=>(x.day||x.ref.day)<M().userDay()&&!x.task.done&&!x.task.doneAt&&!x.task.memoMovedTo&&!x.task.memoDismissed);}
-  function pendingHTML(){return pendingRows().map(historyRow).join('')||'<p class="hint">暂无需要重新安排的任务</p>';}
+  function pendingHTML(){
+    const rows=pendingRows();
+    if(!rows.length)return '<p class="hint">暂无需要重新安排的任务</p>';
+    return ['required','ideal','extra'].map(list=>{
+      const grouped=rows.filter(x=>(x.list||x.ref.list||x.task.assignment?.list||'extra')===list);
+      return grouped.length?'<section class="mw-pending-group"><h3>'+names[list]+' · '+grouped.length+'</h3>'+grouped.map(historyRow).join('')+'</section>':'';
+    }).join('');
+  }
   function waitingRow(t){const ref={kind:'queue',id:t.id},attrs=refAttrs(ref);return '<article class="mw-history-row" data-bounty="'+!!A.memoOrganize?.bounty(score(t,ref))+'" '+attrs+'><strong>'+esc(t.text)+(A.memoOrganize?.badge(score(t,ref))||'')+'<small class="mw-score">+'+Math.max(0,Number(t.points??S().settings().queuePoints??5))+'分</small>'+'</strong><div class="mw-waiting-actions">'+button('assign','安排',attrs)+'</div><details><summary>更多</summary><div class="mw-secondary-actions">'+button('complete','直接完成',attrs)+A.memoSchedule.rowControls(ref)+(t.note?'<p>'+esc(t.note)+'</p>':'')+button('edit','编辑',attrs)+button('pin',t.pinned?'取消置顶':'置顶',attrs)+button('up','上移',attrs)+button('down','下移',attrs)+button('dismiss','不再安排',attrs)+'</div></details></article>';}
   function renderPending(){const nav=document.querySelector('[data-mw-pane="queue"]');if(nav)nav.textContent='待安排 '+(pendingRows().length+sortedQueue().filter(t=>!t.assignment&&!t.memoDismissed).length);}
 
