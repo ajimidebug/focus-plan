@@ -97,7 +97,8 @@ function bankHTML(){
  ' 分</strong> · 月利率：正余额 +2%，负余额 -4%，无固定金额上限</p>'+
  '<p>按每日余额计算，次月首个用户日04:00结息并复利。当前余额不变时，完整月份预计 '+ (estimate>=0?'+':'')+estimate.toFixed(2)+' 分。</p>'+
  (last?'<p>最近结息：'+S().esc(last.month)+'，正利息 +'+last.positive.toFixed(2)+'，负利息 '+last.negative.toFixed(2)+' 分</p>':'<p>新规则启用后第一个完整结息周期结束时显示流水。</p>')+
- '<p class="hint">旧账本不会按新规则补息；补记的经济入账时间以实际保存为准。真实消费预算单独计算。</p></section>';
+ '<p class="hint">旧账本不会按新规则补息；补记的经济入账时间以实际保存为准。真实消费预算单独计算。</p>'+ 
+ '<div class="memo-bank-export"><button type="button" class="btn" data-finance-export>导出积分流水 CSV</button><button type="button" class="btn" data-finance-audit-export>导出审计 JSON</button></div></section>';
 }
 A.memoEconomy={state,enableCore,quote,previousStreak,settleCore,hasPending,closedMonths,balanceAt,bankHTML};
 })();
