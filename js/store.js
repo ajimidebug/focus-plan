@@ -230,6 +230,14 @@
           Array.isArray(f.copies) || !Number.isFinite(f.rate) || f.rate <= 0 ||
           !Number.isFinite(f.penalty) || f.penalty < 0 ||
           !Number.isFinite(f.dailyCap) || f.dailyCap < 0) throw new Error('新流程记录结构异常');
+      const object=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+      const checkpoint=x=>object(x)&&x.version===1&&object(x.days)&&object(x.ledger)&&
+        Object.entries(x.days).every(([day,v])=>/^\d{4}-\d{2}-\d{2}$/.test(day)&&object(v)&&
+          (v.legacyPending===day||Array.isArray(v.columns)&&Array.isArray(v.habits)&&Array.isArray(v.goals)))&&
+        Object.entries(x.ledger).every(([id,v])=>object(v)&&v.id===id&&Number.isFinite(v.points));
+      if(f.reportFacts!==undefined&&!checkpoint(f.reportFacts))throw new Error('复制事实记录结构异常');
+      if(f.factCarry!==undefined&&(!object(f.factCarry)||!/^\d{4}-\d{2}-\d{2}$/.test(f.factCarry.day)||
+        !/^\d{4}-\d{2}-\d{2}$/.test(f.factCarry.selected)||!checkpoint(f.factCarry.base)))throw new Error('复制补记基线结构异常');
     }
     if (clean.memoSchedule !== undefined) {
       const x = clean.memoSchedule;

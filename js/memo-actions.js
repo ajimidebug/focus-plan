@@ -216,7 +216,28 @@
     const ref = { kind: spec.kind, id: spec.id, day: spec.day, list: spec.list }, P = App.memoSchedule;
     const task = spec.kind === 'checkin' ? (S().data().checkins || []).find(t => t.id === spec.id) : P?.find(ref);
     const schedule = S().data().memoSchedule, plans = P && schedule ? schedule.items.filter(p => !p.deleted && P.key(p.ref) === P.key(ref) && (!spec.day || p.day === spec.day)).map(p => ({ id:p.id, day:p.day, start:p.start, end:p.end, title:p.title })) : [];
-    const actualMs = P?.timing ? P.timing(ref,now).totalMs : 0;
+    const execution=P?.execution?.(ref,now),segments=execution?.segments||[];
+    const actualMs=execution?.actualMs??(P?.timing?P.timing(ref,now).totalMs:0);
+    const previous=spec.kind==='checkin'?(S().data().memoEvents||[]).filter(e=>e.active&&e.kind==='checkin'&&e.sourceId===spec.id&&e.sourceDay===(spec.day||M().userDay(now))&&Date.parse(e.at)<=now).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)):[];
+    const covered=previous.flatMap(e=>e.timing?.segments||[]),legacy=previous.filter(e=>!Array.isArray(e.timing?.segments));
+    const cutoff=legacy.length?Math.max(...legacy.map(e=>Date.parse(e.at))):-Infinity;
+    // Subtract previously exported intervals, including partial portions of a resumed chunk.
+    const added=segments.flatMap(c=>{
+      let pieces=[{...c,start:Math.max(c.start,cutoff)}].filter(p=>p.end>p.start);
+      covered.forEach(old=>{pieces=pieces.flatMap(p=>old.end<=p.start||old.start>=p.end?[p]:[{...p,end:Math.min(p.end,old.start)},{...p,start:Math.max(p.start,old.end)}].filter(x=>x.end>x.start));});return pieces;
+    });
+    const newMs=P?.unionMs?P.unionMs(added):actualMs;
+    const spanText=ms=>Math.floor(ms/60000)+'分'+Math.floor(ms/1000)%60+'秒';
+    const fullClock=at=>M().naturalDay(at)+' '+new Date(at+8*3600000).toISOString().slice(11,19);
+    const shown=spec.kind==='checkin'?added:segments;
+    const executionLines=[];
+    if(spec.kind==='checkin')executionLines.push('本次新增计时：'+spanText(newMs)+'；用户日 '+(spec.day||M().userDay(now))+' 累计：'+spanText(actualMs)+'（勿重复累计）');
+    executionLines.push('执行明细'+(spec.kind==='checkin'?'（本次新增）':'')+'：');
+    if(shown.length)shown.forEach((c,i)=>executionLines.push((i+1)+'. '+fullClock(c.start)+' — '+fullClock(c.end)+' · '+spanText(c.end-c.start)+'〔片段 '+c.id+'〕'+(c.overlap?'（与前段重合，合计已去重）':'')+(c.start!==c.rawStart||c.end!==(c.rawEnd??now)?'（按用户日／已记录范围截取）':'')));
+    else executionLines.push('无可列出的有效计时片段；未推测实际用时。');
+    if(execution?.overlap)executionLines.push('原始片段存在重合；有效合计按时间区间去重，原始记录保留。');
+    if(legacy.length)executionLines.push('上次旧记录没有片段快照；本次新增仅列其确认时间之后的有效时段。');
+    const executionText=executionLines.join('\n');
     const lines = [];
     if(plans.length) lines.push('计划：'+plans.map(p=>M().naturalDay(p.start)+' '+M().clock(p.start)+(p.end?'—'+(M().naturalDay(p.end)!==M().naturalDay(p.start)?M().naturalDay(p.end)+' ':'')+M().clock(p.end):'（时间点）')).join('；'));
     const explicitEstimate=task?.memoEstimatedDays?.[spec.day]??task?.estimatedMinutes;
@@ -224,7 +245,8 @@
     if(estimatedMinutes)lines.push('预计用时：'+estimatedMinutes+'分钟');
     if(actualMs)lines.push('实际有效计时：'+Math.floor(actualMs/60000)+'分'+Math.floor(actualMs/1000)%60+'秒');
     else if(spec.kind!=='checkin')lines.push('实际用时：未记录');
-    return { plans, estimatedMinutes, actualMs, text: lines.length ? lines.join('\n')+'\n' : '' };
+    lines.push(executionText);
+    return { version:2, capturedAt:new Date(now).toISOString(), scopeDay:execution?.day||null, plans, estimatedMinutes, actualMs, newMs:spec.kind==='checkin'?newMs:actualMs, segmentScope:spec.kind==='checkin'?'new':'all', segments:spec.kind==='checkin'?added:segments, addedSegments:spec.kind==='checkin'?added:segments, executionText, text:lines.join('\n')+'\n' };
   }
   function complete(spec) {
     if (committing || unsettled) { App.ui.toast('请先完成当前操作或重试保存'); return; }
@@ -243,6 +265,7 @@
     const textarea = m.querySelector('#memo-action-text');
     textarea.value = stamp(at, day) + '【' + label + '】' + spec.title + suffix + (timingSnapshot(spec, Date.parse(at)).text ? '\n' + timingSnapshot(spec, Date.parse(at)).text.replace(/\n$/, '') : '');
     const initialText=textarea.value;
+    const detail=document.createElement('details');detail.className='execution-detail';const title=document.createElement('summary');title.textContent='查看执行时段（确认时更新）';const pre=document.createElement('pre');pre.textContent=timingSnapshot(spec,Date.parse(at)).executionText;detail.append(title,pre);m.querySelector('#ma-timer-state').after(detail);
     const editButton=document.createElement('button');editButton.type='button';editButton.className='btn';editButton.textContent='编辑任务';editButton.onclick=()=>{if(textarea.value!==initialText)return App.ui.toast('请先完成本次记录，再编辑任务');App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list});};if(spec.kind!=='checkin')m.querySelector('.modal-actions').prepend(editButton);
     const ref={kind:spec.kind,id:spec.id,day:spec.day,list:spec.list};
     function saveEstimate(){const n=Number(m.querySelector('#ma-estimate').value)||0;if(n<0||n>1440)throw Error('预计用时应在0—1440分钟之间');const task=App.memoSchedule.find(ref);if(!task)throw Error('任务已移动或停用');if(['checkin','project','daily'].includes(spec.kind))(task.memoEstimatedDays||(task.memoEstimatedDays={}))[spec.day||M().userDay()]=n;else task.estimatedMinutes=n;}
@@ -530,5 +553,5 @@
     });
   }
 
-  App.memoActions = { deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, completeCore, undoCore, latest, passage, commit: transaction };
+  App.memoActions = { deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, completeCore, timingSnapshot, undoCore, latest, passage, commit: transaction };
 })();

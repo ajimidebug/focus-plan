@@ -35,6 +35,7 @@ jobs:
         run: |
           node test/browser-smoke.mjs
           node test/interaction-1732.browser.cjs
+          node test/interaction-1733.browser.cjs
       - name: Ensure validation does not publish or mutate source branch
         run: |
           echo "Prepared artifacts are local to this runner."

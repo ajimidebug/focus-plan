@@ -116,7 +116,8 @@
   function markCopyCore(quote) {
     A.memoReport?.mark(quote);
     const f = state(); if(quote.baseline)f.copyCarry={day:quote.carryDay,selectedDay:quote.day,baseline:quote.baseline}; Object.entries(quote.snapshots).forEach(([day, snapshot]) => { f.copies[day] = Object.assign({}, snapshot, { at: quote.at }); });
-    f.lastCopy = quote;
+    // Checkpoints already live in their dedicated fields; replay only needs the exact copied text.
+    f.lastCopy = {id:quote.id,day:quote.day,text:quote.text,at:quote.at};
   }
   function backfill(ref) {
     ref=A.memoSchedule.canonical(ref); const t=A.memoSchedule.find(ref); if(!t)return;

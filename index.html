@@ -10,12 +10,12 @@
        以前写在页尾，渲染时读到 undefined 就显示成 "v?"。 */
     window.__BUILD = 169;
     window.__MEMO_MODE = true;
-    window.__RELEASE = '173.2.1-test.1';
+    window.__RELEASE = '173.3.0';
   </script>
   <meta name="theme-color" content="#2d3a4a" />
   <title>随手记 · 个人备忘录</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="stylesheet" href="css/style.css?v=173.2.1-test.1" />
+  <link rel="stylesheet" href="css/style.css?v=173.3.0" />
   <style id="pip-style">
     /* ===== 🪟 只在小窗（Document Picture-in-Picture）里生效：让悬浮窗铺满整个小窗 ===== */
     html.pip, html.pip body { background: var(--bg, #f5f7fa); margin: 0; padding: 0; }
@@ -63,9 +63,10 @@
       <div class="stat-item" title="长期拓展进度">
         <span class="stat-label">拓展</span><span id="stat-extra" class="stat-value">0/0</span>
       </div>
-      <div class="stat-item" title="积分余额，点击兑换">
-        <span class="stat-label">积分</span>
+      <div class="stat-item stat-points-group" title="积分余额，点击兑换">
+        <span class="stat-label">总积分</span>
         <button id="stat-points" class="stat-value stat-btn">0</button>
+        <button id="stat-points-today" class="stat-today" type="button" title="查看今日积分收支">今日 +0 / −0</button>
       </div>
       <div class="stat-item" title="旧时间线中标记计入学习的时长，尚未与新任务计时去重合并">
         <span class="stat-label">时间线学习</span><span id="stat-main" class="stat-value">0分</span>
@@ -357,45 +358,45 @@
     </div>
   </div>
 
-  <script src="js/store.js?v=173.2.1-test.1"></script>
-  <script src="js/ui.js?v=173.2.1-test.1"></script>
-  <script src="js/tasks.js?v=173.2.1-test.1"></script>
-  <script src="js/timeline.js?v=173.2.1-test.1"></script>
-  <script src="js/stats.js?v=173.2.1-test.1"></script>
-  <script src="js/settings.js?v=173.2.1-test.1"></script>
-  <script src="js/sport.js?v=173.2.1-test.1"></script>
-  <script src="js/lecture.js?v=173.2.1-test.1"></script>
-  <script src="js/calendar.js?v=173.2.1-test.1"></script>
-  <script src="js/link.js?v=173.2.1-test.1"></script>
-  <script src="js/demo.js?v=173.2.1-test.1"></script>
-  <script src="js/queue.js?v=173.2.1-test.1"></script>
-  <script src="js/milestones.js?v=173.2.1-test.1"></script>
-  <script src="js/memcards.js?v=173.2.1-test.1"></script>
-  <script src="js/checkin.js?v=173.2.1-test.1"></script>
-  <script src="js/backup.js?v=173.2.1-test.1"></script>
-  <script src="js/exams.js?v=173.2.1-test.1"></script>
-  <script src="js/mistakes.js?v=173.2.1-test.1"></script>
-  <script src="js/badges.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-editor.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-schedule.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-actions.js?v=173.2.1-test.1"></script>
-  <script src="js/memo.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-economy.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-currency.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-penalty.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-flow.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-controls.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-refinements.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-rest.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-goals.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-finance.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-report.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-organize.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-wishlist.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-float.js?v=173.2.1-test.1"></script>
-  <script src="js/memo-workspace.js?v=173.2.1-test.1"></script>
-  <script src="js/updates.js?v=173.2.1-test.1"></script>
-  <script src="js/app.js?v=173.2.1-test.1"></script>
+  <script src="js/store.js?v=173.3.0"></script>
+  <script src="js/ui.js?v=173.3.0"></script>
+  <script src="js/tasks.js?v=173.3.0"></script>
+  <script src="js/timeline.js?v=173.3.0"></script>
+  <script src="js/stats.js?v=173.3.0"></script>
+  <script src="js/settings.js?v=173.3.0"></script>
+  <script src="js/sport.js?v=173.3.0"></script>
+  <script src="js/lecture.js?v=173.3.0"></script>
+  <script src="js/calendar.js?v=173.3.0"></script>
+  <script src="js/link.js?v=173.3.0"></script>
+  <script src="js/demo.js?v=173.3.0"></script>
+  <script src="js/queue.js?v=173.3.0"></script>
+  <script src="js/milestones.js?v=173.3.0"></script>
+  <script src="js/memcards.js?v=173.3.0"></script>
+  <script src="js/checkin.js?v=173.3.0"></script>
+  <script src="js/backup.js?v=173.3.0"></script>
+  <script src="js/exams.js?v=173.3.0"></script>
+  <script src="js/mistakes.js?v=173.3.0"></script>
+  <script src="js/badges.js?v=173.3.0"></script>
+  <script src="js/memo-editor.js?v=173.3.0"></script>
+  <script src="js/memo-schedule.js?v=173.3.0"></script>
+  <script src="js/memo-actions.js?v=173.3.0"></script>
+  <script src="js/memo.js?v=173.3.0"></script>
+  <script src="js/memo-economy.js?v=173.3.0"></script>
+  <script src="js/memo-currency.js?v=173.3.0"></script>
+  <script src="js/memo-penalty.js?v=173.3.0"></script>
+  <script src="js/memo-flow.js?v=173.3.0"></script>
+  <script src="js/memo-controls.js?v=173.3.0"></script>
+  <script src="js/memo-refinements.js?v=173.3.0"></script>
+  <script src="js/memo-rest.js?v=173.3.0"></script>
+  <script src="js/memo-goals.js?v=173.3.0"></script>
+  <script src="js/memo-finance.js?v=173.3.0"></script>
+  <script src="js/memo-report.js?v=173.3.0"></script>
+  <script src="js/memo-organize.js?v=173.3.0"></script>
+  <script src="js/memo-wishlist.js?v=173.3.0"></script>
+  <script src="js/memo-float.js?v=173.3.0"></script>
+  <script src="js/memo-workspace.js?v=173.3.0"></script>
+  <script src="js/updates.js?v=173.3.0"></script>
+  <script src="js/app.js?v=173.3.0"></script>
 
 
   <!-- ✨ 快速上手演示动画 -->

@@ -23,7 +23,7 @@
     const done = doneFor(t, ref), attrs = refAttrs(ref);
     const points = score(t,ref), category = ref.list || t.assignment?.list || (ref.kind === 'project' ? t.memoCategoryDays?.[ref.day]||'extra' : 'queue');
     return '<article class="mw-task' + (done ? ' mw-done' : '') + '" data-mw-card data-carried="'+!!A.memoFlow.isCarried(t)+'" data-category="'+category+'" data-bounty="'+!!A.memoOrganize?.bounty(points)+'" data-score="'+scoreBand(points)+'" ' + attrs + '><div class="mw-task-heading">' + button('complete', done ? '✓' : '○', attrs + ' aria-label="' + (done ? '取消完成：' : '完成：') + esc(t.text) + '" aria-pressed="' + done + '"') + '<div class="mw-task-title"><strong>' + esc(t.text) + '</strong>' + scoreHTML(points) + '<div class="mw-task-meta">' + (ref.kind === 'queue' ? '<span>' + (t.pinned ? '置顶 · ' : '') + (options.number ? '第' + options.number + '项' : '已安排') + '</span>' : ref.kind === 'project' ? '<span>每日推进 · ' + esc(ref.day) + '</span>' : '') + '</div></div>' + button('edit', '编辑', attrs + ' aria-label="编辑：' + esc(t.text) + '"') + '</div><div class="mw-task-timing">' + A.memoSchedule.rowControls(ref) + '</div>' +
-      (true ? '<details class="mw-task-extras"><summary>更多操作</summary><div class="mw-task-secondary">' + (['task','queue'].includes(ref.kind) && (!done || t.overdueEventId) ? button('assign', done ? '安排与扣分记录' : ref.kind === 'queue' ? (t.assignment ? '调整今日安排' : '安排到今天') : '调整安排', attrs) : '') + (!done && ['task','queue'].includes(ref.kind) && (t.originalDay || (t.assignment?.day || ref.day) < M().userDay()) ? button('backfill', '补记完成', attrs) : '') + (A.memoFlow.isCarried(t) ? '<details class="mw-late-detail"><summary>顺延记录</summary><small>' + esc(A.memoFlow.lateLabel(t)) + '</small></details>' : '') + (t.assignment ? '<small>' + esc(t.assignment.day + ' · ' + names[t.assignment.list]) + '</small>' : '') + (t.note ? '<details class="mw-note"><summary>备注</summary><p>' + esc(t.note) + '</p></details>' : '') + (options.reorder ? '<details class="mw-manage"><summary>更多操作</summary><div>' + button('pin', t.pinned ? '取消置顶' : '置顶', attrs) + button('up', '上移', attrs) + button('down', '下移', attrs) + '</div></details>' : '') + '</div></details>' : '') + '</article>';
+      (true ? '<details class="mw-task-extras"><summary>更多操作</summary><div class="mw-task-secondary">' + (['task','queue'].includes(ref.kind) && (!done || t.overdueEventId) ? button('assign', done ? '安排与扣分记录' : ref.kind === 'queue' ? (t.assignment ? '调整今日安排' : '安排到今天') : '调整安排', attrs) : '') + (!done && ['task','queue'].includes(ref.kind) && (t.originalDay || (t.assignment?.day || ref.day) < M().userDay()) ? button('backfill', '补记完成', attrs) : '') + (A.memoFlow.isCarried(t) ? '<details class="mw-late-detail"><summary>顺延记录</summary><small>' + esc(A.memoFlow.lateLabel(t)) + '</small></details>' : '') + (t.assignment ? '<small>' + esc(t.assignment.day + ' · ' + names[t.assignment.list]) + '</small>' : '') + (done?A.memoSchedule.executionHTML((S().data().memoEvents||[]).find(e=>e.active&&e.kind===ref.kind&&e.sourceId===ref.id&&(ref.kind==='queue'||e.sourceDay===ref.day))?.timing):'') + (t.note ? '<details class="mw-note"><summary>备注</summary><p>' + esc(t.note) + '</p></details>' : '') + (options.reorder ? '<details class="mw-manage"><summary>更多操作</summary><div>' + button('pin', t.pinned ? '取消置顶' : '置顶', attrs) + button('up', '上移', attrs) + button('down', '下移', attrs) + '</div></details>' : '') + '</div></details>' : '') + '</article>';
   }
   function taskSection(items) {
     const open = items.filter(x => !doneFor(x.task, x.ref)), done = items.filter(x => doneFor(x.task, x.ref));
@@ -33,18 +33,15 @@
   function scoreHTML(n){return n===null?'':(A.memoOrganize?.badge(n)||'')+'<small class="mw-score">+'+esc(n)+'分</small>';}
   function scoreBand(n){return n===null?'group':n===0?'zero':n<5?'low':n<10?'medium':'high';}
   function taskItems(day,list){
-    const items=(S().getDay(day).tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed).map(task=>({task,ref:{kind:'task',id:task.id,day,list}}));
-    A.memoFlow?.assigned(day,list).forEach(task=>items.push({task,ref:{kind:'queue',id:task.id}}));
-    projects().filter(p=>!p.archived&&(!p.createdDay||p.createdDay<=day)&&(p.memoCategoryDays?.[day]||'extra')===list).forEach(task=>items.push({task,ref:{kind:'project',id:task.id,day}}));
-    (S().data().daily||[]).filter(t=>!t.archived&&t.memoCategoryDays?.[day]===list).forEach(task=>items.push({task,ref:{kind:'daily',id:task.id,day}}));const seen=new Set();const result=items.filter(x=>{const found=A.memoSchedule.resolve(x.ref);if(!found)return false;const ref=found.ref,key=A.memoSchedule.key(ref);x.task=found.task;if(seen.has(key))return false;seen.add(key);x.ref=ref;return true;});return result.map((x,i)=>({x,i})).sort((a,b)=>Number(doneFor(a.x.task,a.x.ref))-Number(doneFor(b.x.task,b.x.ref))||(!doneFor(a.x.task,a.x.ref)&&list!=='required'?score(b.x.task,b.x.ref)-score(a.x.task,a.x.ref):0)||a.i-b.i).map(v=>v.x);
+    return A.memoSchedule.columnItems(day,list).map((x,i)=>({x,i})).sort((a,b)=>Number(a.x.done)-Number(b.x.done)||(!a.x.done&&list!=='required'?score(b.x.task,b.x.ref)-score(a.x.task,a.x.ref):0)||a.i-b.i).map(v=>v.x);
   }
   // Calendar's original compact columns and row markup, without mutation controls.
   function overviewHTML(day){
     const dt=new Date(day+'T12:00:00+08:00'),wd=['日','一','二','三','四','五','六'][dt.getUTCDay()];
     let html='<section class="card mw-overview"><div class="row" style="justify-content:space-between;flex-wrap:wrap"><h3 style="margin:0">🗓 '+Number(day.slice(5,7))+'月'+Number(day.slice(8))+'日 周'+wd+'</h3></div><div class="cal-cols" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">';
     [['required','✅ 必须'],['ideal','⭐ 理想'],['extra','🌱 拓展']].forEach(([list,name])=>{
-      const items=taskItems(day,list);
-      html+='<div class="cal-col" data-overview-list="'+list+'" tabindex="0" role="group" aria-label="'+names[list]+'，点击空白添加任务" style="border:1px solid var(--line);border-radius:10px;padding:9px 10px"><div class="cal-col-head" style="font-size:13px;font-weight:700;margin-bottom:6px">'+name+' <span class="tag">'+(items.length+(A.memoFinance?.plans(day).filter(x=>x.r.list===list).length||0))+'</span></div>';
+      const items=taskItems(day,list),progress=A.memoFinance.column(day,list);
+      html+='<div class="cal-col" data-overview-list="'+list+'" tabindex="0" role="group" aria-label="'+names[list]+'，点击空白添加任务" style="border:1px solid var(--line);border-radius:10px;padding:9px 10px"><div class="cal-col-head" style="font-size:13px;font-weight:700;margin-bottom:6px">'+name+' <span class="mw-column-count">'+progress.label+'</span></div><div class="mw-column-meter" role="img" aria-label="'+esc(names[list]+'：'+progress.label)+'"><span style="width:'+progress.percent+'%"></span></div>'+(progress.supervision?'<small class="mw-column-extra">监督 '+progress.supervision+'项</small>':'');
       function rows(items){let html='';items.forEach(({task:t,ref})=>{
         html+='<div class="cal-task'+(doneFor(t,ref)?' done':'')+'" data-carried="'+!!A.memoFlow.isCarried(t)+'" data-category="'+list+'" data-bounty="'+!!A.memoOrganize?.bounty(score(t,ref))+'" data-score="'+scoreBand(score(t,ref))+'" data-overview-ref="'+esc(JSON.stringify(ref))+'" tabindex="0" role="button" aria-label="打开任务：'+esc(t.text+(A.memoFlow.isCarried(t)?'，逾期顺延':'')+(score(t,ref)!==null?'，'+score(t,ref)+'分':''))+'" style="border-bottom:1px dashed var(--line);padding:6px 2px"><span class="t-text" title="'+esc(t.text)+'" style="font-size:13.5px;word-break:break-all"><span class="ov-task-name">'+esc(t.text)+(doneFor(t,ref)?' ✓':'')+'</span>'+scoreHTML(score(t,ref))+(A.tasks?.carryTagHTML?.(t)||'')+(A.tasks?.lecTagHTML?.(t)||'')+'</span>';
         if(t.standard)html+='<div class="t-std" style="font-size:11.5px;color:#f59e0b;margin-top:2px">📌 标准：'+esc(t.standard)+'</div>';
@@ -102,6 +99,11 @@
     requestAnimationFrame(() => { if (options.focusCard) $('schedule-card-' + options.focusCard)?.scrollIntoView({ block: 'center' }); else window.scrollTo({ top: positions[next] || 0 }); });
   }
   function enter(next, day) { if(day && M().validDate(day)){taskDay=day;render();}  if (next) showPane(next, false); else { applyPane(); requestAnimationFrame(() => window.scrollTo({ top: positions[pane] || 0 })); } }
+  function returnToday() {
+    if(document.querySelector('#modal-root .modal-mask')||A.memoActions.busy())return;
+    taskDay=M().userDay();positions.today=0;pane='today';render();
+    requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:0,behavior:'instant'})));
+  }
   function leave() { positions[pane] = window.scrollY; }
   function timingFields() { return '<details open><summary>安排时间（选填）</summary><div class="schedule-fields"><label>开始／时间点<input type="time" id="mw-start"></label><label>结束（选填）<input type="time" id="mw-end"></label></div><label><input type="checkbox" id="mw-next">次日结束</label><p class="hint">只填开始即为时间点；都不填则暂不安排。</p></details>'; }
   function saveTiming(modal, ref, title, day) {
@@ -260,5 +262,5 @@
     setInterval(refreshDates,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDates();});window.addEventListener('focus',refreshDates);
     render();
   }
-  A.memoWorkspace = { complete, score, scoreBand, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
+  A.memoWorkspace = { complete, score, scoreBand, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
 })();

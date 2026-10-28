@@ -24,6 +24,7 @@
     const pts = S().pointsTotal();
     const ptsEl = document.getElementById('stat-points');
     ptsEl.textContent = pts;
+    App.memoFinance?.refreshToday();
     if (lastPoints !== null && pts !== lastPoints) {
       ptsEl.classList.remove('stat-points-bump');
       void ptsEl.offsetWidth; // 重启动画
@@ -428,7 +429,10 @@
 
     // 主导航
     document.querySelectorAll('.nav-btn').forEach(function (b) {
-      b.onclick = function () { switchView(b.dataset.view); };
+      b.onclick = function () {
+        if(window.__MEMO_MODE&&b.dataset.view==='tasks'&&currentView==='tasks'&&b.closest('#mobile-nav')){App.memoWorkspace?.returnToday();return;}
+        switchView(b.dataset.view);
+      };
     });
 
     // 📱 v125 手机底部导航：「更多」抽屉（抽屉里的页面按钮自带 .nav-btn，上面已绑）

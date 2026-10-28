@@ -1,6 +1,6 @@
 /* Copy-only task summaries. No report is inserted in handwritten notes. */
 (function(){'use strict';const A=window.App,S=()=>A.store,M=()=>A.memoCore;
-function report(day,legacyGoals=false,finance=true){const d=S().data(),lines=['===== 用户日 '+day+' · 任务汇总 =====','以下为当前保存记录，不是完整操作日志；复制不代表已发送或归档。'];let any=false;
+function legacyReport(day,legacyGoals=false,finance=true){const d=S().data(),lines=['===== 用户日 '+day+' · 任务汇总 =====','以下为当前保存记录，不是完整操作日志；复制不代表已发送或归档。'];let any=false;
 for(const [list,name] of [['required','必做'],['ideal','理想'],['extra','长期拓展']]){const rows=[];
 (d.days[day]?.tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId).forEach(t=>rows.push({t,done:!!t.done,status:t.memoMovedTo?'已重新安排':t.memoDismissed?'不再安排':t.done?'已完成':'未完成'}));
 A.memoFlow.queues().forEach(t=>{if(t.assignment?.day===day&&t.assignment.list===list&&!t.memoDismissed)rows.push({t,done:!!t.doneAt,status:t.doneAt?'已完成':'未完成'});(t.assignmentHistory||[]).filter(h=>h.day===day&&h.list===list).forEach(()=>rows.push({t,done:false,status:'已重新安排'}));});
@@ -12,6 +12,73 @@ if(finance&&A.memoFinance){const f=A.memoFinance.summary(day);lines.push(f.text)
 const habits=(d.checkins||[]).filter(t=>t.days?.[day]);if(habits.length){any=true;lines.push('【习惯打卡】');habits.forEach(t=>lines.push(t.text+'：'+t.days[day]+'次'));}
 const goals=A.memoGoals?.at(day)||[];if(goals.length){any=true;lines.push('【截止目标】');goals.forEach(g=>lines.push(legacyGoals?g.name+'：'+g.current+'/'+g.total+g.unit+'；截止 '+g.due:g.name+'；截止 '+g.due));}return {text:lines.join('\n'),any};}
 function days(){const d=S().data(),keys=new Set([...Object.keys(d.days),...Object.keys(d.memoNotes||{}),...d.ledger.map(e=>e.date),...(d.memoHabitPlans||[]).map(p=>p.from)]);A.memoFlow.queues().forEach(t=>{if(t.assignment?.day)keys.add(t.assignment.day);(t.assignmentHistory||[]).forEach(h=>{if(h.day)keys.add(h.day);});});(d.memoGoals||[]).forEach(g=>(g.history||[]).forEach(h=>keys.add(h.day)));return [...keys].filter(M().validDate).sort();}
-function attach(q){const f=A.memoFlow.state(),current={},carry=f.reportCarry?.day===M().userDay()&&f.reportCarry.selected===q.day?f.reportCarry.base:(f.reportCopies||{});const base=JSON.parse(JSON.stringify(carry));const selectedReport=report(q.day).text;let text=selectedReport;for(const day of days().filter(k=>k<q.day)){const r=report(day);current[day]=r.text;if(base[day]!==undefined&&(base[day]===report(day,true).text||base[day]===report(day,false,false).text||base[day]===report(day,true,false).text))base[day]=r.text;if(base[day]===undefined)base[day]=f.reportCopies&&r.any?'':r.text;if((base[day]!==undefined&&base[day]!==r.text)||(carry[day]===undefined&&f.reportCopies&&r.any))text+='\n\n'+r.text.replace('· 任务汇总','· 任务汇总修订（替换此前汇总）');}current[q.day]=selectedReport;return Object.assign(q,{text:text+'\n\n'+q.text,reportSnapshots:current,reportBase:base});}
-function mark(q){if(!q.reportSnapshots)return;const f=A.memoFlow.state();f.reportCopies=Object.assign({},f.reportCopies,q.reportSnapshots);f.reportCarry={day:M().userDay(),selected:q.day,base:q.reportBase};}
-A.memoReport={report,attach,mark};})();
+// Facts and ledger checkpoints deliberately exclude derived closing balances and presentation.
+const clone=x=>JSON.parse(JSON.stringify(x));
+const stable=x=>JSON.stringify(x);
+function column(day,list){
+ if(A.memoFinance?.column)return A.memoFinance.column(day,list);
+ const items=A.memoSchedule.columnItems(day,list).map(x=>({id:A.memoSchedule.key(x.ref),title:x.task.text,done:x.done,target:true,kind:x.ref.kind,backfillDay:x.task.backfillDay||'',originalDay:x.task.originalDay||''}));
+ return {items,done:items.filter(x=>x.done).length,total:items.length,label:items.length?items.filter(x=>x.done).length+'/'+items.length:'暂无任务'};
+}
+function facts(day){return {columns:['required','ideal','extra'].map(k=>({list:k,items:column(day,k).items.slice().sort((a,b)=>a.id.localeCompare(b.id))})),habits:(S().data().checkins||[]).filter(t=>t.days?.[day]).map(t=>({id:t.id,title:t.text,count:t.days[day]})).sort((a,b)=>a.id.localeCompare(b.id)),goals:(A.memoGoals?.at(day)||[]).map(g=>({id:g.id,name:g.name,due:g.due})).sort((a,b)=>String(a.id).localeCompare(String(b.id)))};}
+function report(day,legacyGoals=false,finance=true){
+ if(legacyGoals)return legacyReport(day,true,finance);
+ const lines=['===== 用户日 '+day+' · 任务汇总 =====','以下为当前保存记录；执行时段按片段编号去重，复制不代表已发送或归档。'];let any=false;
+ for(const [list,name] of [['required','必做'],['ideal','理想'],['extra','长期拓展']]){
+  const c=column(day,list);lines.push('【'+name+'】'+(c.total?'完成 '+c.label:c.label));
+  if(c.items.length)any=true;
+  c.items.forEach(x=>lines.push((x.done?'✓ ':'○ ')+x.title+'〔'+(x.kind==='checkin'?(x.mode==='punch'?'监督记录 '+x.count+'次':x.count+'/'+x.goal+'次 · '+(x.target?(x.done?'打卡达标':'打卡未达标'):'选做，无完成目标')):x.done?'已完成':'未完成')+(x.backfillDay?'；补记实际完成日 '+x.backfillDay:'')+(x.originalDay?'；原安排 '+x.originalDay:'')+'〕'));
+ }
+ if(finance&&A.memoFinance){const f=A.memoFinance.postingSummary(day);lines.push(f.text);if(f.any)any=true;}
+ const snapshot=facts(day);if(snapshot.habits.length){any=true;lines.push('【习惯打卡】',...snapshot.habits.map(t=>t.title+'：'+t.count+'次'));}
+ if(snapshot.goals.length){any=true;lines.push('【截止目标】',...snapshot.goals.map(g=>g.name+'；截止 '+g.due));}
+ return {text:lines.join('\n'),any};
+}
+function stripFinance(text){return String(text).replace(/【积分汇总】[\s\S]*?(?=【打卡安排】|【习惯打卡】|【截止目标】|$)/,'');}
+function ledgerSnapshot(e){return {id:e.id,at:e.at||null,date:e.date||null,type:e.type||'',points:Number(e.points)||0,note:e.note||'',effectiveAt:e.effectiveAt||null,refundOf:e.refundOf||null,itemSnapshot:e.itemSnapshot||null};}
+function ledgerDay(e){return A.memoFinance?.postingDay(e)||e.date;}
+function attach(q){
+ const f=A.memoFlow.state(),same=f.factCarry?.day===M().userDay()&&f.factCarry.selected===q.day;
+ const base=clone(same?f.factCarry.base:f.reportFacts||{version:1,days:{},ledger:{}}),current={version:1,days:{...base.days},ledger:{...base.ledger}};
+ const prior=f.reportCarry?.day===M().userDay()&&f.reportCarry.selected===q.day?f.reportCarry.base:(f.reportCopies||{});
+ const reportSnapshots={},reportBase=clone(prior),lines=[report(q.day).text];
+ const dates=new Set([...days(),...['daily','memoProjects','checkins'].flatMap(k=>(S().data()[k]||[]).flatMap(t=>Object.keys(t.days||{}))),q.day,...Object.keys(f.reportFacts?.days||{}),...Object.keys(f.reportCopies||{})]);
+ for(const day of [...dates].filter(k=>M().validDate(k)&&k<=q.day).sort()){
+  const fact=facts(day);current.days[day]=fact;reportSnapshots[day]=report(day).text;
+  if(day===q.day)continue;
+  let changed;
+  if(base.days[day]!==undefined)changed=stable(base.days[day])!==stable(fact);
+  else if(f.reportFacts||same)changed=report(day,false,false).any;
+  else {
+   const old=prior[day];
+   changed=old!==undefined?![legacyReport(day).text,legacyReport(day,true).text,legacyReport(day,false,false).text,legacyReport(day,true,false).text,report(day).text].some(t=>stripFinance(t)===stripFinance(old)):!!f.reportCopies&&report(day,false,false).any;
+   // Preserve the actual old baseline through repeated copies on this user day.
+   if(old===undefined)reportBase[day]=changed?'':reportSnapshots[day];
+  }
+  if(changed)lines.push(report(day,false,false).text.replace('· 任务汇总','· 任务汇总修订（替换此前汇总）'));
+  if(!f.reportFacts&&!same)base.days[day]=changed?{legacyPending:day}:clone(fact);
+ }
+ const ledger=Object.fromEntries(Object.values(base.ledger).filter(e=>ledgerDay(e)>q.day).map(e=>[e.id,e]));
+ S().data().ledger.filter(e=>typeof e.id==='string'&&e.id&&(ledgerDay(e)<=q.day||base.ledger[e.id]&&ledgerDay(base.ledger[e.id])<=q.day)).forEach(e=>ledger[e.id]=ledgerSnapshot(e));
+ if(!f.reportFacts&&!same)base.ledger=clone(ledger);
+ current.ledger=ledger;
+ const financial=[];
+ if(f.reportFacts||same){
+  for(const id of new Set([...Object.keys(base.ledger),...Object.keys(ledger)])){
+   const old=base.ledger[id],next=ledger[id];if(stable(old)===stable(next))continue;
+   if(next&&ledgerDay(next)===q.day&&!old)continue; // Already listed in the selected day's flow.
+   const describe=e=>A.memoFinance?A.memoFinance.ledgerText(e):stable(e);
+   financial.push(!old?'新增：'+describe(next):!next?'撤回已移除流水：'+describe(old):'修订前：'+describe(old)+'\n修订后：'+describe(next));
+  }
+ }
+ if(financial.length)lines.push('【积分流水补记／修订 · 仅以下受影响记录】\n'+financial.join('\n'));
+ const supplements=(S().data().memoEvents||[]).filter(e=>e.active&&e.kind!=='cancellation'&&(e.sourceDay===q.day||e.noteDay===q.day||q.snapshots[e.noteDay])&&e.timing?.executionText&&!q.text.includes(e.timing.executionText));
+ if(supplements.length)lines.push('【已保存执行快照 · 按片段编号去重】\n'+supplements.map(e=>e.title+'〔完成记录 '+e.id+'〕\n'+e.timing.executionText).join('\n'));
+ return Object.assign(q,{text:lines.join('\n\n')+'\n\n'+q.text,reportSnapshots,reportBase,factSnapshot:current,factBase:base});
+}
+function mark(q){
+ if(!q.reportSnapshots)return;const f=A.memoFlow.state();
+ f.reportCopies=Object.assign({},f.reportCopies,q.reportSnapshots);f.reportCarry={day:M().userDay(),selected:q.day,base:q.reportBase};
+ if(q.factSnapshot){f.reportFacts=clone(q.factSnapshot);f.factCarry={day:M().userDay(),selected:q.day,base:clone(q.factBase)};}
+}
+A.memoReport={report,legacyReport,facts,attach,mark};})();
