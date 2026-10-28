@@ -23,7 +23,7 @@ function column(day,list){
 function facts(day){return {columns:['required','ideal','extra'].map(k=>({list:k,items:column(day,k).items.slice().sort((a,b)=>a.id.localeCompare(b.id))})),habits:(S().data().checkins||[]).filter(t=>t.days?.[day]).map(t=>({id:t.id,title:t.text,count:t.days[day]})).sort((a,b)=>a.id.localeCompare(b.id)),goals:(A.memoGoals?.at(day)||[]).map(g=>({id:g.id,name:g.name,due:g.due})).sort((a,b)=>String(a.id).localeCompare(String(b.id)))};}
 function report(day,legacyGoals=false,finance=true){
  if(legacyGoals)return legacyReport(day,true,finance);
- const lines=['===== 用户日 '+day+' · 任务汇总 =====','以下为当前保存记录；执行时段按片段编号去重，复制不代表已发送或归档。'];let any=false;
+ const lines=['===== 用户日 '+day+' · 任务汇总 =====','以下为当前保存记录；执行时段按片段编号及起止区间去重，复制不代表已发送或归档。'];let any=false;
  for(const [list,name] of [['required','必做'],['ideal','理想'],['extra','长期拓展']]){
   const c=column(day,list);lines.push('【'+name+'】'+(c.total?'完成 '+c.label:c.label));
   if(c.items.length)any=true;
@@ -73,7 +73,7 @@ function attach(q){
  }
  if(financial.length)lines.push('【积分流水补记／修订 · 仅以下受影响记录】\n'+financial.join('\n'));
  const supplements=(S().data().memoEvents||[]).filter(e=>e.active&&e.kind!=='cancellation'&&(e.sourceDay===q.day||e.noteDay===q.day||q.snapshots[e.noteDay])&&e.timing?.executionText&&!q.text.includes(e.timing.executionText));
- if(supplements.length)lines.push('【已保存执行快照 · 按片段编号去重】\n'+supplements.map(e=>e.title+'〔完成记录 '+e.id+'〕\n'+e.timing.executionText).join('\n'));
+ if(supplements.length)lines.push('【已保存执行快照 · 按片段编号及起止区间去重】\n'+supplements.map(e=>e.title+'〔完成记录 '+e.id+'〕\n'+e.timing.executionText).join('\n'));
  return Object.assign(q,{text:lines.join('\n\n')+'\n\n'+q.text,reportSnapshots,reportBase,factSnapshot:current,factBase:base});
 }
 function mark(q){
