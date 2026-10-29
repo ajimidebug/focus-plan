@@ -1872,10 +1872,6 @@ body[data-theme="dark"] .memo-queue-item .memo-queue-points, body[data-theme="pu
 .schedule-chart { border:1px solid var(--line); border-radius:8px; padding:8px 5px 16px; background:var(--card); }
 .schedule-axis { grid-template-columns:46px minmax(0,1fr) minmax(0,1fr); background:repeating-linear-gradient(to bottom,transparent 0,transparent 71px,var(--line) 71px,var(--line) 72px); }
 .schedule-legend { grid-template-columns:46px minmax(0,1fr) minmax(0,1fr); margin:0 0 6px; }
-.schedule-chart[data-mode="plan"] .schedule-actual-lane, .schedule-chart[data-mode="plan"] .schedule-legend > :last-child,
-.schedule-chart[data-mode="actual"] .schedule-plan-lane, .schedule-chart[data-mode="actual"] .schedule-legend > :nth-child(2) { display:none; }
-.schedule-chart[data-mode="plan"] .schedule-axis, .schedule-chart[data-mode="actual"] .schedule-axis,
-.schedule-chart[data-mode="plan"] .schedule-legend, .schedule-chart[data-mode="actual"] .schedule-legend { grid-template-columns:46px minmax(0,1fr); }
 .schedule-block { min-height:0; min-width:0; margin:0; text-align:left; cursor:pointer; border:1px solid #6d99bd; padding:2px 4px; color:#244d73; font:inherit; font-size:12px; }
 .schedule-block span { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .schedule-new { background:#d9efe3; border-color:#6d9f80; color:#214d32; }
@@ -1939,10 +1935,6 @@ body[data-theme="dark"] .memo-queue-item .memo-queue-points, body[data-theme="pu
 .schedule-short span { display:block; position:absolute; top:var(--label-offset,0px); left:10px; max-width:calc(100% - 10px); min-height:28px; padding:3px 5px; border-radius:4px; border:1px solid currentColor; background:var(--card); white-space:normal; line-height:1.3; font-size:13px; z-index:3; }
 .schedule-short::after { top:-12px; height:40px; }
 .schedule-completed::before { border-radius:0; transform:rotate(45deg); }
-.schedule-chart[data-mode="plan"] .schedule-legend > :nth-child(2) { display:none; }
-.schedule-chart[data-mode="plan"] .schedule-legend > :last-child { display:block; }
-.schedule-chart[data-mode="actual"] .schedule-legend > :nth-child(2) { display:block; }
-.schedule-chart[data-mode="actual"] .schedule-legend > :last-child { display:none; }
 .schedule-toolbar .btn { min-height:40px; }
 @media(max-height:500px) { .mw-tabs { padding:3px 0; } .mw-group { margin-top:8px; } .schedule-explanation { display:none; } .schedule-toolbar { gap:4px; margin:4px 0; } }
 .schedule-short span { height:26px; min-height:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -2038,12 +2030,6 @@ body.memo-layout[data-view="tasks"] .release-panel:has(#storage-status:is([data-
 .mw-session-menu { display:contents; }
 .mw-session-menu > summary { display:none; }
 #view-memo-timeaxis { min-width:0; }
-.schedule-chart[data-mode="combined"] .schedule-legend,
-.schedule-chart[data-mode="combined"] .schedule-axis { grid-template-columns:46px minmax(0,1fr); }
-.schedule-chart[data-mode="combined"] .schedule-plan-lane,
-.schedule-chart[data-mode="combined"] .schedule-legend > :last-child { display:none; }
-.schedule-chart[data-mode="combined"] .schedule-legend > :nth-child(2) { font-size:0; }
-.schedule-chart[data-mode="combined"] .schedule-legend > :nth-child(2)::after { content:'计划与实际'; font-size:13px; }
 .schedule-block.schedule-is-plan { background:#e4eefb; border-color:#7c9fc3; color:#244d73; }
 #flow-shop { margin:10px 0; }
 #memo-copy-status { cursor:pointer; }
@@ -2490,3 +2476,52 @@ body .mw-overview [data-overview-ref]{padding:7px 4px!important;min-height:44px;
 :is(#mw-live[data-status="paused"],.task-action-modal [data-status="paused"]) .float-meter-fill{opacity:.72;box-shadow:none;transition:none;}
 .task-action-modal .float-meter-text{color:var(--muted);overflow-wrap:anywhere;}
 @media(prefers-reduced-motion:reduce){:is(#mw-live,.task-action-modal) .float-meter-fill{transition:none;}}
+
+/* 173.6: one clock, separate expectation / execution / completion tracks. */
+.schedule-chart{--schedule-plan:#467fc0;--schedule-actual:#2e946e;--schedule-complete:#a77c39;padding-bottom:48px;}
+.schedule-chart .schedule-axis,.schedule-chart .schedule-legend{grid-template-columns:42px minmax(0,3fr) minmax(0,4.4fr) minmax(0,2.6fr);gap:5px;}
+.schedule-chart .schedule-legend{font-size:12px;margin-bottom:0;}
+.schedule-chart .schedule-legend>strong{padding:5px 3px;border-radius:5px 5px 0 0;color:var(--ink);font-weight:600;}
+.schedule-chart .schedule-plan-lane,.schedule-chart .schedule-plan-heading{background:color-mix(in srgb,var(--schedule-plan) 6%,var(--card));}
+.schedule-chart .schedule-actual-lane,.schedule-chart .schedule-actual-heading{background:color-mix(in srgb,var(--schedule-actual) 6%,var(--card));}
+.schedule-chart .schedule-completion-lane,.schedule-chart .schedule-completion-heading{background:color-mix(in srgb,var(--schedule-complete) 6%,var(--card));}
+.schedule-chart .schedule-lane{border-left:1px solid color-mix(in srgb,var(--ink) 18%,var(--line));}
+.schedule-chart .schedule-axis{background-size:auto 72px;}
+.schedule-chart .schedule-block{border-radius:5px;color:var(--ink);border-left-width:3px;font-size:12px;padding:3px;overflow:visible;z-index:1;}
+.schedule-chart .schedule-block>small{font-size:10px;line-height:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--muted);}
+.schedule-chart .schedule-block>span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:normal;overflow-wrap:anywhere;line-height:15px;max-height:30px;}
+.schedule-chart .schedule-block.schedule-is-plan{background:color-mix(in srgb,var(--schedule-plan) 14%,var(--card))!important;border-color:var(--schedule-plan);color:var(--ink);}
+.schedule-chart .schedule-block.schedule-new:not(.schedule-is-plan){background:color-mix(in srgb,var(--schedule-actual) 14%,var(--card));border-color:var(--schedule-actual);color:var(--ink);}
+.schedule-chart .schedule-block.schedule-legacy{background:color-mix(in srgb,var(--muted) 10%,var(--card));border-color:var(--muted);color:var(--ink);}
+.schedule-chart .schedule-block.schedule-aggregate{background:transparent;border-style:dashed;}
+.schedule-chart .schedule-block.schedule-running{border-left-width:4px;box-shadow:inset 2px 0 color-mix(in srgb,var(--schedule-actual) 30%,transparent);}
+.schedule-chart .schedule-block.schedule-short{border:0;border-top:2px solid var(--schedule-actual);padding-top:2px;background:none;}
+.schedule-chart .schedule-block.schedule-short.schedule-is-plan{border-top-color:var(--schedule-plan);background:none!important;}
+.schedule-chart .schedule-block.schedule-short.schedule-legacy{border-top-color:var(--muted);}
+.schedule-chart .schedule-block.schedule-short::after{top:0;height:42px;}
+.schedule-chart .schedule-block.schedule-short>span{position:static;left:auto;min-height:0;max-width:none;height:auto;padding:0;border:0;border-radius:0;background:transparent;font-size:12px;z-index:auto;}
+.schedule-chart .schedule-block.schedule-short>span::before{content:none;}
+.schedule-chart .schedule-point::before{background:var(--schedule-plan);}
+.schedule-chart .schedule-block.completion-marker::before{background:var(--schedule-complete);}
+.schedule-chart .schedule-block.completion-marker{border:0;border-top:2px dotted var(--schedule-complete);background:var(--card);height:42px;min-height:42px;}
+.schedule-chart .schedule-block.completion-marker>span{-webkit-line-clamp:1;max-height:15px;}
+.schedule-chart .schedule-block:focus-visible{outline:2px solid var(--primary);outline-offset:2px;z-index:3;}
+.schedule-chart[data-mode="compare"] .schedule-axis,.schedule-chart[data-mode="compare"] .schedule-legend{grid-template-columns:42px minmax(0,4.4fr) minmax(0,3fr) minmax(0,2.6fr);}
+.schedule-chart[data-mode="compare"] :is(.schedule-plan-lane,.schedule-plan-heading){grid-column:3;grid-row:1;}
+.schedule-chart[data-mode="compare"] :is(.schedule-actual-lane,.schedule-actual-heading){grid-column:2;grid-row:1;}
+.schedule-chart[data-mode="compare"] :is(.schedule-completion-lane,.schedule-completion-heading){grid-column:4;grid-row:1;}
+.schedule-chart[data-mode="plan"] :is(.schedule-actual-lane,.schedule-actual-heading,.schedule-completion-lane,.schedule-completion-heading),
+.schedule-chart[data-mode="actual"] :is(.schedule-plan-lane,.schedule-plan-heading){display:none;}
+.schedule-chart[data-mode="plan"] .schedule-axis,.schedule-chart[data-mode="plan"] .schedule-legend{grid-template-columns:42px minmax(0,1fr);}
+.schedule-chart[data-mode="actual"] .schedule-axis,.schedule-chart[data-mode="actual"] .schedule-legend{grid-template-columns:42px minmax(0,7fr) minmax(0,3fr);}
+/* The same top anchor is used while folded; visible-viewport bounds come from memo-float. */
+body #mw-live,body[data-view="tasks"] #mw-live.mw-local-timer{top:var(--float-top,clamp(144px,24dvh,260px));max-height:var(--float-room,calc(100dvh - clamp(144px,24dvh,260px) - 88px));}
+/* Points precede notes in DOM order; advanced settings cannot push them down. */
+.mw-task-editor #mw-points-field[hidden]{display:none!important;}
+.mw-task-editor :is(.mw-title-field,#mw-points-field){margin-bottom:8px;}
+.mw-task-editor #mw-title{min-height:54px;}
+.mw-task-editor #mw-note-edit{min-height:54px;}
+.mw-task-editor .modal-body>label:has(select){margin-bottom:8px;}
+
+.schedule-chart #schedule-now{z-index:0;}
+.schedule-chart .schedule-block.schedule-density-group{background:var(--card)!important;border-style:dashed;}

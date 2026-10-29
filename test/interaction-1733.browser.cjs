@@ -100,7 +100,7 @@ async function run(){
    await context.close();
   }
   // Actual 04:00 change refreshes today's flow independently of behavior/effective date.
-  const c=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),p=await c.newPage();await p.clock.install({time:new Date('2026-10-28T03:59:59+08:00')});await p.goto('http://127.0.0.1:'+server.address().port);await p.waitForFunction(()=>App?.app?.ready);
+  const c=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),p=await c.newPage();await p.clock.install({time:new Date('2026-10-28T03:59:00+08:00')});await p.goto('http://127.0.0.1:'+server.address().port);await p.waitForFunction(()=>App?.app?.ready);await p.clock.pauseAt(new Date('2026-10-28T03:59:59+08:00'));
   await p.evaluate(()=>{App.store.data().ledger=[{id:'boundary',at:'2026-10-28T03:59:59+08:00',date:'2026-10-27',points:5,type:'earn-task'}];App.app.refreshStats();App.memoSchedule.tick();});
   check((await p.locator('#stat-points-today').innerText()).includes('+5'),'pre-boundary flow');await p.clock.runFor(2100);await p.evaluate(()=>App.memoSchedule.tick());check((await p.locator('#stat-points-today').innerText())==='今日 +0 / −0','flow resets at 04:00');await c.close();
  }finally{await browser.close();await new Promise(r=>server.close(r));}

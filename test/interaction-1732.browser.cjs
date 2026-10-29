@@ -19,7 +19,7 @@ async function run(){
  try{
   for(const [width,height] of [[320,640],[390,844],[550,350],[770,490],[1280,800]]){
    const context=await browser.newContext({viewport:{width,height},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
-   page.on('pageerror',e=>errors.push(e.message));
+   page.on('pageerror',e=>errors.push(e.stack||e.message));
    await page.goto('http://127.0.0.1:'+server.address().port);
    await page.addStyleTag({content:'#toast-root{visibility:hidden!important}'});
    const shot=async name=>{if(process.env.FOCUS_SCREENSHOT_DIR){fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR,{recursive:true});await page.screenshot({animations:'disabled',path:path.join(process.env.FOCUS_SCREENSHOT_DIR,name+'-'+width+'.png')});}};

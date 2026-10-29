@@ -5,6 +5,19 @@ const A = window.App;
 let selected = null, collapsed = true;
 try { collapsed = localStorage.getItem('focusPlanFloatExpanded') !== '1'; } catch {}
 const clock = ms => { const s = Math.floor(Math.max(0, ms) / 1000); return Math.floor(s / 3600) + ':' + String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+// Anchor to the visible viewport, including when a mobile keyboard reduces it.
+function place() {
+ const root = document.getElementById('mw-live'); if (!root) return;
+ const viewport = window.visualViewport, height = viewport?.height || window.innerHeight, offset = viewport?.offsetTop || 0;
+ const bottom = height < 500 ? 64 : 88;
+ const target = height < 500 ? Math.min(64, height * .18) : Math.max(144, Math.min(260, height * .24));
+ const top = Math.max(12, Math.min(target, height - bottom - 112));
+ root.style.setProperty('--float-top', (offset + top) + 'px');
+ root.style.setProperty('--float-room', Math.max(44, height - top - bottom) + 'px');
+}
+window.visualViewport?.addEventListener('resize', place);
+window.visualViewport?.addEventListener('scroll', place);
+window.addEventListener('resize', place);
 function ensure(root) {
  if (root.querySelector('[data-float-toggle]')) return;
  const toggle = document.createElement('button');
@@ -24,6 +37,7 @@ function update(session, paused = []) {
  selected = session;
  const root = document.getElementById('mw-live'); if (!root) return;
  ensure(root);
+ place();
  const memoFocused = document.activeElement?.id === 'memo-editor', folded = collapsed || memoFocused;
  root.classList.toggle('float-empty', !session);
  root.classList.toggle('float-collapsed', folded);
