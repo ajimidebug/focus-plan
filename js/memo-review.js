@@ -50,7 +50,7 @@
       if (existing) return existing;
     }
     const list = options.list || s.list, day = M().userDay(due); if (!lists[list]) throw Error('任务栏目无效');
-    const r = { id: S().uid(), seriesId: id, n: Math.max(0,...rounds(id).map(x=>x.n))+1, due, originalDue: due, status: 'pending', result: '', history: [], createdAt: new Date().toISOString(), parentEventId: options.parentEventId || null };
+    const r = { id: S().uid(), seriesId: id, title: s.text, n: Math.max(0,...rounds(id).map(x=>x.n))+1, due, originalDue: due, status: 'pending', result: '', history: [], createdAt: new Date().toISOString(), parentEventId: options.parentEventId || null };
     const task = { id: S().uid(), text: '复习：' + s.text + ' · 第' + r.n + '轮', note: s.note, points: s.points, estimatedMinutes: s.estimatedMinutes, dateBasis: 'user', createdAt: r.createdAt, memoReviewRoundId: r.id };
     r.taskRef = { kind: 'task', id: task.id, day, list };
     state(true).rounds.push(r); S().getDay(day).tasks[list].push(task); point(r); return r;
@@ -90,7 +90,7 @@
     const { round:r, series:s } = x, value = spec.review || {};
     if (!Object.hasOwn(results,value.result || '')) throw Error('复习结果无效');
     r.status='done'; r.at=event.at; r.eventId=event.id; r.result=value.result || '';
-    event.review={seriesId:s.id,roundId:r.id,n:r.n,title:s.text,due:r.due,originalDue:r.originalDue,result:r.result};
+    event.review={seriesId:s.id,roundId:r.id,n:r.n,title:r.title||s.text,due:r.due,originalDue:r.originalDue,result:r.result};
     const previous=rounds(s.id).filter(v=>v.status==='done'&&v.id!==r.id&&Date.parse(v.at)<=Date.parse(event.at)).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at))[0];
     if(previous)event.review.gapMs=Date.parse(event.at)-Date.parse(previous.at);
     if(value.mode && value.mode!=='none'){
@@ -98,7 +98,7 @@
       if(!Number.isFinite(due)||due<=Date.parse(event.at))throw Error('下一轮应晚于本轮完成时刻');
       const next=scheduleCore(s.id,due,{parentEventId:event.id});event.review.nextRoundId=next.id;
     }
-    return '\n复习：'+s.text+' · 第'+r.n+'轮\n原定：'+clock(r.due)+'；实际：'+clock(Date.parse(event.at))+'\n结果：'+results[r.result]+(previous?'；距上次实际完成 '+gapText(event.review.gapMs):'')+(event.review.nextRoundId?'\n下次：'+clock(round(event.review.nextRoundId).due):'');
+    return '\n复习：'+(r.title||s.text)+' · 第'+r.n+'轮\n原定：'+clock(r.due)+'；实际：'+clock(Date.parse(event.at))+'\n结果：'+results[r.result]+(previous?'；距上次实际完成 '+gapText(event.review.gapMs):'')+(event.review.nextRoundId?'\n下次：'+clock(round(event.review.nextRoundId).due):'');
   }
   function started(r) { const f=taskOf(r); return !!f && P().state().sessions.some(s=>s.ref.id===f.ref.id&&s.ref.kind===f.ref.kind&&s.chunks.length); }
   function onUndo(event) {
@@ -170,7 +170,7 @@
     const s=newSeriesCore({...input,source:ref});
     plan.forEach(old=>{const due=Number(old.due);if(!Number.isFinite(due)||due<=0)throw Error('旧计划时间异常，原记录未改动');
       if(old.done===null){const need=Math.max(1,Number(old.need)||1),hits=Array.isArray(old.hits)?old.hits.length:0;if(need>20)throw Error('旧轮次遍数异常');for(let i=0;i<Math.max(1,need-hits);i++){const r=scheduleCore(s.id,due,{legacy:true});r.legacy={...clone(old),remainingPass:i+1,remainingTotal:Math.max(1,need-hits)};}}
-      else{const at=typeof old.at==='number'?new Date(old.at).toISOString():old.at&&Number.isFinite(Date.parse(old.at))?old.at:null;state(true).rounds.push({id:S().uid(),seriesId:s.id,n:Math.max(0,...rounds(s.id).map(r=>r.n))+1,due,originalDue:due,status:old.done===true?'done':'cancelled',at,result:'',history:[],legacy:clone(old),createdAt:new Date().toISOString()});}});
+      else{const at=typeof old.at==='number'?new Date(old.at).toISOString():old.at&&Number.isFinite(Date.parse(old.at))?old.at:null;state(true).rounds.push({id:S().uid(),seriesId:s.id,title:s.text,n:Math.max(0,...rounds(s.id).map(r=>r.n))+1,due,originalDue:due,status:old.done===true?'done':'cancelled',at,result:'',history:[],legacy:clone(old),createdAt:new Date().toISOString()});}});
     return s;
   }
   function completionFields(ref,m){

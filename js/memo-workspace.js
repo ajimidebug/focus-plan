@@ -80,7 +80,7 @@
     $('mw-day').onchange = e => { if (M().validDate(e.target.value)) { taskDay = e.target.value; renderTasks(); } };
   }
   function renderQueue() {
-    const all = sortedQueue().filter(t=>!t.memoDismissed), q = all.filter(t => !t.assignment), assigned = all.filter(t => t.assignment), done = S().data().queueDone || [];
+    const all = sortedQueue().filter(t=>!t.memoDismissed&&!A.memoReview?.hidden(t,t.assignment?.list)), q = all.filter(t => !t.assignment), assigned = all.filter(t => t.assignment), done = S().data().queueDone || [];
     $('mw-queue').innerHTML = '<section class="mw-waiting-section"><h2>需要重新安排</h2>'+pendingHTML()+'</section><section class="mw-waiting-section"><div class="mw-group-head"><h2>尚未安排</h2>' + button('add-queue', '＋ 添加任务', '', true) + '</div><div class="mw-queue-grid">' + q.map(waitingRow).join('') + '</div>' + (!q.length ? '<p class="hint">添加准备做的任务，再安排顺序。</p>' : '') + (assigned.filter(t=>t.assignment.day>=M().userDay()).length ? '<details class="mw-assigned"><summary>已安排（' + assigned.filter(t=>t.assignment.day>=M().userDay()).length + '）</summary>' + assigned.filter(t=>t.assignment.day>=M().userDay()).map(t => card(t, { kind: 'queue', id: t.id }, { number: '已安排', reorder: true })).join('') + '</details>' : '') + '<details><summary>已完成（' + done.length + '）</summary>' + done.slice(0, 100).map(t => card(t, { kind: 'queue', id: t.id }, { number: '已完成' })).join('') + '</details></section>';
   }
   function preserve(renderFn) {
@@ -206,7 +206,7 @@
     }).join('');
   }
   function waitingRow(t){const ref={kind:'queue',id:t.id},attrs=refAttrs(ref);return '<article class="mw-history-row" data-bounty="'+!!A.memoOrganize?.bounty(score(t,ref))+'" '+attrs+'><strong>'+esc(t.text)+(A.memoOrganize?.badge(score(t,ref))||'')+'<small class="mw-score">+'+Math.max(0,Number(t.points??S().settings().queuePoints??5))+'分</small>'+'</strong><div class="mw-waiting-actions">'+button('assign','安排',attrs)+'</div><details><summary>更多</summary><div class="mw-secondary-actions">'+button('complete','直接完成',attrs)+A.memoSchedule.rowControls(ref)+(t.note?'<p>'+esc(t.note)+'</p>':'')+button('edit','编辑',attrs)+button('pin',t.pinned?'取消置顶':'置顶',attrs)+button('up','上移',attrs)+button('down','下移',attrs)+button('dismiss','不再安排',attrs)+'</div></details></article>';}
-  function renderPending(){const nav=document.querySelector('[data-mw-pane="queue"]');if(nav)nav.textContent='待安排 '+(pendingRows().length+sortedQueue().filter(t=>!t.assignment&&!t.memoDismissed).length);}
+  function renderPending(){const nav=document.querySelector('[data-mw-pane="queue"]');if(nav)nav.textContent='待安排 '+(pendingRows().length+sortedQueue().filter(t=>!t.assignment&&!t.memoDismissed&&!A.memoReview?.hidden(t,t.assignment?.list)).length);}
 
   let historyFrom = '', historyTo = '', historyStatus = '', historyList = '';
   function renderHistory() {
