@@ -97,7 +97,7 @@
     const x = assertExecutable(spec); if (!x) return '';
     const { round:r, series:s } = x, value = spec.review || {};
     if (!Object.hasOwn(results,value.result || '')) throw Error('复习结果无效');
-    r.status='done'; r.at=event.at; r.eventId=event.id; r.result=value.result || '';
+    r.status='done'; r.at=event.at; r.eventId=event.id; r.result=value.result || '';if(event.backfillDay)r.backfillDay=event.backfillDay;
     event.review={seriesId:s.id,roundId:r.id,n:r.n,title:r.title||s.text,due:r.due,originalDue:r.originalDue,result:r.result};
     const previous=rounds(s.id).filter(v=>v.status==='done'&&v.id!==r.id&&Date.parse(v.at)<=Date.parse(event.at)).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at))[0];
     if(event.backfillDay)event.review.reportedDay=event.backfillDay;
@@ -113,7 +113,7 @@
   function started(r) { const f=taskOf(r); return !!f && P().state().sessions.some(s=>s.ref.id===f.ref.id&&s.ref.kind===f.ref.kind&&s.chunks.length); }
   function onUndo(event) {
     if(!event.review)return;const r=round(event.review.roundId);if(!r||r.eventId!==event.id)throw Error('复习完成关联已改变');
-    r.status='pending';delete r.at;delete r.eventId;r.result='';
+    r.status='pending';delete r.at;delete r.eventId;delete r.backfillDay;r.result='';
     const next=round(event.review.nextRoundId);
     if(next&&next.status==='pending'&&!next.editedAt&&!started(next))cancelCore(next.id,'撤销上轮完成时取消未使用的下一轮');
     else if(next)next.predecessorUndone=true;
@@ -163,8 +163,8 @@
   function manage(id){
     const s=series(id);if(!s)return;const rs=rounds(id);
     const m=A.ui.openModal('复习任务 · '+s.text,'<p>'+E(s.note)+'</p><div class="review-history">'+rs.map((r,i)=>{
-      const previous=rs.slice(0,i).filter(v=>v.status==='done').at(-1),interval=r.at&&previous?.at?' · 间隔 '+gapText(Date.parse(r.at)-Date.parse(previous.at)):'';
-      return '<article><strong>第'+r.n+'轮 · '+E(r.status==='done'?'已完成':r.status==='cancelled'?'已取消':'待复习')+'</strong><small>计划 '+E(clock(r.due))+(r.originalDue!==r.due?' · 最初 '+E(clock(r.originalDue)):'')+'</small>'+(r.at?'<small>实际 '+E(clock(Date.parse(r.at)))+E(interval)+' · '+results[r.result||'']+'</small>':'')+(r.legacy?'<small>旧记录 · '+E(r.legacy.via==='move'?'移动记作完成，未验证实际复习':'保留原记录，未重新计分')+'</small>':'')+(r.predecessorUndone?'<small>前置完成已撤销；本轮保留</small>':'')+(taskOf(r)?'<button class="btn btn-small" data-review-open="'+r.id+'">查看本轮</button>':'')+(r.status==='pending'&&!s.paused?'<button class="btn btn-small" data-review-edit="'+r.id+'">改时间</button><button class="btn btn-small" data-review-task="'+r.id+'">本轮内容与积分</button><button class="btn btn-small" data-review-cancel="'+r.id+'">取消本轮</button>':'')+(r.history.length?'<details><summary>调整记录</summary>'+r.history.map(h=>'<small>'+E(clock(Date.parse(h.at)))+' · '+E(h.reason||(h.from?clock(h.from)+' → '+clock(h.to):h.action))+'</small>').join('')+'</details>':'')+'</article>';
+      const previous=rs.slice(0,i).filter(v=>v.status==='done').at(-1),interval=r.at&&previous?.at&&!r.backfillDay&&!previous.backfillDay?' · 间隔 '+gapText(Date.parse(r.at)-Date.parse(previous.at)):'';
+      return '<article><strong>第'+r.n+'轮 · '+E(r.status==='done'?'已完成':r.status==='cancelled'?'已取消':'待复习')+'</strong><small>计划 '+E(clock(r.due))+(r.originalDue!==r.due?' · 最初 '+E(clock(r.originalDue)):'')+'</small>'+(r.at?'<small>'+E(r.backfillDay?'补记日 '+r.backfillDay+'；录入 ':'实际 ')+E(clock(Date.parse(r.at)))+E(interval)+' · '+results[r.result||'']+'</small>':'')+(r.legacy?'<small>旧记录 · '+E(r.legacy.via==='move'?'移动记作完成，未验证实际复习':'保留原记录，未重新计分')+'</small>':'')+(r.predecessorUndone?'<small>前置完成已撤销；本轮保留</small>':'')+(taskOf(r)?'<button class="btn btn-small" data-review-open="'+r.id+'">查看本轮</button>':'')+(r.status==='pending'&&!s.paused?'<button class="btn btn-small" data-review-edit="'+r.id+'">改时间</button><button class="btn btn-small" data-review-task="'+r.id+'">本轮内容与积分</button><button class="btn btn-small" data-review-cancel="'+r.id+'">取消本轮</button>':'')+(r.history.length?'<details><summary>调整记录</summary>'+r.history.map(h=>'<small>'+E(clock(Date.parse(h.at)))+' · '+E(h.reason||(h.from?clock(h.from)+' → '+clock(h.to):h.action))+'</small>').join('')+'</details>':'')+'</article>';
     }).join('')+'</div><p role="alert">'+(A.memoActions.busy()?'本次操作尚未保存，请重试保存。':'')+'</p>','<button class="btn" data-act="close">关闭</button><button class="btn" data-act="edit">修改内容</button><button class="btn" data-act="pause">'+(s.paused?'恢复复习':'暂停复习')+'</button>'+(!s.paused?'<button class="btn" data-act="stop">停止后续</button><button class="btn btn-primary" data-act="add">安排下一轮</button>':''),{lock:true});
     async function change(fn){try{if(await A.memoActions.commit(fn)){refresh();manage(id);}}catch(e){m.querySelector('[role=alert]').textContent=e.message;const b=document.createElement('button');b.className='btn';b.textContent='重试保存';b.onclick=()=>change(()=>{});m.querySelector('[role=alert]').append(b);}}
     if(A.memoActions.busy()){const retry=document.createElement('button');retry.className='btn';retry.textContent='重试保存';retry.onclick=()=>change(()=>{});m.querySelector('[role=alert]').append(retry);}
