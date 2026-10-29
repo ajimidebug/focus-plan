@@ -80,7 +80,7 @@
     if (!e || e.forgivenAt) return;
     e.forgivenAt = new Date().toISOString(); e.reason = String(reason).trim();
     const original = S().data().ledger.find(x => x.id === e.id);
-    if (original) S().data().ledger.push({ id: S().uid(), operationId: 'forgive:' + e.id, date: M().userDay(), type: 'refund-penalty', points: -original.points, leisure: 0, at: e.forgivenAt, note: '撤销错误扣分：' + e.title + '；' + e.reason });
+    if (original) S().data().ledger.push({ id: S().uid(), operationId: 'forgive:' + e.id, date: M().userDay(), type: 'refund-penalty', points: -original.points, leisure: 0, at: e.forgivenAt, refundOf:original.id, note: '撤销错误扣分：' + e.title + '；' + e.reason });
   }
   function isCarried(t) {
     if (t.backfillDay && t.originalDay && t.backfillDay <= t.originalDay) return false;

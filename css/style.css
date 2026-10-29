@@ -2429,6 +2429,11 @@ body .habit-plan-goal-done small,body #checkin-view .ck-row.done:not([data-habit
 .execution-detail summary{cursor:pointer;color:var(--muted);padding:5px 0;}
 .execution-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;background:var(--bg);border-radius:6px;padding:8px;max-height:220px;overflow:auto;}
 .points-day-rows p{border-top:1px solid var(--line);padding:8px 0;overflow-wrap:anywhere;font-size:12px;}
+.points-account-modal .points-account-actions,.points-account-modal .points-ledger-scope{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;}
+.points-account-modal .points-ledger-scope .btn{flex:1;min-width:0;white-space:normal;min-height:44px;}
+.points-account-modal .points-ledger-scope [aria-pressed="true"]{color:var(--primary);border-color:var(--primary);font-weight:700;}
+.points-account-modal .points-account-summary,.points-account-modal #points-presets{overflow-wrap:anywhere;}
+.points-account-modal .points-day-rows .btn{min-height:36px;margin-top:6px;}
 @media(max-width:400px){.memo-layout .brand{max-width:44%;}.memo-layout .brand h1{font-size:19px;}.memo-layout #stat-bar{right:10px;}.stat-points-group{max-width:49vw;}}
 
 /* 173.4: three simultaneous columns, with readable names and no inner carousel. */

@@ -78,6 +78,7 @@
           date:day, type: missed?'penalty-habit-miss':'refund-habit-miss',
           taskId:it.id, points, leisure:0, at,
           note:(missed?'习惯未达标扣分：':'补记达标退还扣分：')+r.title };
+        if(r.entries.length)entry.refundOf=r.entries[r.entries.length-1];
         ledger.push(entry); r.entries.push(entry.id);
       }
       r.status = missed ? 'penalized' : 'refunded';

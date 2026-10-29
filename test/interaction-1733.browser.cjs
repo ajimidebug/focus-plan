@@ -39,7 +39,7 @@ async function run(){
    check(/收入 \+120.*支出 −50/.test(await page.locator('.modal-body').innerText()),'daily breakdown '+width);
    check((await page.locator('.modal-body').innerText()).includes('行为日 '+old),'backfill behavior day retained '+width);
    check(/1条旧流水/.test(await page.locator('.modal-body').innerText()),'missing timestamp explained '+width);
-   await page.locator('.modal [data-act="close"]').click();
+   await page.locator('.modal [data-act="cancel"]').click();
    const mobile=await page.locator('#mobile-nav').isVisible();
    await page.evaluate(old=>{App.memoWorkspace.enter('today',old);App.app.switchView('memo');},old);
    const nav=page.locator('#mobile-nav [data-view="tasks"]');

@@ -894,9 +894,136 @@ test('one-off long tasks carry without ledger writes and keep one live identity'
 });
 
 function financeHarness(b){b.ctx.document={addEventListener:()=>{}};vm.runInContext(source('js/memo-finance.js'),b.ctx);return b.ctx.App.memoFinance;}
+test('unified point detail nets canceled rewards without rewriting or hiding ledger events',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b),day=b.ctx.App.memoCore.userDay(),at=day+'T12:00:00+08:00';
+ b.S.data().ledger=[
+  {id:'reward',date:day,at,type:'earn-checkin',points:25,note:'打卡：合成习惯'},
+  {id:'undo',date:day,at,type:'undo-earn-checkin',points:-25,note:'撤销原次积分：合成习惯',refundOf:'reward'},
+  {id:'cost',date:day,at,type:'redeem',points:-60,note:'自定义支出：合成消费',itemSnapshot:{amountCents:3000,rate:2,note:'<img src=x onerror=alert(1)>'}},
+  {id:'miss',date:'2026-10-28',at,type:'penalty-habit',points:-50,note:'习惯未达标扣分：合成习惯'},
+  {id:'overdue1',date:'2026-10-28',at,type:'penalty-required',points:-5,note:'必做逾期：甲'},
+  {id:'overdue2',date:'2026-10-28',at,type:'penalty-required',points:-5,note:'必做逾期：乙'},
+  {id:'task',date:day,at,type:'earn-task',points:1,note:'任务完成'},
+  {id:'habit',date:day,at,type:'earn-checkin',points:3,note:'打卡'},
+  {id:'old',date:'2026-10-27',at:'2026-10-27T12:00:00+08:00',type:'redeem',points:-24,note:'历史消费'},
+  {id:'unknown',date:day,type:'adjust',points:100,note:'无可靠入账时间'}
+ ];
+ const before=JSON.stringify(b.S.data()),html=F.accountHTML();
+ assert.match(html,/有效收入 \+4 \/ 有效支出 −120 \/ 今日净变动 -116分/);
+ assert.match(html,/消费 −60 \/ 扣分 −60 \/ 其他支出 −0分/);
+ assert.match(html,/data-ledger-status="canceled"/);
+ assert.equal((html.match(/data-ledger-id=/g)||[]).length,8);
+ assert.match(html,/30.00元；比例：2分\/元/);assert.match(html,/对应原流水：reward/);
+ assert.match(html,/行为日 2026-10-28/);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
+ assert.doesNotMatch(html,/data-ledger-id="old"|data-ledger-id="unknown"/);
+ const all=F.accountHTML('all');assert.equal((all.match(/data-ledger-id=/g)||[]).length,10);
+ assert.match(all,/入账时间缺失/);assert.match(all,/历史消费/);
+ b.S.data().ledger.push({id:'refund',date:day,at,type:'refund-redeem',points:60,refundOf:'cost',note:'撤销支出'});
+ const refunded=F.accountHTML();assert.match(refunded,/有退回记录，退款另列/);assert.doesNotMatch(refunded,/data-id="cost"/);
+ b.S.data().ledger.pop();assert.equal(JSON.stringify(b.S.data()),before);
+ let calls=0;b.ctx.App.memoCurrency={shop:()=>++calls};F.todayDialog();assert.equal(calls,1);
+});
 test('finance summary separates consumption refunds and penalties and computes historical closing',async()=>{const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b);b.S.data().ledger=[{date:'2026-10-20',type:'earn-checkin',points:10},{date:'2026-10-20',type:'redeem',points:-4},{date:'2026-10-20',type:'refund-redeem',points:4},{date:'2026-10-20',type:'penalty-required',points:-2},{date:'2026-10-21',type:'earn-ideal',points:8}];const r=F.summary('2026-10-20');assert(r.any);assert.match(r.text,/消费：-4/);assert.match(r.text,/退回：4/);assert.match(r.text,/该日结余：8分/);});
 test('habit single date overrides daily plan without another reward source',async()=>{const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b),d=b.S.data();d.checkins=[{id:'h',text:'喝水',days:{'2026-10-21':2}}];d.memoHabitPlans=[{habitId:'h',mode:'daily',from:'2026-10-20',list:'required',target:3},{habitId:'h',mode:'once',from:'2026-10-21',list:'extra',target:2}];assert.equal(F.plans('2026-10-21').length,1);assert.equal(F.plans('2026-10-21')[0].r.list,'extra');assert.match(F.planned('2026-10-21','extra'),/2\/2次 ✓/);assert(!F.planned('2026-10-21','extra').includes('data-mw="complete"'));d.memoHabitPlans.push({habitId:'h',mode:'once',from:'2026-10-21',hidden:true});assert.equal(F.plans('2026-10-21').length,0);assert.equal(F.plans('2026-10-22').length,1);});
 test('finance note links one ledger row and preserves spending reason',async()=>{const b=browser();await b.S.load();const M=memoHarness(b),F=financeHarness(b),e={id:'expense',at:new Date().toISOString(),type:'redeem',points:-10,note:'小说',itemSnapshot:{amountCents:500,rate:2,note:'阅读'}};F.note(e);const text=M.read(M.userDay()).text;F.note(e);assert.equal(M.read(M.userDay()).text,text);assert.match(text,/小说/);assert.match(text,/5.00元/);assert.match(text,/阅读/);});
+
+test('effective same-day totals handle redoing, spending refunds, bad habits and partial cents',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b),day='2026-10-29';
+ const cases=[
+  [[25,-25],0,0],[[25,-25,18],18,0],[[-60,60],0,0],[[-10,10],0,0],[[-60,20],0,40],[[0.3,-0.1],0.2,0],[[25,-25,25,-25],0,0]
+ ];
+ for(const [values,income,expense] of cases){
+  b.S.data().ledger=values.map((points,i)=>({id:'x'+i,date:day,at:day+'T12:00:0'+i+'+08:00',points,
+   type:i===0?(points>0?'earn-checkin':'redeem'):i===2&&values[i]===18?'earn-checkin':'reverse-entry',
+   ...(i&&!(i===2&&values[i]===18)?{refundOf:'x'+(i-1)}:{})}));
+  const before=JSON.stringify(b.S.data()),f=F.effectiveFlow(day);
+  assert.equal(f.income,income);assert.equal(f.expense,expense);assert.equal(f.unverified,0);
+  assert.equal(f.net,Number(values.reduce((n,v)=>n+v,0).toFixed(8)));
+  assert.equal(Number((f.income-f.expense+f.crossDay+f.otherAdjustment).toFixed(8)),f.net);
+  assert.equal(JSON.stringify(b.S.data()),before);
+ }
+});
+test('effective totals clip 04:00 corrections by posting day without rewriting earlier earned income',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b);
+ b.S.data().ledger=[
+  {id:'early',date:'2026-10-20',at:'2026-10-29T03:59:59+08:00',type:'earn-checkin',points:25},
+  {id:'after',date:'2026-10-20',at:'2026-10-29T04:00:00+08:00',type:'reverse-earn-checkin',points:-25,refundOf:'early'},
+  {id:'cost',date:'2026-10-27',at:'2026-10-28T22:00:00+08:00',type:'redeem',points:-60},
+  {id:'refund',date:'2026-10-27',at:'2026-10-29T04:01:00+08:00',type:'refund-redeem',points:60,refundOf:'cost'}
+ ];
+ const old=F.effectiveFlow('2026-10-28'),current=F.effectiveFlow('2026-10-29');
+ assert.deepEqual([old.income,old.expense,old.net],[25,60,-35]);
+ assert.deepEqual([current.income,current.expense,current.crossDay,current.net],[0,0,35,35]);
+ assert.equal(F.effectiveProjection().meta.get(b.S.data().ledger[1]).status,'cross-day');
+});
+test('effective same-day delete restore delete chains retain their final business direction',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b),day='2026-10-29',at=day+'T12:00:00+08:00';
+ const entries=[{id:'original',at,date:day,type:'earn-checkin',points:25},
+  {id:'delete',at,date:day,type:'reverse-earn-checkin',points:-25,refundOf:'original'},
+  {id:'restore',at,date:day,type:'reverse-restored-deletion',points:25,refundOf:'delete'},
+  {id:'delete-again',at,date:day,type:'reverse-earn-checkin',points:-25,refundOf:'original'}];
+ b.S.data().ledger=entries.slice(0,3);assert.equal(F.effectiveFlow(day).income,25);assert.equal(F.effectiveFlow(day).expense,0);
+ b.S.data().ledger=entries;assert.equal(F.effectiveFlow(day).income,0);assert.equal(F.effectiveFlow(day).expense,0);assert.equal(F.effectiveFlow(day).unverified,0);
+});
+test('effective totals follow actual delete restore operations with append-only economic records',async()=>{
+ const b=browser();await b.S.load();const {A}=actionHarness(b),F=financeHarness(b),d=b.S.data(),day='2026-10-29';
+ let stamp=Date.parse(day+'T10:00:00+08:00');b.ctx.Date=class extends Date{constructor(...args){super(...(args.length?args:[stamp]));}static now(){return stamp;}};
+ vm.runInContext(source('js/memo-economy.js'),b.ctx);b.ctx.App.memoEconomy.enableCore(stamp-3600000);
+ b.S.getDay(day).tasks.ideal=[{id:'real-task',text:'合成项目',done:true}];
+ d.ledger=[{id:'source',at:day+'T09:00:00+08:00',date:day,type:'earn-ideal',taskId:'real-task',points:12}];
+ const deletion=A.deleteCore({kind:'task',id:'real-task',day,list:'ideal'},'',new b.ctx.Date().toISOString());
+ assert.equal(F.effectiveFlow(day).income,0);assert.equal(F.effectiveFlow(day).expense,0);
+ stamp+=3600000;A.restoreCore(deletion.id);assert.equal(F.effectiveFlow(day).income,12);assert.equal(F.effectiveFlow(day).expense,0);
+ stamp+=3600000;A.deleteCore({kind:'task',id:'real-task',day,list:'ideal'},'',new b.ctx.Date().toISOString());
+ assert.equal(F.effectiveFlow(day).income,0);assert.equal(F.effectiveFlow(day).expense,0);assert.equal(F.effectiveFlow(day).unverified,0);assert.equal(d.ledger.length,4);assert.equal(b.S.pointsTotal(),0);
+});
+test('old penalty settlement IDs establish exact corrections without memo text guesses',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b),d=b.S.data(),day='2026-10-29',at=day+'T12:00:00+08:00';
+ d.ledger=[{id:'miss',date:'2026-10-28',at,type:'penalty-habit-miss',points:-50,taskId:'h'},
+  {id:'backfill',date:'2026-10-28',at,type:'refund-habit-miss',points:50,taskId:'h'},
+  {id:'cancel-backfill',date:'2026-10-28',at,type:'penalty-habit-miss',points:-50,taskId:'h'},
+  {id:'late',date:'2026-10-28',at,type:'penalty-required',points:-5},
+  {id:'forgive',date:day,at,type:'refund-penalty',operationId:'forgive:late',points:5}];
+ d.memoHabitPenalties=[{id:'settlement',habitId:'h',day:'2026-10-28',entries:['miss','backfill','cancel-backfill']}];
+ d.memoFlow={settlements:[{id:'late'}]};
+ const before=JSON.stringify(d),f=F.effectiveFlow(day);assert.equal(f.income,0);assert.equal(f.expense,50);assert.equal(f.penalties,50);assert.equal(f.unverified,0);assert.equal(f.net,-50);
+ assert.equal(F.effectiveProjection().links.get(d.ledger[1]).id,'miss');assert.equal(JSON.stringify(d),before);
+});
+test('ambiguous corrections and duplicated refunds remain adjustments and preserve accounting identity',async()=>{
+ const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b),day='2026-10-29',at=day+'T12:00:00+08:00';
+ const examples=[
+  [{id:'orphan',at,type:'reverse-checkin',points:-25,refundOf:'missing'}],
+  [{id:'source',at,type:'redeem',points:-60},{id:'r1',at,type:'refund-redeem',points:60,refundOf:'source'},{id:'r2',at,type:'refund-redeem',points:60,refundOf:'source'}],
+  [{id:'a',at,type:'reverse-checkin',points:25,refundOf:'b'},{id:'b',at,type:'reverse-checkin',points:-25,refundOf:'a'}],
+  [{id:'dup',at,type:'earn-task',points:25},{id:'dup',at,type:'earn-task',points:25},{id:'r',at,type:'reverse-task',points:-25,refundOf:'dup'}],
+  [{id:'source',type:'earn-task',points:25},{id:'r',at,type:'reverse-task',points:-25,refundOf:'source'}]
+ ];
+ for(const ledger of examples){b.S.data().ledger=ledger;const before=JSON.stringify(ledger),f=F.effectiveFlow(day);assert(f.unverified>0);assert.equal(Number((f.income-f.expense+f.crossDay+f.otherAdjustment).toFixed(8)),F.flow(day).net);assert.equal(JSON.stringify(ledger),before);}
+});
+test('new missed-habit and overdue refunds keep explicit links and survive import',async()=>{
+ const b=browser();await b.S.load();const {F,M}=flowHarness(b),d=b.S.data();vm.runInContext(source('js/memo-penalty.js'),b.ctx);
+ const P=b.ctx.App.memoPenalty,day=M.userDay(),old=M.shiftDay(day,-1),now=Date.parse(day+'T12:00:00+08:00');
+ d.checkins=[{id:'h',text:'合成习惯',target:1,days:{},memoPenaltyPolicies:[{from:old,mode:'miss',amount:50,target:1}]}];
+ P.settleCore(now);const original=d.ledger.find(e=>e.type==='penalty-habit-miss');d.checkins[0].days[old]=1;P.settleCore(now+1000);
+ assert.equal(d.ledger.find(e=>e.type==='refund-habit-miss').refundOf,original.id);
+ const task={id:'late',text:'合成任务',overdueEventId:'debit'};b.S.getDay(day).tasks.required=[task];d.memoFlow.settlements=[{id:'debit',taskId:'late',title:'合成任务',points:5}];d.ledger.push({id:'debit',date:day,at:new Date(now).toISOString(),type:'penalty-required',points:-5});
+ F.forgiveCore({kind:'task',id:'late',day,list:'required'},'合成纠正');assert.equal(d.ledger.find(e=>e.type==='refund-penalty').refundOf,'debit');
+ const before=JSON.stringify(d.ledger);assert(b.S.validate(JSON.parse(JSON.stringify(d))));await b.S.save();const again=browser({shared:b});await again.S.load();assert.equal(JSON.stringify(again.S.data().ledger),before);
+});
+test('effective read-only projections preserve interest and randomized multi-day reversal totals',async()=>{
+ const b=browser();await b.S.load();const {M}=flowHarness(b),F=financeHarness(b),d=b.S.data();vm.runInContext(source('js/memo-economy.js'),b.ctx);
+ const E=b.ctx.App.memoEconomy;E.enableCore(Date.parse('2026-10-20T12:00:00+08:00'));
+ let seed=27;const rand=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed;};
+ d.ledger=[];
+ for(let i=0;i<80;i++){
+  const points=(rand()%2?1:-1)*(rand()%200+1)/10;let day=0,previous='s'+i,sign=1;
+  d.ledger.push({id:previous,date:'2026-10-25',at:'2026-10-25T12:00:00+08:00',type:points>0?'earn-task':'redeem',points});
+  const count=rand()%6;for(let j=0;j<count;j++){day=Math.min(3,day+rand()%2);sign=-sign;const id='r'+i+'-'+j,date=M.shiftDay('2026-10-25',day);d.ledger.push({id,date,at:date+'T12:00:00+08:00',type:'reverse-entry',points:sign*points,refundOf:previous});previous=id;}
+ }
+ const before=JSON.stringify(d),balance=b.S.pointsTotal(),interest=E.balanceAt(Date.parse('2026-10-29T04:00:00+08:00'));
+ for(let i=0;i<4;i++){const day=M.shiftDay('2026-10-25',i),f=F.effectiveFlow(day);assert.equal(f.unverified,0);assert(f.income>=0&&f.expense>=0);assert.equal(Number((f.income-f.expense+f.crossDay+f.otherAdjustment).toFixed(8)),F.flow(day).net);}
+ assert.equal(b.S.pointsTotal(),balance);assert.equal(E.balanceAt(Date.parse('2026-10-29T04:00:00+08:00')),interest);assert.equal(JSON.stringify(d),before);
+});
 
 test('numeric increments preserve current values cents caps and reject invalid text',()=>{const ctx={App:{}};ctx.window=ctx;vm.runInNewContext(source('js/memo-controls.js'),ctx);const add=ctx.App.memoNumbers.add;assert.equal(add('',5),5);assert.equal(add(10,5),15);assert.equal(add('0.10',1),1.1);assert.equal(add(1430,60,1440),1440);assert.throws(()=>add('invalid',1));});
 test('habit timing resolves original habit and separates day estimates',async()=>{const b=browser();await b.S.load();const {P,M}=flowHarness(b),day=M.userDay();b.S.data().checkins=[{id:'habit-clock',text:'计时习惯',days:{},memoEstimatedDays:{[day]:25}}];assert.equal(P.find({kind:'checkin',id:'habit-clock',day}).memoEstimatedDays[day],25);assert.notEqual(P.key({kind:'checkin',id:'habit-clock',day}),P.key({kind:'checkin',id:'habit-clock',day:M.shiftDay(day,-1)}));});
