@@ -21,7 +21,7 @@ function column(day,list){
  return {items,done:items.filter(x=>x.done).length,total:items.length,label:items.length?items.filter(x=>x.done).length+'/'+items.length:'暂无任务'};
 }
 function reviewFacts(day){return (S().data().memoReview?.rounds||[]).filter(r=>M().userDay(r.due)===day||r.at&&M().userDay(r.at)===day).map(r=>({id:r.id,n:r.n,title:r.title||A.memoReview?.series(r.seriesId)?.text||'',due:r.due,status:r.status,result:r.result,at:r.at||null})).sort((a,b)=>a.id.localeCompare(b.id));}
-function facts(day){const fact={columns:['required','ideal','extra'].map(k=>({list:k,items:column(day,k).items.slice().sort((a,b)=>a.id.localeCompare(b.id))})),habits:(S().data().checkins||[]).filter(t=>t.days?.[day]).map(t=>({id:t.id,title:t.text,count:t.days[day]})).sort((a,b)=>a.id.localeCompare(b.id)),goals:(A.memoGoals?.at(day)||[]).map(g=>({id:g.id,name:g.name,due:g.due})).sort((a,b)=>String(a.id).localeCompare(String(b.id)))};const reviews=reviewFacts(day);if(reviews.length)fact.reviews=reviews;return fact;}
+function facts(day){const fact={columns:['required','ideal','extra'].map(k=>({list:k,items:column(day,k).items.slice().sort((a,b)=>a.id.localeCompare(b.id))})),habits:(S().data().checkins||[]).filter(t=>t.days?.[day]).map(t=>({id:t.id,title:t.text,count:t.days[day]})).sort((a,b)=>a.id.localeCompare(b.id)),goals:(A.memoGoals?.at(day)||[]).map(g=>({id:g.id,name:g.name,due:g.due})).sort((a,b)=>String(a.id).localeCompare(String(b.id)))};const notes=(S().data().memoEvents||[]).filter(e=>e.active&&e.sourceDay===day&&e.remark?.trim()).map(e=>({id:e.id,remark:e.remark}));if(notes.length)fact.completionRemarks=notes;const reviews=reviewFacts(day);if(reviews.length)fact.reviews=reviews;return fact;}
 function report(day,legacyGoals=false,finance=true){
  if(legacyGoals)return legacyReport(day,true,finance);
  const lines=['===== 用户日 '+day+' · 任务汇总 =====','以下为当前保存记录；执行时段按片段编号及起止区间去重，复制不代表已发送或归档。'];let any=false;
@@ -32,6 +32,7 @@ function report(day,legacyGoals=false,finance=true){
  }
  const review=reviewFacts(day);if(review.length){any=true;lines.push('【间隔复习 · 轮次说明，不另计时长】',...review.map(r=>r.title+' · 第'+r.n+'轮 · 原定 '+M().naturalDay(r.due)+' '+M().clock(r.due)+' · '+({pending:'待复习',done:'已完成',cancelled:'已取消'}[r.status])+(r.at?' · 实际 '+M().naturalDay(r.at)+' '+M().clock(r.at):'')+(r.result?' · '+({no:'未掌握',partial:'部分掌握',yes:'已掌握'}[r.result]):'')));}
  if(finance&&A.memoFinance){const f=A.memoFinance.postingSummary(day);lines.push(f.text);if(f.any)any=true;}
+ const remarks=(S().data().memoEvents||[]).filter(e=>e.active&&e.sourceDay===day&&e.remark?.trim());if(remarks.length){any=true;lines.push('【本次完成备注】',...remarks.map(e=>e.title+'：'+e.remark));}
  const snapshot=facts(day);if(snapshot.habits.length){any=true;lines.push('【习惯打卡】',...snapshot.habits.map(t=>t.title+'：'+t.count+'次'));}
  if(snapshot.goals.length){any=true;lines.push('【截止目标】',...snapshot.goals.map(g=>g.name+'；截止 '+g.due));}
  return {text:lines.join('\n'),any};

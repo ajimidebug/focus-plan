@@ -66,21 +66,22 @@
   function overdue(now = Date.now()) {
     const today = M().userDay(now), f = state(), out = [];
     Object.entries(S().data().days).filter(([day]) => day >= f.startedDay && day < today).sort(([a], [b]) => a.localeCompare(b)).forEach(([day, d]) => {
-      (d.tasks.required || []).filter(t => !t.done && !t.fromDaily && !t.fromQueue && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed).forEach(t => out.push({ task: t, ref: { kind: 'task', id: t.id, day, list: 'required' } }));
+      (d.tasks.required || []).filter(t => !t.done && !t.memoNoAutoCarry && !t.fromDaily && !t.fromQueue && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed).forEach(t => out.push({ task: t, ref: { kind: 'task', id: t.id, day, list: 'required' } }));
     });
-    (S().data().queue || []).filter(t => !t.memoDismissed && !t.archived && !t.doneAt && t.assignment?.list === 'required' && t.assignment.day >= f.startedDay && t.assignment.day < today).forEach(task => out.push({ task, ref: { kind: 'queue', id: task.id }, day: task.assignment.day }));
+    (S().data().queue || []).filter(t => !t.memoDismissed && !t.archived && !t.memoNoAutoCarry && !t.doneAt && t.assignment?.list === 'required' && t.assignment.day >= f.startedDay && t.assignment.day < today).forEach(task => out.push({ task, ref: { kind: 'queue', id: task.id }, day: task.assignment.day }));
     return out;
   }
   function longOverdue(now = Date.now()) {
     const today=M().userDay(now),out=[];
     Object.entries(S().data().days).filter(([day])=>day<today).sort(([a],[b])=>a.localeCompare(b)).forEach(([day,d])=>{
-      (d.tasks.extra||[]).filter(t=>!t.done&&!t.doneAt&&!t.archived&&!t.fromDaily&&!t.fromQueue&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed&&!t.memoReviewHidden).forEach(task=>out.push({task,ref:{kind:'task',id:task.id,day,list:'extra'},day}));
+      (d.tasks.extra||[]).filter(t=>!t.done&&!t.doneAt&&!t.archived&&!t.memoNoAutoCarry&&!t.fromDaily&&!t.fromQueue&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed&&!t.memoReviewHidden).forEach(task=>out.push({task,ref:{kind:'task',id:task.id,day,list:'extra'},day}));
     });
-    (S().data().queue||[]).filter(t=>!t.doneAt&&!t.done&&!t.archived&&!t.memoDismissed&&t.assignment?.list==='extra'&&t.assignment.day<today).forEach(task=>out.push({task,ref:{kind:'queue',id:task.id},day:task.assignment.day}));
+    (S().data().queue||[]).filter(t=>!t.doneAt&&!t.done&&!t.archived&&!t.memoDismissed&&!t.memoNoAutoCarry&&t.assignment?.list==='extra'&&t.assignment.day<today).forEach(task=>out.push({task,ref:{kind:'queue',id:task.id},day:task.assignment.day}));
     return out;
   }
   function settleCore(now = Date.now()) {
     const f = state(), today = M().userDay(now), at = new Date(now).toISOString();
+    A.memoRecurrence?.ensureCore(M().userDay(now),now);
     longOverdue(now).forEach(({task:t,ref,day})=>{t.originalDay=t.originalDay||day;t.memoAutoCarry={kind:'extra',at,origin:t.memoAutoCarry?.origin||day};moveCore(ref,today,'extra');});
     overdue(now).forEach(({ task: t, ref, day }) => {
       const dueDay = day || ref.day, origin = t.originalDay || dueDay;
@@ -101,7 +102,7 @@
     if (!e || e.forgivenAt) return;
     e.forgivenAt = new Date().toISOString(); e.reason = String(reason).trim();
     const original = S().data().ledger.find(x => x.id === e.id);
-    if (original) S().data().ledger.push({ id: S().uid(), operationId: 'forgive:' + e.id, date: M().userDay(), type: 'refund-penalty', points: -original.points, leisure: 0, at: e.forgivenAt, refundOf:original.id, note: '撤销错误扣分：' + e.title + '；' + e.reason });
+    if (original) { const refundId=S().uid();e.refundLedgerId=refundId;S().data().ledger.push({ id: refundId, operationId: 'forgive:' + e.id + ':' + refundId, date: M().userDay(), type: 'refund-penalty', points: -original.points, leisure: 0, at: e.forgivenAt, refundOf:original.id, note: '撤销错误扣分：' + e.title + '；' + e.reason });return refundId; }
   }
   function isCarried(t) {
     if (t.backfillDay && t.originalDay && t.backfillDay <= t.originalDay) return false;
@@ -140,10 +141,10 @@
     // Checkpoints already live in their dedicated fields; replay only needs the exact copied text.
     f.lastCopy = {id:quote.id,day:quote.day,text:quote.text,at:quote.at};
   }
-  function backfill(ref) {
+  function backfill(ref, preferredDay) {
     ref=A.memoSchedule.canonical(ref); const t=A.memoSchedule.find(ref); if(!t)return;
     const due=t.originalDay || t.assignment?.day || ref.day, today=M().userDay();
-    const m=A.ui.openModal('补记完成', '<label>实际完成用户日<input id="bf-day" type="date" value="'+due+'" max="'+today+'"></label><label>完成说明<textarea id="bf-note"></textarea></label><p>按时完成会退回本任务实际逾期扣分；延期完成保留扣分。不追补历史整组奖励。记录写入今天笔记。</p><p id="bf-preview"></p><p role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">确认补记</button>', {lock:true});
+    const m=A.ui.openModal('补记完成', '<label>实际完成用户日<input id="bf-day" type="date" value="'+(preferredDay||due)+'" max="'+today+'"></label><label>完成说明<textarea id="bf-note"></textarea></label><p>按时完成会退回本任务实际逾期扣分；延期完成保留扣分。不追补历史整组奖励。记录写入今天笔记。</p><p id="bf-preview"></p><p role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">确认补记</button>', {lock:true});
     const q=x=>m.querySelector(x), e=state().settlements.find(x=>x.id===t.overdueEventId);
     const preview=()=>q('#bf-preview').textContent='完成日期：'+q('#bf-day').value+'；退回 '+(q('#bf-day').value<=due && !e?.forgivenAt ? e?.points||0:0)+' 分'; preview();q('#bf-day').oninput=preview;
     A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},save:async b=>{b.disabled=true;try{if(await A.memoActions.commit(()=>{
@@ -151,23 +152,38 @@
       if(day < (t.createdDay || '0000-00-00'))throw new Error('完成日不能早于任务创建日');
       const current=A.memoSchedule.find(ref); if(!current || current.done || current.doneAt)throw new Error('任务状态已改变');
       const refund=day<=due && e && !e.forgivenAt;
-      if(refund)forgiveCore(ref,'补记实际完成日：'+day);
+      const beforeRef=clone(A.memoSchedule.canonical(ref)),beforeAssignment=clone(current.assignment||null);
+      const refundId=refund?forgiveCore(ref,'补记实际完成日：'+day):null;
       if(ref.kind==='task')moveCore(ref,day,ref.list); else if(current.assignment)moveCore(ref,day,current.assignment.list);
       const target=ref.kind==='task'?{kind:'task',id:ref.id,day,list:ref.list}:ref;
       const task=A.memoSchedule.find(target);task.originalDay=task.originalDay||due;task.backfillDay=day;
-      const event=A.memoActions.completeCore({kind:target.kind,id:target.id,day,list:target.list,title:task.text}, M().clock()+'【补记完成】'+task.text+'\n实际完成用户日：'+day+'\n'+q('#bf-note').value);
-      event.backfillDay=day;event.penaltyCorrection=refund?e.id:null;
+      const event=A.memoActions.completeCore({kind:target.kind,id:target.id,day,list:target.list,title:task.text,remark:q('#bf-note').value,backfillDay:day}, M().clock()+'【补记完成】'+task.text+'\n实际完成用户日：'+day+'\n'+q('#bf-note').value);
+      event.backfillDay=day;event.penaltyCorrection=refund?e.id:null;event.penaltyRefundId=refundId;
+      event.backfillOrigin={ref:beforeRef,assignment:beforeAssignment};
+      event.backfillPlans=[];A.memoSchedule.state().items.filter(p=>p.ref.id===task.id&&p.day>day&&!p.deleted).forEach(p=>{p.suspendedByBackfill=event.id;event.backfillPlans.push({id:p.id,snapshot:clone(p)});});
     })){A.ui.closeModal();A.memoWorkspace.render();A.memoSchedule.render();A.app.refreshStats();}}catch(err){q('[role="alert"]').textContent=err.message;}finally{b.disabled=false;}}});
+  }
+  function restoreBackfillCore(event){
+    if(!event.backfillOrigin)return;
+    const P=A.memoSchedule,f=P.resolve({kind:event.kind,id:event.sourceId,day:event.sourceDay,list:event.sourceList});
+    if(!f)return;const old=event.backfillOrigin;
+    // Only restore the arrangement owned by this completion; subsequent edits win.
+    if(f.ref.kind==='task'&&f.ref.day===event.sourceDay&&f.ref.list===event.sourceList){moveCore(f.ref,old.ref.day,old.ref.list);}
+    else if(f.ref.kind==='queue'&&f.task.assignment?.day===event.sourceDay){
+      if(old.assignment)moveCore(f.ref,old.assignment.day,old.assignment.list);else delete f.task.assignment;
+    }
+    (event.backfillPlans||[]).forEach(saved=>{const p=P.state().items.find(x=>x.id===saved.id);if(p&&JSON.stringify(p)===JSON.stringify(saved.snapshot))delete p.suspendedByBackfill;});
+    P.invalidate?.();
   }
   let settling = false;
   async function settle() {
     if (settling || A.memoEditor?.busy() || A.memoActions.busy() || S().status().readOnly) return;
-    if (S().data().memoFlow && A.memoEconomy?.state() && !overdue().length && !longOverdue().length && !A.memoPenalty?.hasPending() && !A.memoEconomy?.hasPending()) return;
+    if (S().data().memoFlow && A.memoEconomy?.state() && !overdue().length && !longOverdue().length && !A.memoPenalty?.hasPending() && !A.memoEconomy?.hasPending() && !A.memoRecurrence?.needsEnsure()) return;
     settling = true;
     try { if (await A.memoActions.commit(() => { enableCore(); settleCore(); A.memoPenalty?.settleCore(); A.memoEconomy?.enableCore(); A.memoEconomy?.settleCore(); })) { A.memoWorkspace?.render(); A.app?.refreshStats(); } }
     catch (e) { A.ui.toast(e.message); const el = document.getElementById('flow-save-error'); if (el) { el.hidden = false; el.textContent = '跨日处理尚未保存 · 点此重试'; el.onclick = async () => { try { if (await A.memoActions.commit(() => {})) { el.hidden = true; await settle(); A.memoWorkspace.render(); } } catch (err) { A.ui.toast(err.message); } }; } }
     finally { settling = false; }
   }
   async function init() { await settle(); setInterval(settle, 30000); document.addEventListener('visibilitychange', () => { if (!document.hidden) settle(); }); }
-  A.memoFlow = { backfill, state, enableCore, queues, assignment, assigned, deferred, moveCore, longOverdue, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
+  A.memoFlow = { restoreBackfillCore, backfill, state, enableCore, queues, assignment, assigned, deferred, moveCore, longOverdue, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
 })();

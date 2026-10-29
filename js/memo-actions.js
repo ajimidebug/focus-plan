@@ -81,7 +81,9 @@
     if (spec.kind === 'task' && App.memoSchedule) { const found = App.memoSchedule.resolve({ kind: 'task', id: spec.id, day: spec.day, list: spec.list }); if (found?.ref.kind === 'project') spec = Object.assign({}, spec, { kind: 'project', id: found.ref.id, day: found.ref.day }); else if (found?.ref.kind === 'task') spec = Object.assign({}, spec, found.ref); }
     const assignment = spec.kind === 'queue' && App.memoFlow?.assignment(spec.id); if (assignment) spec = Object.assign({}, spec, { day: assignment.day, list: assignment.list });
     App.memoReview?.assertExecutable(spec);
+    App.memoRecurrence?.ensureCore(spec.day||M().userDay(at),Date.parse(at));
     const d = S().data(), event = { id: S().uid(), kind: spec.kind, sourceId: spec.id, sourceDay: spec.day || M().userDay(at), sourceList: spec.list || '', noteDay: M().userDay(at), at, active: true, ledgerIds: [], points: 0, title: spec.title };
+    event.remark=String(spec.remark||'');if(spec.backfillDay)event.backfillDay=spec.backfillDay;
     event.timing = timingSnapshot(spec, Date.parse(at));
     events(d); // Validate before making any changes.
     noteBlocks(event.noteDay);
@@ -123,7 +125,7 @@
     } else throw new Error('无法识别勾选来源');
     event.ruleVersion = d.memoCurrency?.version || 1;
     App.memoSchedule?.stopRef({ kind: spec.kind, id: spec.id, day: (spec.kind === 'task' || spec.kind === 'daily' || spec.kind === 'project' || spec.kind === 'checkin') ? spec.day : undefined, list: spec.kind === 'task' ? spec.list : undefined }, Date.parse(at));
-    const reviewText=App.memoReview?.onComplete(event,spec)||''; if(text.trim())text+=reviewText;
+    App.memoRecurrence?.onComplete(event,spec);const reviewText=App.memoReview?.onComplete(event,spec)||''; if(text.trim())text+=reviewText;
     events(d).push(event); grantRewards(event, choices); const actual=d.ledger.filter(e=>e.memoEventId===event.id||e.memoReward&&e.taskId===event.sourceId&&e.at===event.at).reduce((n,e)=>n+e.points,0); append(event, text.trim()?text+'\n本次实际获得积分：'+actual+'分':text); return event;
   }
   function undoCore(id, reason = '', at = new Date().toISOString()) {
@@ -152,15 +154,15 @@
     if (event.kind === 'checkin' && event.sourceDay < M().userDay(at)) App.memoPenalty?.settleCore(Date.parse(at));
     if(event.penaltyCorrection){
       const f=d.memoFlow, e=f.settlements.find(x=>x.id===event.penaltyCorrection);
-      if(e){const original=d.ledger.find(x=>x.operationId==='forgive:'+e.id);
+      if(e){const original=event.penaltyRefundId?d.ledger.find(x=>x.id===event.penaltyRefundId):d.ledger.filter(x=>x.operationId==='forgive:'+e.id||x.operationId?.startsWith('forgive:'+e.id+':')).at(-1);
         if(original&&App.memoEconomy?.state()){
-          const operationId='undo-forgive:'+e.id;
+          const operationId='undo-forgive:'+original.id;
           if(!d.ledger.some(x=>x.operationId===operationId))d.ledger.push({
             id:S().uid(),operationId,date:M().userDay(at),at,type:'reverse-refund-penalty',
             points:-(Number(original.points)||0),leisure:0,refundOf:original.id,
             note:'撤销逾期罚分豁免'});
-        }else d.ledger=d.ledger.filter(x=>x.operationId!=='forgive:'+e.id);
-        delete e.forgivenAt;delete e.reason;}
+        }else d.ledger=d.ledger.filter(x=>x.id!==original?.id);
+        delete e.forgivenAt;delete e.reason;delete e.refundLedgerId;}
     }
     const backfilled=event.kind==='task'?locateTask({kind:'task',id:event.sourceId,day:event.sourceDay,list:event.sourceList}):(d.queue||[]).find(t=>t.id===event.sourceId);
     if(backfilled)delete backfilled.backfillDay;
@@ -185,7 +187,7 @@
       kept.push(block); if (block.text) removedLine = false;
     });
     M().write(event.noteDay, kept.map(b => b.text).join(''), at, kept);
-    event.active = false; event.undoneAt = at; event.reason = reason; App.memoReview?.onUndo(event);
+    event.active = false; event.undoneAt = at; event.reason = reason; App.memoReview?.onUndo(event); App.memoRecurrence?.onUndo(event); App.memoFlow?.restoreBackfillCore(event);
     if (event.kind === 'task' || (event.kind === 'queue' && event.sourceList)) withdrawRewards(event.sourceDay);
     if (reason.trim()) {
       const noteEvent = { id: S().uid(), kind: 'cancellation', noteDay: M().userDay(at), at };
@@ -250,6 +252,8 @@
     lines.push(executionText);
     return { version:2, capturedAt:new Date(now).toISOString(), scopeDay:execution?.day||null, plans, estimatedMinutes, actualMs, newMs:spec.kind==='checkin'?newMs:actualMs, segmentScope:spec.kind==='checkin'?'new':'all', segments:spec.kind==='checkin'?added:segments, addedSegments:spec.kind==='checkin'?added:segments, executionText, text:lines.join('\n')+'\n' };
   }
+  const completionDrafts=new Map();
+  const draftKey=spec=>JSON.stringify([spec.kind,spec.id,spec.day||'']);
   function complete(spec) {
     if (committing || unsettled) { App.ui.toast('请先完成当前操作或重试保存'); return; }
     try{App.memoReview?.assertExecutable(spec);}catch(e){App.ui.toast(e.message);return;}
@@ -259,7 +263,7 @@
     const sourceTask=spec.kind==='checkin'?(S().data().checkins||[]).find(t=>t.id===spec.id):App.memoSchedule.find(spec);
     const initialEstimate=sourceTask?.memoEstimatedDays?.[spec.day]??sourceTask?.estimatedMinutes??'';
     const m = App.ui.openModal('确认' + (spec.kind === 'checkin' ? '打卡' : '完成'),
-      '<p class="action-task-title">'+E(spec.title)+'</p><label>预计用时（分钟，选填）<input id="ma-estimate" type="number" min="0" max="1440" value="'+E(initialEstimate)+'"></label><p id="ma-timer-state"></p><button class="btn" id="ma-timer" type="button">开始计时</button><details class="action-passage" open><summary>完成说明（可编辑）</summary><p class="hint">时间只表示本次勾选时刻。可补充、改写或清空；清空后仍完成并记积分。</p>' +
+      '<p class="action-task-title">'+E(spec.title)+'</p><label for="ma-remark">本次备注（选填）</label><textarea id="ma-remark" rows="2" placeholder="记录这次完成的情况，可留空"></textarea><label>预计用时（分钟，选填）<input id="ma-estimate" type="number" min="0" max="1440" value="'+E(initialEstimate)+'"></label><p id="ma-timer-state"></p><button class="btn" id="ma-timer" type="button">开始计时</button><details class="action-passage" open><summary>完成说明（可编辑）</summary><p class="hint">时间只表示本次勾选时刻。可补充、改写或清空；清空后仍完成并记积分。</p>' +
       '<label for="memo-action-text">写入笔记的文段</label><textarea id="memo-action-text" class="memo-action-text"></textarea>' +
       options.map(kind => '<div class="field"><label><input type="checkbox" data-reward="' + kind + '" checked> 同时领取' + (kind === 'base' ? '保底' : '额外全部完成（含选做，非全勤）') + '奖励</label><input type="number" min="0" data-reward-points="' + kind + '" value="' + Number(kind === 'base' ? settings.baseRewardPoints : settings.perfectRewardPoints) + '"></div>').join('') +
       '</details><p class="hint" id="memo-action-info"></p><p id="memo-action-error" role="alert"></p>',
@@ -269,11 +273,16 @@
     textarea.value = stamp(at, day) + '【' + label + '】' + spec.title + suffix + (timingSnapshot(spec, Date.parse(at)).text ? '\n' + timingSnapshot(spec, Date.parse(at)).text.replace(/\n$/, '') : '');
     const reviewChoice=App.memoReview?.completionFields(spec,m);
     const reviewTask=App.memoReview?.locate(spec);
-    if(reviewTask){const link=document.createElement('button');link.type='button';link.className='btn';link.textContent='复习历史与安排';link.onclick=()=>{if(textarea.value===initialText&&!App.memoActions.busy())App.memoReview.manage(reviewTask.series.id);else App.ui.toast('请先完成当前记录');};m.querySelector('.action-task-title').after(link);}
+    if(reviewTask){const link=document.createElement('button');link.type='button';link.className='btn';link.textContent='复习历史与安排';link.onclick=()=>{if(textarea.value===initialText&&!m.querySelector('#ma-remark').value.trim()&&!App.memoActions.busy())App.memoReview.manage(reviewTask.series.id);else App.ui.toast('请先完成当前记录');};m.querySelector('.action-task-title').after(link);}
     else if(App.memoReview&&['task','queue'].includes(spec.kind)){const link=document.createElement('button');link.type='button';link.className='btn';link.textContent='建立间隔复习';link.onclick=()=>{if(!App.memoActions.busy())App.memoReview?.newEditor(spec);};m.querySelector('.action-task-title').after(link);}
-    const initialText=textarea.value;
+    let initialText=textarea.value;
+    const remark=m.querySelector('#ma-remark'),draftId=draftKey(spec),draft=completionDrafts.get(draftId);
+    if(draft){remark.value=draft.remark;textarea.value=draft.text;m.querySelector('#ma-estimate').value=draft.estimate;if(!draft.custom)initialText=draft.text;}
+    const remember=()=>completionDrafts.set(draftId,{remark:remark.value,text:textarea.value,custom:textarea.value!==initialText,estimate:m.querySelector('#ma-estimate').value});
+    remark.addEventListener('input',()=>{if(textarea.value===initialText){textarea.value=stamp(at,day)+'【'+label+'】'+spec.title+suffix+'\n'+(remark.value.trim()?'本次备注：'+remark.value.trim()+'\n':'')+timingSnapshot(spec,Date.parse(at)).text;initialText=textarea.value;}remember();});textarea.addEventListener('input',remember);m.querySelector('#ma-estimate').addEventListener('input',remember);
+    if(['task','queue'].includes(spec.kind)){const assign=document.createElement('button');assign.type='button';assign.className='btn';assign.textContent='调整安排';assign.onclick=()=>{if(!App.memoActions.busy()){remember();App.memoWorkspace.assignmentEditor(ref,()=>{const next=Object.assign({},spec,App.memoSchedule.canonical(ref));completionDrafts.set(draftKey(next),completionDrafts.get(draftId));complete(next);});}};m.querySelector('.modal-actions').prepend(assign);}
     const detail=document.createElement('details');detail.className='execution-detail';const title=document.createElement('summary');title.textContent='查看执行时段（确认时更新）';const pre=document.createElement('pre');pre.textContent=timingSnapshot(spec,Date.parse(at)).executionText;detail.append(title,pre);m.querySelector('#ma-timer-state').after(detail);
-    const editButton=document.createElement('button');editButton.type='button';editButton.className='btn';editButton.textContent='编辑任务';editButton.onclick=()=>{if(textarea.value!==initialText)return App.ui.toast('请先完成本次记录，再编辑任务');App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list});};if(spec.kind!=='checkin')m.querySelector('.modal-actions').prepend(editButton);
+    const editButton=document.createElement('button');editButton.type='button';editButton.className='btn';editButton.textContent='编辑任务';editButton.onclick=()=>{if(textarea.value!==initialText||remark.value.trim())return App.ui.toast('请先完成本次记录，再编辑任务');App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list});};if(spec.kind!=='checkin')m.querySelector('.modal-actions').prepend(editButton);
     const ref={kind:spec.kind,id:spec.id,day:spec.day,list:spec.list};
     function saveEstimate(){const n=Number(m.querySelector('#ma-estimate').value)||0;if(n<0||n>1440)throw Error('预计用时应在0—1440分钟之间');const task=App.memoSchedule.find(ref);if(!task)throw Error('任务已移动或停用');if(['checkin','project','daily'].includes(spec.kind))(task.memoEstimatedDays||(task.memoEstimatedDays={}))[spec.day||M().userDay()]=n;else task.estimatedMinutes=n;}
     const timerButton=m.querySelector('#ma-timer');
@@ -294,7 +303,7 @@
         const active=timerState();timerButton.textContent='保存中…';
         if(await transaction(()=>{saveEstimate();if(active?.status==='running')App.memoSchedule.pauseCore(active,Date.now());else App.memoSchedule.startRef(ref);})){
           m.querySelector('#memo-action-error').textContent='';
-          if(textarea.value===initialText&&active?.status!=='running'){App.ui.closeModal();refresh();App.ui.toast('计时已开始；其他任务的运行计时会自动暂停');}
+          if(textarea.value===initialText&&!remark.value.trim()&&active?.status!=='running'){App.ui.closeModal();refresh();App.ui.toast('计时已开始；其他任务的运行计时会自动暂停');}
           else timerState();
         }else timerState();
       }catch(e){m.querySelector('#memo-action-error').textContent=e.message;if(unsettled)timerButton.textContent='重试保存';else timerState();}
@@ -314,7 +323,7 @@
     if (spec.kind === 'task') { const it = S().getDay(spec.day).tasks[spec.list].find(x => x.id === spec.id); previewPoints = ['ideal', 'extra'].includes(spec.list) ? Number(it.points ?? (spec.list === 'ideal' ? settings.idealPoints : settings.extPoints)) : 0; }
     m.querySelector('#memo-action-info').textContent = '本次积分 ' + (previewPoints > 0 ? '+' : '') + (previewPoints || 0) + '；写入 ' + day + ' 的笔记（04:00分日）。';
     if (spec.kind === 'checkin') m.querySelector('#memo-action-info').textContent += '（' + (App.memoCurrency?.ruleLabel?.() || '旧连续倍率') + '）';
-    bindCommit(m, () => {saveEstimate();const submittedAt=new Date().toISOString();const currentDay=M().userDay(submittedAt);if(currentDay!==day)throw Error('已跨过用户日，请关闭后重新打开任务');const finalText=textarea.value===initialText?stamp(submittedAt,currentDay)+'【'+label+'】'+spec.title+suffix+'\n'+timingSnapshot(spec,Date.parse(submittedAt)).text:textarea.value;applyCategory();if(reviewChoice)spec.review=reviewChoice();return completeCore(spec,finalText,submittedAt,[...m.querySelectorAll('[data-reward]:checked')].map(x=>({kind:x.dataset.reward,points:m.querySelector('[data-reward-points="'+x.dataset.reward+'"]').value})));}, spec.kind==='checkin'?()=>App.checkin?.focusItem?.(spec.id):null);
+    bindCommit(m, () => {saveEstimate();const submittedAt=new Date().toISOString();const currentDay=M().userDay(submittedAt);if(currentDay!==day)throw Error('已跨过用户日，请关闭后重新打开任务');spec.remark=remark.value;const finalText=textarea.value===initialText?stamp(submittedAt,currentDay)+'【'+label+'】'+spec.title+suffix+'\n'+(remark.value.trim()?'本次备注：'+remark.value.trim()+'\n':'')+timingSnapshot(spec,Date.parse(submittedAt)).text:textarea.value;applyCategory();if(reviewChoice)spec.review=reviewChoice();const event=completeCore(spec,finalText,submittedAt,[...m.querySelectorAll('[data-reward]:checked')].map(x=>({kind:x.dataset.reward,points:m.querySelector('[data-reward-points="'+x.dataset.reward+'"]').value})));completionDrafts.delete(draftId);return event;}, spec.kind==='checkin'?()=>App.checkin?.focusItem?.(spec.id):null);
     // Reuse the existing fixed footer and the original handlers. Only the body
     // scrolls, so starting a task stays reachable beneath long completion notes.
     m.classList.add('task-action-modal');
@@ -340,6 +349,7 @@
       pre.textContent=timingSnapshot(spec,Date.now()).executionText;
     };
     m._timerTick();m.querySelector('#ma-estimate').addEventListener('input',m._timerTick);
+    remark.focus({preventScroll:true});
   }
   function cancelEvent(event) {
     if (committing || unsettled) return;
@@ -445,7 +455,7 @@
     else if (act === 'delete' || act === 'delete-done') deleteTask({ kind: 'queue', id });
     else if (act === 'up' || act === 'down' || act === 'again') {
       try { await transaction(() => {
-        if (act === 'again') { const old = S().data().queueDone.find(x => x.id === id); if (!old) return; const next = copy(old); next.id = S().uid(); delete next.memoReviewRoundId; delete next.memoReviewHidden; delete next.doneDay; delete next.doneAt; delete next.memoCompletionId; (next.subs || []).forEach(s => { s.done = null; }); (next.groups || []).forEach(g => (g.subs || []).forEach(s => { s.done = null; })); q.push(next); }
+        if (act === 'again') { const old = S().data().queueDone.find(x => x.id === id); if (!old) return; const next = copy(old); next.id = S().uid(); delete next.memoReviewRoundId; delete next.memoReviewHidden;delete next.memoOccurrenceId;delete next.memoNoAutoCarry;delete next.memoSkipped; delete next.doneDay; delete next.doneAt; delete next.memoCompletionId; (next.subs || []).forEach(s => { s.done = null; }); (next.groups || []).forEach(g => (g.subs || []).forEach(s => { s.done = null; })); q.push(next); }
         else { const i = q.findIndex(x => x.id === id), j = i + (act === 'up' ? -1 : 1); if (i >= 0 && j >= 0 && j < q.length) [q[i], q[j]] = [q[j], q[i]]; }
       }); refresh(); } catch (error) { recover(error); }
     }
@@ -481,7 +491,7 @@
       }
       changes.push({ op: 'field', path, before: snapshotValue(a), after: snapshotValue(b), had: a !== undefined });
     }
-    ['queue', 'queueDone', 'daily', 'checkins', 'ledger', 'memoEvents', 'memoSchedule', 'memoReview', 'days', 'memoNotes'].forEach(k => walk(before[k] || (k === 'memoNotes' ? {} : before[k]), after[k] || (k === 'memoNotes' ? {} : after[k]), [k]));
+    ['queue', 'queueDone', 'daily', 'checkins', 'ledger', 'memoEvents', 'memoSchedule', 'memoReview', 'memoRecurrence', 'days', 'memoNotes'].forEach(k => walk(before[k] || (k === 'memoNotes' ? {} : before[k]), after[k] || (k === 'memoNotes' ? {} : after[k]), [k]));
     return changes;
   }
   function pathValue(root, path) { let value = root; for (const part of path) value = typeof part === 'object' ? value?.find(x => x.id === part.id) : value?.[part]; return value; }
@@ -543,7 +553,7 @@
       const types = spec.kind === 'queue' ? ['earn-queue'] : spec.list === 'ideal' ? ['earn-ideal'] : spec.list === 'extra' ? ['earn-extra'] : [];
       withdrawLedger(l=>l.taskId === spec.id && l.date === (spec.day || payload.doneDay) && types.includes(l.type),'删除任务撤回旧积分',at);
     }
-    App.memoReview?.onDelete(original);
+    App.memoReview?.onDelete(original);App.memoRecurrence?.onDelete(original);
     App.memoSchedule?.stopRef(canonical, Date.parse(at), true);
     if (canonical.kind === 'queue') {
       d.queue = (d.queue || []).filter(t => t.id !== canonical.id); d.queueDone = (d.queueDone || []).filter(t => t.id !== canonical.id);
@@ -571,7 +581,7 @@
         t.done = false; delete t.memoCompletionId; if (t.summary) t.summary.done = false; list.push(t);
       }
     }
-    if(unfinished){const restored=locateTask(entry.canonical);if(restored)App.memoReview?.restoreTask(restored);}
+    if(unfinished){const restored=locateTask(entry.canonical);if(restored)App.memoReview?.restoreTask(restored);App.memoRecurrence?.restoreTask(restored);}
     entry.restored = true; entry.restoredAt = new Date().toISOString();
   }
   function deleteTask(spec) {

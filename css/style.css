@@ -2538,3 +2538,25 @@ body #mw-live,body[data-view="tasks"] #mw-live.mw-local-timer{top:var(--float-to
 .review-completion select,.review-completion input{width:100%;min-height:40px;}
 .review-badge{padding-top:3px;white-space:normal;}
 .review-due p{margin:8px 0;}
+
+/* 173.8: true execution intervals, stable completion states and compact inputs. */
+.task-action-modal #ma-remark{min-height:62px;resize:vertical;scroll-margin-block:12px;}
+.task-action-modal .action-passage{margin:6px 0;}
+.task-action-modal .modal-body{overscroll-behavior:contain;}
+:is(.mw-task.mw-done,.cal-task.done,.habit-plan-row.habit-plan-done)[data-bounty],.mw-task.mw-done,.mw-overview .cal-task.done,.habit-plan-row.habit-plan-done{opacity:1;background:color-mix(in srgb,#23966c 14%,var(--card))!important;border-color:color-mix(in srgb,#23966c 58%,var(--line))!important;}
+.mw-task.mw-done strong,.mw-overview .cal-task.done .ov-task-name{color:var(--ink);text-decoration:none;}
+.mw-deferred-actions .btn{font-size:11px;line-height:1.35;min-height:36px;padding:5px 3px;}
+.mw-overview .cal-col{padding:7px 4px!important;}
+.schedule-chart .schedule-axis,.schedule-chart .schedule-legend{grid-template-columns:40px minmax(0,3fr) minmax(0,5fr) minmax(0,2fr);gap:4px;}
+.schedule-chart[data-mode="compare"] .schedule-axis,.schedule-chart[data-mode="compare"] .schedule-legend{grid-template-columns:40px minmax(0,5fr) minmax(0,3fr) minmax(0,2fr);}
+.schedule-chart .schedule-block.schedule-execution{min-height:2px;box-sizing:border-box;border:1px solid var(--schedule-actual);border-top:2px solid var(--schedule-actual);border-bottom:2px solid var(--schedule-actual);background:color-mix(in srgb,var(--schedule-actual) 30%,var(--card))!important;border-radius:3px;padding:0 3px;overflow:hidden;}
+.schedule-chart .schedule-execution>small{color:var(--ink);font-size:10px;line-height:12px;display:block;}
+.schedule-chart .schedule-execution>span{font-size:11px;line-height:14px;}
+.schedule-chart .schedule-execution.schedule-short{padding-top:0;}
+.schedule-chart .schedule-execution.schedule-short::after{content:none;}
+.schedule-chart .schedule-execution.schedule-legacy{border-color:var(--muted);background:color-mix(in srgb,var(--muted) 18%,var(--card))!important;}
+.schedule-chart .schedule-execution.schedule-running{border-style:solid;box-shadow:inset 3px 0 var(--schedule-actual);}
+.schedule-chart .schedule-execution.schedule-selected{outline:2px solid var(--primary);outline-offset:1px;z-index:4;}
+.schedule-chart .schedule-block.completion-marker{font-size:10px;padding:1px;}
+.review-suggestion{font-size:12px;line-height:1.6;color:var(--ink);padding:7px;border-radius:6px;background:color-mix(in srgb,var(--primary) 8%,var(--card));}
+@media(max-width:400px){.task-action-modal .ma-secondary .btn{flex-basis:85px;}.schedule-chart .schedule-legend{font-size:11px;}}
