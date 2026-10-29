@@ -20,6 +20,7 @@
     document.getElementById('stat-req').textContent = cnt('required', function (t) { return t.done; }) + '/' + cnt('required', function () { return true; });
     document.getElementById('stat-ideal').textContent = cnt('ideal', function (t) { return t.done; }) + '/' + cnt('ideal', function () { return true; });
     document.getElementById('stat-extra').textContent = cnt('extra', function (t) { return t.done; }) + '/' + cnt('extra', function () { return true; });
+    if(window.__MEMO_MODE&&App.memoFinance)['required','ideal','extra'].forEach((list,i)=>{const x=App.memoFinance.column(dayKey,list);document.getElementById(['stat-req','stat-ideal','stat-extra'][i]).textContent=x.done+'/'+x.total;});
 
     const pts = S().pointsTotal();
     const ptsEl = document.getElementById('stat-points');

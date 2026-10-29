@@ -47,23 +47,13 @@ function update(session, paused = []) {
  const valid = Number.isFinite(expected) && expected > 0, currentMs = A.memoSchedule.elapsed(session);
  const ms = valid ? (daily ? totals.todayMs : totals.allMs) : currentMs;
  const meter = root.querySelector('#float-meter'), track = meter.querySelector('.float-meter-track');
- const over = valid && ms > expected * 60000;
- root.classList.toggle('float-overtime', over); root.classList.toggle('float-unbounded', !valid);
- let fill, detail;
- if (valid && !over) {
-   fill = Math.min(100, ms / (expected * 60000) * 100);
-   detail = (daily ? '今日预计 ' : '预计总用时 ') + expected + '分钟 · ' + (over ? '超时 ' + clock(ms-expected*60000) : ms === expected*60000 ? '达到预计时长' : '剩余 ' + clock(expected*60000-ms));
-   track.setAttribute('role', 'progressbar'); track.setAttribute('aria-label', daily ? '今日预计用时进度' : '任务预计总用时进度');
-   track.setAttribute('aria-valuemin', '0'); track.setAttribute('aria-valuemax', '100'); track.setAttribute('aria-valuenow', String(Math.round(fill)));
- } else {
-   // A clock scale, never a completion percentage. Exact hours keep a full segment until the next second.
-   const seconds = Math.floor((over ? ms-expected*60000 : ms) / 1000), hours = Math.floor(seconds / 3600), rest = seconds % 3600;
-   fill = seconds > 0 && rest === 0 ? 100 : rest / 3600 * 100;
-   detail = (over ? (daily?'今日预计 ':'预计总用时 ')+expected+'分钟 · 超时 ' : '用时刻度 · ') + (hours ? hours + '小时＋' : '') + Math.floor(rest / 60) + '分' + String(rest % 60).padStart(2, '0') + '秒';
-   track.setAttribute('role', 'img'); track.setAttribute('aria-label', (over?'超时':'本次用时')+'刻度，每格15分钟，每段1小时');
-   ['aria-valuemin', 'aria-valuemax', 'aria-valuenow'].forEach(name => track.removeAttribute(name));
- }
- track.style.setProperty('--meter-tick', valid&&!over?Math.min(100,15/expected*100)+'%':'25%');
+ const {over,bounded,fill,detail,tick,state}=A.memoSchedule.meterState(ms,expected,daily);
+ root.classList.toggle('float-overtime',over);root.classList.toggle('float-unbounded',!valid);root.dataset.meterState=state;
+ track.setAttribute('role',bounded?'progressbar':'img');
+ track.setAttribute('aria-label',bounded?(daily?'今日预计用时进度':'任务预计总用时进度'):(over?'超时':'本次用时')+'刻度，每格15分钟，每段1小时');
+ ['aria-valuemin','aria-valuemax','aria-valuenow'].forEach(name=>track.removeAttribute(name));
+ if(bounded){track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax','100');track.setAttribute('aria-valuenow',String(Math.round(fill)));}
+ track.style.setProperty('--meter-tick',tick);
  if(over&&folded)root.querySelector('.float-clock').textContent='超时 '+clock(ms-expected*60000);
  track.setAttribute('aria-valuetext', detail);
  meter.querySelector('.float-meter-fill').style.width = Math.max(0, fill) + '%';

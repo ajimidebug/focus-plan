@@ -29,7 +29,7 @@
   }
   function taskLists(day) {
     const key = Object.keys(S().data().days).find(k => S().data().days[k] === day);
-    return ['required', 'ideal', 'extra'].map(k => (day.tasks[k] || []).filter(t => !t.fromQueue && !t.fromDaily && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed).concat((App.memoFlow?.assigned(key, k) || []).map(t => Object.assign({}, t, { done: !!t.doneAt }))));
+    return ['required', 'ideal', 'extra'].map(k => (day.tasks[k] || []).filter(t => !t.fromQueue && !t.fromDaily && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed).concat((App.memoFlow?.assigned(key, k) || []).map(t => Object.assign({}, t, { done: !!t.doneAt })),(App.memoFlow?.deferred?.(key,k)||[]).filter(x=>!x.closed).map(x=>Object.assign({},x.task,{done:false}))));
   }
   function rewardSpec(spec) { const a = spec.kind === 'queue' && App.memoFlow?.assignment(spec.id); return a ? Object.assign({}, spec, { kind: 'task', day: a.day, list: a.list }) : spec; }
   function eligible(day, kind) {
@@ -99,7 +99,7 @@
       if (!task || task.done) throw new Error('任务状态已改变，请重新打开');
       task.done = true; task.memoCompletionId = event.id; task.summary = { done: true, text, at };
       const settings = S().settings();
-      const pts = task.points == null ? (spec.list === 'ideal' ? (settings.idealPoints ?? 10) : spec.list === 'extra' ? (settings.extPoints ?? 5) : 0) : task.points;
+      const pts = task.points == null ? (spec.list === 'ideal' ? (settings.idealPoints ?? 1) : spec.list === 'extra' ? (settings.extPoints ?? 5) : 0) : task.points;
       // Required tasks keep the original group-reward rule rather than earning per-task points.
       if (spec.list === 'ideal' || spec.list === 'extra') ledger(event, 'earn-' + spec.list, pts, '任务完成：' + task.text);
     } else if (spec.kind === 'project') {
@@ -322,15 +322,14 @@
       if(committing||unsettled||timerButton.disabled)return;
       const active=timerState(),t=App.memoSchedule.timing(ref),expected=Number(m.querySelector('#ma-estimate').value),valid=Number.isFinite(expected)&&expected>0;
       const daily=['checkin','daily','project'].includes(ref.kind),ms=valid?(daily?t.dayMs:t.allMs):t.currentMs,over=valid&&ms>expected*60000;
-      const seconds=Math.floor(Math.max(0,over?ms-expected*60000:ms)/1000),hours=Math.floor(seconds/3600),rest=seconds%3600;
-      const bounded=valid&&!over,fill=bounded?Math.min(100,ms/(expected*60000)*100):seconds>0&&rest===0?100:rest/36;
-      const detail=bounded?(daily?'今日预计 ':'预计总用时 ')+expected+'分钟 · 已用 '+Math.floor(ms/60000)+'分钟':(over?'超时刻度 · ':'本次用时刻度 · ')+(hours?hours+'小时＋':'')+Math.floor(rest/60)+'分'+String(rest%60).padStart(2,'0')+'秒';
+      const {bounded,fill,detail,tick,state}=App.memoSchedule.meterState(ms,expected,daily);
       panel.dataset.status=active?.status||'ended';panel.classList.toggle('float-overtime',over);
+      panel.dataset.meterState=state;
       meter.querySelector('.float-meter-text').textContent=detail;
       const track=meter.querySelector('.float-meter-track');track.setAttribute('role',bounded?'progressbar':'img');track.setAttribute('aria-label',detail);
       ['aria-valuemin','aria-valuemax','aria-valuenow'].forEach(name=>track.removeAttribute(name));
       if(bounded){track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax','100');track.setAttribute('aria-valuenow',String(Math.round(fill)));}
-      track.style.setProperty('--meter-tick',bounded?Math.min(100,15/expected*100)+'%':'25%');meter.querySelector('.float-meter-fill').style.width=fill+'%';
+      track.style.setProperty('--meter-tick',tick);track.setAttribute('aria-valuetext',detail);meter.querySelector('.float-meter-fill').style.width=fill+'%';
       pre.textContent=timingSnapshot(spec,Date.now()).executionText;
     };
     m._timerTick();m.querySelector('#ma-estimate').addEventListener('input',m._timerTick);

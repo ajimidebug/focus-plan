@@ -3459,7 +3459,7 @@
   }
 
   /* ---------- 渲染 ---------- */
-  const DEFAULT_POINTS = { ideal: 10, extra: 5 };
+  const DEFAULT_POINTS = { ideal: 1, extra: 5 };
 
   function taskPoints(task, listKey) {
     if (listKey !== 'ideal' && listKey !== 'extra') return null;

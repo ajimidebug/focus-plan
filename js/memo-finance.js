@@ -121,6 +121,7 @@ function accountHTML(scope='today'){
 }
 function column(day,list){
  const tasks=A.memoSchedule.columnItems(day,list).map(x=>({id:A.memoSchedule.key(x.ref),title:x.task.text,done:x.done,target:true,kind:x.ref.kind,backfillDay:x.task.backfillDay||'',originalDay:x.task.originalDay||''}));
+ (A.memoFlow?.deferred?.(day,list)||[]).forEach(x=>tasks.push({id:'deferred:'+x.ref.kind+':'+day+':'+x.ref.id,title:x.task.text,done:false,target:!x.closed,kind:x.ref.kind,deferredTo:x.toDay,deferredClosed:x.closed,backfillDay:'',originalDay:x.task.originalDay||''}));
  const habits=plans(day).filter(x=>!x.r.hidden&&x.r.list===list).map(x=>{const mode=A.memoPenalty?.policy(x.it,day).mode||'reward';return {id:'habit:'+x.it.id,title:x.it.text,kind:'checkin',mode,count:x.n,goal:x.r.target,target:mode!=='punch'&&x.r.target>0,done:mode!=='punch'&&x.r.target>0&&x.n>=x.r.target};});
  const items=tasks.concat(habits),targets=items.filter(x=>x.target),done=targets.filter(x=>x.done).length,total=targets.length,supervision=habits.filter(x=>x.mode==='punch').length;
  return {items,done,total,supervision,percent:total?Math.min(100,done/total*100):0,label:total?done+'/'+total:items.length?'无完成目标':'暂无任务'};

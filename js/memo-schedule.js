@@ -151,6 +151,15 @@
   }
   function timingText(t) { return (t.day === M().userDay() ? '今日 ' : t.day + ' ') + duration(t.dayMs) + ' · 累计 ' + duration(t.allMs) + '\n' + (t.session?.status === 'ended' ? '上次 ' : '本次 ') + duration(t.currentMs); }
   function duration(ms) { const sec = Math.floor(Math.max(0, ms) / 1000); return Math.floor(sec / 3600) + ':' + String(Math.floor(sec / 60) % 60).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); }
+  function meterState(ms,expected,daily=false){
+    ms=Math.max(0,Number(ms)||0);expected=Number(expected);
+    const valid=Number.isFinite(expected)&&expected>0,over=valid&&ms>expected*60000,bounded=valid&&!over;
+    const seconds=Math.floor(Math.max(0,over?ms-expected*60000:ms)/1000),hours=Math.floor(seconds/3600),rest=seconds%3600;
+    const fill=bounded?Math.min(100,ms/(expected*60000)*100):seconds>0&&rest===0?100:rest/36;
+    const prefix=(daily?'今日预计 ':'预计总用时 ')+expected+'分钟 · ';
+    const detail=bounded?prefix+(ms===expected*60000?'达到预计时长':'剩余 '+duration(expected*60000-ms)):(over?prefix+'超时 ':'用时刻度 · ')+(hours?hours+'小时＋':'')+Math.floor(rest/60)+'分'+String(rest%60).padStart(2,'0')+'秒';
+    return {valid,over,bounded,fill,detail,tick:bounded?Math.min(100,15/expected*100)+'%':'25%',state:over?'overtime':bounded?'expected':'unbounded'};
+  }
   function active() { return state().sessions.find(s => s.status === 'running'); }
   function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
   function startRef(ref, now = Date.now(), itemId = null) {
@@ -466,5 +475,5 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } }); window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();
   }
-  App.memoSchedule = { setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
+  App.memoSchedule = { invalidate:()=>{summaryCache=null;},meterState,setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
 })();

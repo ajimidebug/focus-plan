@@ -15,30 +15,51 @@
   function queues() { const d = S().data(); return (d.queue || []).concat(d.queueDone || []); }
   function assignment(id) { return queues().find(t => t.id === id)?.assignment; }
   function assigned(day, list) { return queues().filter(t => !t.memoDismissed && t.assignment?.day === day && (!list || t.assignment.list === list)); }
+  // Historical copies never resolve to an active task for rendering or counting.
+  function deferred(day,list){
+    const out=[],d=S().data();
+    (d.days[day]?.tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&t.memoMovedTo?.kind==='task'&&t.memoMovedTo.day!==day).forEach(t=>{
+      const ref={kind:'task',id:t.id,day,list},found=A.memoSchedule.resolve(ref);
+      out.push({task:t,ref,done:false,deferred:true,toDay:t.memoMovedTo.day,currentRef:found?.ref||t.memoMovedTo,closed:t.memoMovedTo.day<day,legacy:!t.memoDeferred});
+    });
+    queues().forEach(t=>{
+      if(t.assignment?.day===day)return;
+      const steps=(t.assignmentHistory||[]).concat(t.assignment?[t.assignment]:[]),matches=[];
+      steps.forEach((h,i)=>{if(h.day!==day||h.list!==list)return;const next=steps.slice(i+1).find(x=>x.day&&x.list);if(!next||next.day===day)return;
+        const snapshot=h.snapshot||{id:t.id,text:t.text,points:t.points,note:t.note};
+        matches.push({task:snapshot,ref:{kind:'queue',id:t.id,day,list},done:false,deferred:true,toDay:h.toDay||next.day,currentRef:{kind:'queue',id:t.id},closed:(h.toDay||next.day)<day,legacy:!h.snapshot});
+      });
+      if(matches.length)out.push(matches[matches.length-1]);
+    });
+    return out;
+  }
   function moveCore(ref, day, list, target = 'task') {
     if (!M().validDate(day) || !['required', 'ideal', 'extra'].includes(list)) throw new Error('请选择有效日期和任务栏目');
     const found = A.memoSchedule.resolve(ref); if (!found) throw new Error('任务已移动或删除');
     const t = found.task, r = found.ref;
+    A.memoSchedule.invalidate?.();
     if (t.done || t.doneAt || t.archived || t.memoDismissed) throw new Error('请先恢复未完成状态');
     if (r.kind === 'queue') {
       if (target === 'queue') { if(t.assignment)(t.assignmentHistory||(t.assignmentHistory=[])).push(clone(t.assignment));delete t.assignment; return; }
       if (t.assignment?.day === day && t.assignment.list === list) return;
-      (t.assignmentHistory || (t.assignmentHistory = [])).push(clone(t.assignment || { at: new Date().toISOString(), state: '待安排' }));
+      const old=clone(t.assignment||{at:new Date().toISOString(),state:'待安排'});
+      if(t.assignment&&t.assignment.day!==day){old.toDay=day;old.snapshot=clone(Object.assign({},t,{assignmentHistory:undefined,assignment:undefined}));}
+      (t.assignmentHistory || (t.assignmentHistory = [])).push(old);
       t.assignment = { day, list, at: new Date().toISOString() }; return;
     }
     if (r.kind !== 'task') throw new Error('每日推进项目不作为一次性任务移动');
     if (target === 'queue') {
       if (queues().some(q => q.id === t.id)) throw new Error('队列中已存在此任务');
-      const q = Object.assign({}, t); delete q.done; delete q.memoMovedTo;
+      const q = clone(t); delete q.done; delete q.memoMovedTo;delete q.memoDeferred;
       (S().data().queue || (S().data().queue = [])).push(q);
       t.memoMovedTo = { kind: 'queue', id: q.id }; return;
     }
     if (r.day === day && r.list === list) return;
     const destination = S().getDay(day).tasks[list];
     if (r.day!==day && Object.values(S().getDay(day).tasks).flat().some(x => x.id === t.id && !x.memoMovedTo)) throw new Error('此任务已在目标日，请刷新');
-    const next = Object.assign({}, t, { originalDay: t.originalDay || r.day }); delete next.memoMovedTo;
+    const next = clone(t);next.originalDay=t.originalDay||r.day;delete next.memoMovedTo;delete next.memoDeferred;
     if (r.day === day) S().getDay(r.day).tasks[r.list] = S().getDay(r.day).tasks[r.list].filter(x => x.id !== t.id);
-    else t.memoMovedTo = { kind: 'task', id: t.id, day, list };
+    else {t.memoMovedTo = { kind: 'task', id: t.id, day, list };t.memoDeferred={version:1,at:new Date().toISOString(),toDay:day};}
     Object.values(S().getDay(day).tasks).forEach(items => { for(let i=items.length-1;i>=0;i--)if(items[i].id===t.id && items[i].memoMovedTo)items.splice(i,1); });
     destination.push(next);
   }
@@ -148,5 +169,5 @@
     finally { settling = false; }
   }
   async function init() { await settle(); setInterval(settle, 30000); document.addEventListener('visibilitychange', () => { if (!document.hidden) settle(); }); }
-  A.memoFlow = { backfill, state, enableCore, queues, assignment, assigned, moveCore, longOverdue, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
+  A.memoFlow = { backfill, state, enableCore, queues, assignment, assigned, deferred, moveCore, longOverdue, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
 })();

@@ -65,7 +65,7 @@
       extStart: '22:00', extEnd: '23:00',
       baseRewardTime: 30,   // 保底奖励：休闲分钟
       baseRewardPoints: 10, // 保底奖励：积分
-      idealPoints: 10,      // 每条理想任务积分
+      idealPoints: 1,       // 新理想任务默认积分
       extPoints: 5,         // 每条拓展任务积分
       subDefaultPoints: 10, // 每个新小题的默认积分（可自定义）
       perfectRewardTime: 30,  // 100% 额外奖励：休闲分钟
@@ -140,6 +140,7 @@
   function defaultData() {
     return {
       version: 1,
+      memoIdealDefaultVersion: 1,
       createdAt: nowIso(),
       settings: defaultSettings(),
       days: {},
@@ -212,12 +213,14 @@
       if (['__proto__', 'constructor', 'prototype'].indexOf(k) < 0) clean[k] = d[k];
     });
     clean.settings = Object.assign(defaultSettings(), d.settings);
+    if(d.memoIdealDefaultVersion!==undefined&&d.memoIdealDefaultVersion!==1)throw new Error('理想任务默认值版本不兼容');
     Object.keys(clean.days).forEach(function (key) {
       const old = clean.days[key];
       if (!old || typeof old !== 'object' || Array.isArray(old)) throw new Error('日记录结构异常');
       const day = Object.assign(freshDay(), old);
       day.tasks = Object.assign({ required: [], ideal: [], extra: [] }, old.tasks || {});
       ['required', 'ideal', 'extra'].forEach(function (col) { if (!Array.isArray(day.tasks[col])) throw new Error('任务结构异常'); });
+      Object.values(day.tasks).flat().forEach(t=>{const x=t.memoDeferred;if(x!==undefined&&(!x||x.version!==1||!Number.isFinite(Date.parse(x.at))||!/^\d{4}-\d{2}-\d{2}$/.test(x.toDay)))throw new Error('延期历史结构异常');});
       if (!Array.isArray(day.timeline) || !Array.isArray(day.sessions)) throw new Error('时间线结构异常');
       clean.days[key] = day;
     });
@@ -318,6 +321,12 @@
             !Number.isFinite(Date.parse(r.effectiveAt)) || !Number.isFinite(Date.parse(r.postedAt))) ||
           new Set(b.settlements.map(r=>r.month)).size!==b.settlements.length)
         throw new Error('积分银行记录结构异常');
+    }
+    if(d.memoIdealDefaultVersion!==1){
+      const oldDefault=Number.isFinite(Number(d.settings.idealPoints))&&d.settings.idealPoints!=null?Number(d.settings.idealPoints):10;
+      Object.values(clean.days).forEach(day=>(day.tasks.ideal||[]).forEach(t=>{if(t.points==null&&!t.fromQueue&&!t.fromDaily&&!t.memoProjectId)t.points=oldDefault;}));
+      if(d.settings.idealPoints==null||Number(d.settings.idealPoints)===10)clean.settings.idealPoints=1;
+      clean.memoIdealDefaultVersion=1;
     }
     return clean;
   }
@@ -511,6 +520,7 @@
         if (v === undefined || v === null) return;
         merged[k] = JSON.parse(JSON.stringify(v));
       });
+      if(obj.memoIdealDefaultVersion===undefined)delete merged.memoIdealDefaultVersion;
       data = normalise(merged);
       data._storageRevision = revision;
       ensureDay(todayKey());

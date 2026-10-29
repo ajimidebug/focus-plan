@@ -355,7 +355,7 @@ test('backfill keeps the attributed day distinct from the operation-time note ac
 });
 test('cancelled task withdraws only newly linked dependent rewards and cannot farm bonuses', async () => {
   const b = browser(); await b.S.load(); const { A } = actionHarness(b), day = b.S.getDay('2026-10-19');
-  day.tasks.required = [{ id: 'r', text: '必须' }]; day.tasks.ideal = [{ id: 'i', text: '理想' }]; day.tasks.extra = [{ id: 'x', text: '拓展' }];
+  day.tasks.required = [{ id: 'r', text: '必须' }]; day.tasks.ideal = [{ id: 'i', text: '理想',points:10 }]; day.tasks.extra = [{ id: 'x', text: '拓展' }];
   const r = A.completeCore({ kind: 'task', id: 'r', list: 'required', day: '2026-10-19', title: '必须' }, '必须', actionAt, [{ kind: 'base', points: 10 }]);
   A.completeCore({ kind: 'task', id: 'i', list: 'ideal', day: '2026-10-19', title: '理想' }, '理想', actionAt);
   A.completeCore({ kind: 'task', id: 'x', list: 'extra', day: '2026-10-19', title: '拓展' }, '拓展', actionAt, [{ kind: 'perfect', points: 20 }]);
@@ -505,7 +505,7 @@ test('task column moves keep plan identity, completion links and exact cancellat
   assert.equal(P.find(ref).id, 'stable'); assert.equal(P.resolve(ref).ref.list, 'ideal');
   const session = P.startCore(plan.id, Date.parse(actionAt));
   const event = A.completeCore({ ...ref, title: '任务' }, '完成', actionAt);
-  assert.equal(session.status, 'ended'); assert.equal(b.S.pointsTotal(), 10);
+  assert.equal(session.status, 'ended'); assert.equal(b.S.pointsTotal(), b.S.settings().idealPoints);
   day.tasks.extra.push(day.tasks.ideal.pop()); A.undoCore(event.id, '', actionAt);
   assert.equal(day.tasks.extra[0].done, false); assert.equal(b.S.pointsTotal(), 0);
 });
@@ -894,6 +894,60 @@ test('one-off long tasks carry without ledger writes and keep one live identity'
 });
 
 function financeHarness(b){b.ctx.document={addEventListener:()=>{}};vm.runInContext(source('js/memo-finance.js'),b.ctx);return b.ctx.App.memoFinance;}
+test('173.5 ideal default migration preserves old implicit points, zeroes and future custom defaults',async()=>{
+ for(const oldDefault of [10,3,0,undefined]){
+  const initial=data({settings:oldDefault===undefined?{}:{idealPoints:oldDefault}});initial.days['2026-10-18'].tasks.ideal=[{id:'implicit',text:'旧任务'},{id:'zero',points:0},{id:'custom',points:7}];
+  const original=JSON.stringify(initial),b=browser({initial});assert(await b.S.load());
+  assert.equal(b.S.settings().idealPoints,oldDefault===10||oldDefault===undefined?1:oldDefault);
+  assert.deepEqual(copy(b.S.getDay('2026-10-18').tasks.ideal.map(t=>t.points)),[oldDefault??10,0,7]);assert.equal(JSON.stringify(initial),original);
+  b.S.settings().idealPoints=10;await b.S.save();const next=browser({shared:b});await next.S.load();assert.equal(next.S.settings().idealPoints,10);assert.equal(next.S.data().memoIdealDefaultVersion,1);
+ }
+ const fresh=browser({initial:null});await fresh.S.load();assert.equal(fresh.S.settings().idealPoints,1);
+ const {A}=actionHarness(fresh),day=fresh.ctx.App.memoCore.userDay();fresh.S.getDay(day).tasks.ideal=[{id:'new',text:'新任务'}];A.completeCore({kind:'task',id:'new',day,list:'ideal',title:'新任务'},'');assert.equal(fresh.S.pointsTotal(),1);
+});
+test('173.5 importing legacy backups migrates once and rejects unsupported default metadata',async()=>{
+ const b=browser({initial:null});await b.S.load();const old=data({settings:{idealPoints:10}});old.days['2026-10-18'].tasks.ideal=[{id:'legacy'}];assert(b.S.restoreFrom(old));assert.equal(b.S.settings().idealPoints,1);assert.equal(b.S.getDay('2026-10-18').tasks.ideal[0].points,10);
+ const corrupt=copy(b.S.data());corrupt.memoIdealDefaultVersion=2;assert.equal(b.S.validate(corrupt),false);
+});
+test('173.5 dated deferrals preserve independent source snapshots and exactly one live continuation',async()=>{
+ const b=browser();await b.S.load();const {F,A,P,M}=flowHarness(b),day=M.userDay(),old=M.shiftDay(day,-1),next=M.shiftDay(day,1);financeHarness(b);vm.runInContext(source('js/memo-report.js'),b.ctx);
+ b.S.getDay(old).tasks.ideal=[{id:'copy',text:'原名称',points:10,note:'原备注',subs:[{text:'已做子项',done:true}],groups:[{name:'组',subs:[{text:'子项',done:false}]}]}];
+ const ref={kind:'task',id:'copy',day:old,list:'ideal'};F.moveCore(ref,day,'ideal');F.moveCore(ref,day,'ideal');assert.equal(P.columnItems(day,'ideal').length,1);
+ const current=P.find(ref);current.text='新名称';current.note='新备注';current.subs[0].text='改写';current.groups[0].subs[0].done=true;
+ const historyCopy=F.deferred(old,'ideal')[0];assert.equal(historyCopy.task.text,'原名称');assert.equal(historyCopy.task.note,'原备注');assert.equal(historyCopy.task.subs[0].text,'已做子项');assert.equal(historyCopy.task.groups[0].subs[0].done,false);
+ F.moveCore(ref,next,'ideal');assert.equal(F.deferred(day,'ideal')[0].task.text,'新名称');assert.equal(F.deferred(old,'ideal')[0].toDay,day);assert.equal(F.deferred(old,'ideal')[0].currentRef.day,next);
+ A.completeCore({kind:'task',id:'copy',day:next,list:'ideal',title:'新名称'},'',next+'T12:00:00+08:00');assert.equal(b.S.pointsTotal(),10);assert.equal(historyCopy.task.done,undefined);
+ const c=b.ctx.App.memoFinance.column(old,'ideal');assert.equal(c.done,0);assert.equal(c.total,1);assert.match(b.ctx.App.memoReport.report(old).text,/未完成；已延期至/);
+ assert.throws(()=>A.completeCore({kind:'task',id:'copy',day:next,list:'ideal',title:'新名称'},''));
+});
+test('173.5 queue deferrals snapshot names and subitems without copying completion or rewards',async()=>{
+ const b=browser();await b.S.load();const {F,M,A}=flowHarness(b),day=M.userDay(),old=M.shiftDay(day,-1);b.S.data().queue=[{id:'q-copy',text:'旧队列名',points:7,subs:[{text:'完成子项',done:true}],assignment:{day:old,list:'ideal'}}];
+ const ref={kind:'queue',id:'q-copy'};F.moveCore(ref,day,'ideal');F.moveCore(ref,day,'ideal');const q=b.S.data().queue[0];q.text='新队列名';q.subs[0].text='新子项';
+ const history=F.deferred(old,'ideal');assert.equal(history.length,1);assert.equal(history[0].task.text,'旧队列名');assert.equal(history[0].task.subs[0].text,'完成子项');
+ A.completeCore({kind:'queue',id:q.id,title:q.text},'',day+'T12:00:00+08:00');assert.equal(F.deferred(old,'ideal')[0].done,false);assert.equal(b.S.pointsTotal(),7);
+});
+test('173.5 running deferral preserves session identity, timer chunks and daily actual time',async()=>{
+ const b=browser();await b.S.load();const {F,P,M}=flowHarness(b),day=M.userDay(),old=M.shiftDay(day,-1),edge=Date.parse(day+'T04:00:00+08:00');
+ b.S.getDay(old).tasks.required=[{id:'clock-copy',text:'计时任务'}];const ref={kind:'task',id:'clock-copy',day:old,list:'required'},s=P.startRef(ref,edge-600000);
+ assert.equal(P.timing(ref,edge).allMs,600000);const raw=JSON.stringify(P.state().sessions);F.moveCore(ref,day,'required');assert.equal(P.timing(ref,edge+600000).allMs,1200000);assert.equal(JSON.stringify(P.state().sessions),raw);assert.equal(P.dayExecutionMs(old,edge+600000),600000);assert.equal(P.dayExecutionMs(day,edge+600000),600000);assert.equal(P.state().sessions[0].id,s.id);
+});
+test('173.5 deferring a required task cannot turn its original day into full completion rewards',async()=>{
+ const b=browser();await b.S.load();const {F,M,A}=flowHarness(b),day=M.userDay(),next=M.shiftDay(day,1);b.S.getDay(day).tasks.required=[{id:'delay',text:'延期必做'}];b.S.getDay(day).tasks.ideal=[{id:'finish',text:'其他任务',points:1}];
+ F.moveCore({kind:'task',id:'delay',day,list:'required'},next,'required');A.completeCore({kind:'task',id:'finish',day,list:'ideal',title:'其他任务'},'',day+'T12:00:00+08:00',[{kind:'base',points:10},{kind:'perfect',points:20}]);
+ assert.equal(b.S.pointsTotal(),1);assert.equal(b.S.getDay(day).rewards.length,0);
+});
+test('173.5 automatic carry is idempotent and backfill closes the continuation without duplicate reward',async()=>{
+ const b=browser();await b.S.load();const {F,P,M,A}=flowHarness(b),old='2026-10-20',day='2026-10-21';financeHarness(b);
+ b.S.getDay(old).tasks.required=[{id:'carry-copy',text:'必做任务'}];F.settleCore(Date.parse(day+'T05:00:00+08:00'));const count=b.S.data().ledger.length;F.settleCore(Date.parse(day+'T06:00:00+08:00'));assert.equal(F.deferred(old,'required').length,1);assert.equal(b.S.data().ledger.length,count);assert.equal(P.columnItems(day,'required').length,1);
+ const ref={kind:'task',id:'carry-copy',day,list:'required'};F.moveCore(ref,old,'required');A.completeCore({kind:'task',id:ref.id,day:old,list:'required',title:'必做任务'},'',day+'T07:00:00+08:00');assert.equal(P.columnItems(day,'required').length,0);assert.equal(F.deferred(day,'required')[0].closed,true);assert.equal(b.ctx.App.memoFinance.column(day,'required').total,0);
+ const raw=JSON.stringify(b.S.data().ledger);F.settleCore(Date.parse(day+'T08:00:00+08:00'));assert.equal(JSON.stringify(b.S.data().ledger),raw);assert(b.S.validate(b.S.data()));
+});
+test('173.5 shared meter switches after the exact threshold and preserves hourly overtime semantics',async()=>{
+ const b=browser();await b.S.load();const {P}=flowHarness(b),meter=P.meterState;
+ assert.equal(meter(59000,1).state,'expected');assert.equal(meter(60000,1).fill,100);assert.equal(meter(60000,1).over,false);
+ const over=meter(61000,1);assert.equal(over.state,'overtime');assert.equal(over.bounded,false);assert.equal(over.fill,1/36);assert.match(over.detail,/超时 0分01秒/);
+ assert.equal(meter(3660000,1).fill,100);assert.match(meter(3661000,1).detail,/1小时＋0分01秒/);assert.equal(meter(30000,0).state,'unbounded');
+});
 test('unified point detail nets canceled rewards without rewriting or hiding ledger events',async()=>{
  const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b),day=b.ctx.App.memoCore.userDay(),at=day+'T12:00:00+08:00';
  b.S.data().ledger=[

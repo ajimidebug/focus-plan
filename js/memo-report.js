@@ -27,7 +27,7 @@ function report(day,legacyGoals=false,finance=true){
  for(const [list,name] of [['required','必做'],['ideal','理想'],['extra','长期拓展']]){
   const c=column(day,list);lines.push('【'+name+'】'+(c.total?'完成 '+c.label:c.label));
   if(c.items.length)any=true;
-  c.items.forEach(x=>lines.push((x.done?'✓ ':'○ ')+x.title+'〔'+(x.kind==='checkin'?(x.mode==='punch'?'监督记录 '+x.count+'次':x.count+'/'+x.goal+'次 · '+(x.target?(x.done?'打卡达标':'打卡未达标'):'选做，无完成目标')):x.done?'已完成':'未完成')+(x.backfillDay?'；补记实际完成日 '+x.backfillDay:'')+(x.originalDay?'；原安排 '+x.originalDay:'')+'〕'));
+  c.items.forEach(x=>lines.push((x.done?'✓ ':'○ ')+x.title+'〔'+(x.deferredTo?(x.deferredClosed?'已补记至':'未完成；已延期至')+x.deferredTo:x.kind==='checkin'?(x.mode==='punch'?'监督记录 '+x.count+'次':x.count+'/'+x.goal+'次 · '+(x.target?(x.done?'打卡达标':'打卡未达标'):'选做，无完成目标')):x.done?'已完成':'未完成')+(x.backfillDay?'；补记实际完成日 '+x.backfillDay:'')+(x.originalDay?'；原安排 '+x.originalDay:'')+'〕'));
  }
  if(finance&&A.memoFinance){const f=A.memoFinance.postingSummary(day);lines.push(f.text);if(f.any)any=true;}
  const snapshot=facts(day);if(snapshot.habits.length){any=true;lines.push('【习惯打卡】',...snapshot.habits.map(t=>t.title+'：'+t.count+'次'));}

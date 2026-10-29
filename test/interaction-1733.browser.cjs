@@ -66,7 +66,7 @@ async function run(){
    await page.evaluate(()=>{const P=App.memoSchedule,s=P.timing({kind:'queue',id:'meter'}).session;P.pauseCore(s,Date.now());P.tick();});
    const paused=await page.locator('.float-meter-fill').evaluate(e=>e.style.width);await page.clock.runFor(2500);await page.evaluate(()=>App.memoSchedule.tick());
    check(await page.locator('.float-meter-fill').evaluate(e=>e.style.width)===paused,'paused scale frozen '+width);
-   check(await page.locator('.float-meter-fill').evaluate(e=>Number(getComputedStyle(e).opacity))<.5,'paused meter dims '+width);
+   check(await page.locator('.float-meter-fill').evaluate(e=>Number(getComputedStyle(e).opacity))>=.65,'paused meter remains readable '+width);
    const setMinutes=async minutes=>page.evaluate(minutes=>{const P=App.memoSchedule,s=P.timing({kind:'queue',id:'meter'}).session;s.chunks[0].start=s.chunks[0].end-minutes*60000;P.tick();},minutes);
    await setMinutes(100);check(Number(await page.locator('.float-meter-fill').evaluate(e=>parseFloat(e.style.width)))===100,'exact overtime hour keeps full segment '+width);
    await setMinutes(100+1/60);check(Number(await page.locator('.float-meter-fill').evaluate(e=>parseFloat(e.style.width)))<1,'overtime hour rollover retains hour text '+width);
