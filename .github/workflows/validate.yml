@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, fix-173.1-float-memo-ledger-20261027]
+    branches: [main, fix-173.1-float-memo-ledger-20261027, feat-review-1737-20261029]
   workflow_dispatch:
 
 permissions:
@@ -40,6 +40,7 @@ jobs:
           node test/points-account.browser.cjs
           node test/interaction-1735.browser.cjs
           node test/interaction-1736.browser.cjs
+          node test/interaction-1737.browser.cjs
       - name: Ensure validation does not publish or mutate source branch
         run: |
           echo "Prepared artifacts are local to this runner."

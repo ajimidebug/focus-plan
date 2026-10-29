@@ -1,198 +1,202 @@
 {
-  "id": "173.6.0",
+  "id": "173.7.0",
   "dataVersion": 1,
-  "releasedAt": "2026-10-29T08:29:43.803Z",
+  "releasedAt": "2026-10-29T12:21:59.583Z",
   "assets": [
     {
-      "url": "./index.html?v=173.6.0",
-      "sha256": "92d68e1cfc42eb011c0af7ff1dd0da25136d624bb56824d1813ba1e892d6279d"
+      "url": "./index.html?v=173.7.0",
+      "sha256": "4923da6451cb9617a9453b04baf8cda03fa6de48f4ee77b1145e335167203f6d"
     },
     {
-      "url": "./version.html?v=173.6.0",
+      "url": "./version.html?v=173.7.0",
       "sha256": "7a82aef2612c437f0d584e526bf1d11947d0620fc3de4fec1170342308f83b57"
     },
     {
-      "url": "./css/style.css?v=173.6.0",
-      "sha256": "14ed80e8f8e6301abb0c160c538d67160424696aaf11b52836f7c12f8af25a16"
+      "url": "./css/style.css?v=173.7.0",
+      "sha256": "ac8a8ce7736e9d2a65e050f6338ea67ff2feb1b632657b4667a2c39852884249"
     },
     {
-      "url": "./css/katex.css?v=173.6.0",
+      "url": "./css/katex.css?v=173.7.0",
       "sha256": "c596bf225b14e4e817fb4f1b801f6f85682e8b92fa457d12af2c0b891eb96bcc"
     },
     {
-      "url": "./js/app.js?v=173.6.0",
+      "url": "./js/app.js?v=173.7.0",
       "sha256": "ded08745b2b43fde6fe3aa0c4f07a8363df2f2f2cdd030ff1cd8ccc7e8480b3a"
     },
     {
-      "url": "./js/backup.js?v=173.6.0",
+      "url": "./js/backup.js?v=173.7.0",
       "sha256": "979264c92e4434fd175cc420aff0ab06de623a11f175f8fbaf673855601c48a3"
     },
     {
-      "url": "./js/badges.js?v=173.6.0",
+      "url": "./js/badges.js?v=173.7.0",
       "sha256": "8a5cb3be5508cbd504040b26ffed48b236d4d16c1f05a709e52a809611fc2929"
     },
     {
-      "url": "./js/calendar.js?v=173.6.0",
+      "url": "./js/calendar.js?v=173.7.0",
       "sha256": "640ab9d44d79bdf203c964c0deda5a1fe4a1499feebc1f9280c70023c34c6d27"
     },
     {
-      "url": "./js/checkin.js?v=173.6.0",
+      "url": "./js/checkin.js?v=173.7.0",
       "sha256": "456183a7b7965f7c461b6e0d8b18aebeb1fe48b3e0453f485f4a0167138db926"
     },
     {
-      "url": "./js/demo.js?v=173.6.0",
+      "url": "./js/demo.js?v=173.7.0",
       "sha256": "a2a5f017e3ac0ebd8cbfd508c7bb95d361dafd4946a744fd0e4b025f93b28bb9"
     },
     {
-      "url": "./js/exams.js?v=173.6.0",
+      "url": "./js/exams.js?v=173.7.0",
       "sha256": "99da6d693304cd5483f71894978693f8b7cdd11bb2e7c9698b78ac722be36f20"
     },
     {
-      "url": "./js/katex.min.js?v=173.6.0",
+      "url": "./js/katex.min.js?v=173.7.0",
       "sha256": "2ec26e326d3b141856db1c4d46c07ac3618923c7032d4fcf65f66718ea5cda00"
     },
     {
-      "url": "./js/lecture.js?v=173.6.0",
+      "url": "./js/lecture.js?v=173.7.0",
       "sha256": "b25bacaee1d24924b3d4ac6ecb967a1ae2e732d853a7532ced268bf18235efee"
     },
     {
-      "url": "./js/link.js?v=173.6.0",
+      "url": "./js/link.js?v=173.7.0",
       "sha256": "bdbe316d78091867df2f186e8d190092e0bfca1934ac9062a4f897d915e87914"
     },
     {
-      "url": "./js/marked.min.js?v=173.6.0",
+      "url": "./js/marked.min.js?v=173.7.0",
       "sha256": "2b5f392ea73cf6f79ab6529e8e0d3bdce7f36c320aa29153a0d4949775344baf"
     },
     {
-      "url": "./js/memcards.js?v=173.6.0",
-      "sha256": "2b0f7610b4f65f65b329394a1fd866903aae2ef0d5550e5e1ac052851cbba321"
+      "url": "./js/memcards.js?v=173.7.0",
+      "sha256": "73ff7b11109da5b15ae9a80bab0b44ebe34a8f272a1e9368796116bcbf74926f"
     },
     {
-      "url": "./js/memo-actions.js?v=173.6.0",
-      "sha256": "11e7ce477ec1fe4c967427504ab2b04479da0a2b6b30e92f884fb4071912a02e"
+      "url": "./js/memo-actions.js?v=173.7.0",
+      "sha256": "86e1af4ca572c273293642bec85d40e2f5a65749acab94a3875597d78318990e"
     },
     {
-      "url": "./js/memo-controls.js?v=173.6.0",
+      "url": "./js/memo-controls.js?v=173.7.0",
       "sha256": "9036f52d4cbe1a54f03cefd0c8332007ded67cfdd25844b0b2797d04ae006e24"
     },
     {
-      "url": "./js/memo-currency.js?v=173.6.0",
+      "url": "./js/memo-currency.js?v=173.7.0",
       "sha256": "cb9cd947fcaff9920e04cbb868226eeb5c3c4ab73f4751ad65d7f72926bb5dc6"
     },
     {
-      "url": "./js/memo-economy.js?v=173.6.0",
+      "url": "./js/memo-economy.js?v=173.7.0",
       "sha256": "4daf618875d7b77c6c1b9f65e42523deadf24fd9bc9259ca66a762253f2affb6"
     },
     {
-      "url": "./js/memo-editor.js?v=173.6.0",
+      "url": "./js/memo-editor.js?v=173.7.0",
       "sha256": "ff742800fbf30bb84ee2de6aecbc9858f184592b6945e41e9d951235452aff91"
     },
     {
-      "url": "./js/memo-finance.js?v=173.6.0",
+      "url": "./js/memo-finance.js?v=173.7.0",
       "sha256": "d9f6acc0ce5bbd6995f4fd2309955ee9f1d94b35301e01234ff030ba8028f1e8"
     },
     {
-      "url": "./js/memo-float.js?v=173.6.0",
+      "url": "./js/memo-float.js?v=173.7.0",
       "sha256": "b9fd9a829b8cef2fa8fd304307931254530a54654c2ccd772701849c071ddc35"
     },
     {
-      "url": "./js/memo-flow.js?v=173.6.0",
-      "sha256": "4d583bebaac326c8a89e8eb58361cf22cd581abbf42ff2dd2a69f18885b5e4c8"
+      "url": "./js/memo-flow.js?v=173.7.0",
+      "sha256": "676da76b7d0814a3fea5ebed60bab041d5a9eaea3854eef2b2aaee0e3e504ba5"
     },
     {
-      "url": "./js/memo-goals.js?v=173.6.0",
+      "url": "./js/memo-goals.js?v=173.7.0",
       "sha256": "a2954ec0b9520c3c83b55988e3531cf57a7486c8c72f908097436b2d847c1b7d"
     },
     {
-      "url": "./js/memo-organize.js?v=173.6.0",
+      "url": "./js/memo-organize.js?v=173.7.0",
       "sha256": "dcb46ec5c2775e26cbee7f5a917843b3da045b58a6424027ecdaaaccfd136f76"
     },
     {
-      "url": "./js/memo-penalty.js?v=173.6.0",
+      "url": "./js/memo-penalty.js?v=173.7.0",
       "sha256": "c1f1ca64cdd191b4022d101ef3f616adf8de10971df0d4f762fe55c0b54ed27b"
     },
     {
-      "url": "./js/memo-refinements.js?v=173.6.0",
+      "url": "./js/memo-refinements.js?v=173.7.0",
       "sha256": "a6d2477143c834ebe4dd40fe8033159df53a11dccc02651b08a267ec75495c93"
     },
     {
-      "url": "./js/memo-report.js?v=173.6.0",
-      "sha256": "e876e4f6ca6590fd7259a5d3f8a66c3f918fe57c2affb4e06fe4f7290ec8a439"
+      "url": "./js/memo-report.js?v=173.7.0",
+      "sha256": "cd5c35bacc4acb78c3cec94fe0eb5aaa787b5ef911b41dc7e6b062b54806a719"
     },
     {
-      "url": "./js/memo-rest.js?v=173.6.0",
+      "url": "./js/memo-rest.js?v=173.7.0",
       "sha256": "fb95c6f6f94e8b67e1537347e2b1650cdc21e9388607b14c60747bf6767a24d1"
     },
     {
-      "url": "./js/memo-schedule.js?v=173.6.0",
-      "sha256": "2d71655629ab32641304f788f4781d24f60bcfd03988b34563042085875f5f84"
+      "url": "./js/memo-review.js?v=173.7.0",
+      "sha256": "fda08cf0d8265fe09cbf5227307fcfb69de97c328f706f54bd6472710e457955"
     },
     {
-      "url": "./js/memo-wishlist.js?v=173.6.0",
+      "url": "./js/memo-schedule.js?v=173.7.0",
+      "sha256": "9fbba52bad7008df7bfec6c8e57201df65efb0001af25ac7c56a936ae7a02f91"
+    },
+    {
+      "url": "./js/memo-wishlist.js?v=173.7.0",
       "sha256": "0c5c1b9364258aa85a7756fbbbfb2ffb0df787b3ca0430ff4c895188488dd51d"
     },
     {
-      "url": "./js/memo-workspace.js?v=173.6.0",
-      "sha256": "bed07ec7402f9577ed48326c1d2ef30e5851f72505e0aae1096e4fe22802aff0"
+      "url": "./js/memo-workspace.js?v=173.7.0",
+      "sha256": "b43595e1713a7d9cf23ac19006473f40d423491fffc5809c10bb7c30b4815b69"
     },
     {
-      "url": "./js/memo.js?v=173.6.0",
+      "url": "./js/memo.js?v=173.7.0",
       "sha256": "8a090e4ff712062060e7701712c4c8a1fba0864634663e80bdb67561f8a4afff"
     },
     {
-      "url": "./js/mhchem.min.js?v=173.6.0",
+      "url": "./js/mhchem.min.js?v=173.7.0",
       "sha256": "cdf8174ee9a8113fcecc79cf24209754554e080efe19b767940c9aec5864a834"
     },
     {
-      "url": "./js/milestones.js?v=173.6.0",
+      "url": "./js/milestones.js?v=173.7.0",
       "sha256": "9c0521d6f006d4075d8f35d4d36d3b4195226804a97aa31c1d591e816cd3f125"
     },
     {
-      "url": "./js/mistakes.js?v=173.6.0",
+      "url": "./js/mistakes.js?v=173.7.0",
       "sha256": "a0df83f6fc839461703366364c2487c88adc2932e6fb671edba11fa5b587be90"
     },
     {
-      "url": "./js/queue.js?v=173.6.0",
+      "url": "./js/queue.js?v=173.7.0",
       "sha256": "afead75511ab2371e265273f7350613c20291bee40ecc271d79f4ed92cf373e8"
     },
     {
-      "url": "./js/settings.js?v=173.6.0",
+      "url": "./js/settings.js?v=173.7.0",
       "sha256": "90873bbd9f9a86e895f13b29a7dc2e21ae38fd532c85ab1c1048ac5b215a01af"
     },
     {
-      "url": "./js/sport.js?v=173.6.0",
+      "url": "./js/sport.js?v=173.7.0",
       "sha256": "fbd6e64d9c02a42dfd1f606dd399451a1a9eb885fbe1c666b3318004c124bc54"
     },
     {
-      "url": "./js/stats.js?v=173.6.0",
+      "url": "./js/stats.js?v=173.7.0",
       "sha256": "5849ec142ff8aff4796bdb907d5e34c65fe56fc99506fa0c96efe8440ee62c9c"
     },
     {
-      "url": "./js/store.js?v=173.6.0",
-      "sha256": "013c4d7c465ee45d9517f682b0cf74097e91e58bbed1311daa637b3812c32e27"
+      "url": "./js/store.js?v=173.7.0",
+      "sha256": "69dd799dc361f3e1eb15afdd6083df638cc552d661229508e9bb32f50c7dcff0"
     },
     {
-      "url": "./js/tasks.js?v=173.6.0",
+      "url": "./js/tasks.js?v=173.7.0",
       "sha256": "b5eea9db4cd08265a67744d776efd1a7fb091b235ea337c2be6005a63f812f46"
     },
     {
-      "url": "./js/timeline.js?v=173.6.0",
+      "url": "./js/timeline.js?v=173.7.0",
       "sha256": "01a162b92306b5e4e70a15e47c093a2d1c4dd43d444b001195dc385763e57b3b"
     },
     {
-      "url": "./js/ui.js?v=173.6.0",
+      "url": "./js/ui.js?v=173.7.0",
       "sha256": "6361ba709040c2f8da98d2d08d6182bb6dcc8cd23e94bceae17d22ad4cc5c180"
     },
     {
-      "url": "./js/updates.js?v=173.6.0",
+      "url": "./js/updates.js?v=173.7.0",
       "sha256": "7f91e6e7db9a34d5d8b08282decde753a2576058cef7e4e764b130b92906bcc5"
     },
     {
-      "url": "./manifest.webmanifest?v=173.6.0",
+      "url": "./manifest.webmanifest?v=173.7.0",
       "sha256": "6db6c99f8f9693b54fa0066ae609bf824216e47094fd01b28487a9bd059a9402"
     },
     {
-      "url": "./icon.svg?v=173.6.0",
+      "url": "./icon.svg?v=173.7.0",
       "sha256": "57cc2f36576a189060fe6d592a51bdf7c7f4adea9d489418e44f2d79afa6f74a"
     }
   ]

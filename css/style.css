@@ -2525,3 +2525,16 @@ body #mw-live,body[data-view="tasks"] #mw-live.mw-local-timer{top:var(--float-to
 
 .schedule-chart #schedule-now{z-index:0;}
 .schedule-chart .schedule-block.schedule-density-group{background:var(--card)!important;border-style:dashed;}
+
+/* 173.7 review management is secondary; ordinary task controls remain primary. */
+.review-registry,.review-due{margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--card);}
+.review-registry>summary,.review-due>summary{cursor:pointer;min-height:32px;font-weight:600;}
+.review-series,.review-history article{padding:10px 0;border-bottom:1px solid var(--line);}
+.review-series small,.review-history small,.review-badge{display:block;color:var(--muted);font-size:12px;overflow-wrap:anywhere;}
+.review-history article .btn{margin:6px 5px 0 0;min-height:38px;}
+.review-chips{display:flex;gap:5px;flex-wrap:wrap;margin:7px 0;}
+.review-completion{margin:10px 0;border:1px solid var(--line);border-radius:8px;padding:9px;}
+.review-completion label{display:block;}
+.review-completion select,.review-completion input{width:100%;min-height:40px;}
+.review-badge{padding-top:3px;white-space:normal;}
+.review-due p{margin:8px 0;}

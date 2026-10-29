@@ -43,12 +43,12 @@
     const d = S().data(), out = [], dayKey = forDay || selectedDay || M().userDay();
     (d.queue || []).filter(t=>!t.memoDismissed&&!t.archived&&(!t.assignment||t.assignment.day===dayKey)).forEach(t => out.push({ ref: { kind: 'queue', id: t.id }, title: t.text, label: '队列 · ' + t.text }));
     const day = S().getDay(dayKey);
-    ['required', 'ideal', 'extra'].forEach(list => (day.tasks[list] || []).filter(t => !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed).forEach(t => { const found = resolve({ kind: 'task', id: t.id, day: dayKey, list }); if (found) out.push({ ref: found.ref, title: found.task.text, label: '当天 · ' + found.task.text }); }));
+    ['required', 'ideal', 'extra'].forEach(list => (day.tasks[list] || []).filter(t => !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed && !App.memoReview?.hidden(t,list)).forEach(t => { const found = resolve({ kind: 'task', id: t.id, day: dayKey, list }); if (found) out.push({ ref: found.ref, title: found.task.text, label: '当天 · ' + found.task.text }); }));
     (d.daily || []).filter(t=>!t.archived).forEach(t => out.push({ ref: { kind: 'daily', id: t.id, day: dayKey }, title: t.text, label: '基础 · ' + t.text }));
     (d.memoProjects || []).filter(t => !t.archived && (!t.createdDay || t.createdDay <= dayKey)).forEach(t => out.push({ ref: { kind: 'project', id: t.id, day: dayKey }, title: t.text, label: '每日推进 · ' + t.text }));
     App.memoFinance?.plans(dayKey).filter(x=>!x.r.hidden&&!x.it.archived).forEach(x=>out.push({ref:{kind:'checkin',id:x.it.id,day:dayKey},title:x.it.text,label:'打卡 · '+x.it.text}));const seen = new Set(); return out.filter(x => { const k = key(x.ref); if (seen.has(k)) return false; seen.add(k); return true; });
   }
-  function unscheduled(day=selectedDay||M().userDay()){const base=dayStart(day),keys=new Set(state().items.filter(p=>!p.deleted&&!p.suspendedByArchive&&p.start<base+86400000&&(p.type==='point'?p.start>=base:p.end>base)).map(p=>key(p.ref)));return sources(day).filter(x=>!keys.has(key(x.ref))&&!isDone({ref:x.ref}));}
+  function unscheduled(day=selectedDay||M().userDay()){const base=dayStart(day),keys=new Set(state().items.filter(p=>!p.deleted&&!p.suspendedByArchive&&!p.suspendedByReview&&p.start<base+86400000&&(p.type==='point'?p.start>=base:p.end>base)).map(p=>key(p.ref)));return sources(day).filter(x=>!keys.has(key(x.ref))&&!isDone({ref:x.ref}));}
   // Execution time is calculated from actual timer chunks, never planned spans.
   // Keep it separate from legacy timeline minutes until overlap reconciliation.
   function dayExecutionMs(day, now = Date.now()) {
@@ -126,7 +126,7 @@
     return days;
   }
   function columnItems(day,list) {
-    const d=S().data(),items=(d.days[day]?.tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed).map(task=>({task,ref:{kind:'task',id:task.id,day,list}}));
+    const d=S().data(),items=(d.days[day]?.tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed&&!App.memoReview?.hidden(t,list)).map(task=>({task,ref:{kind:'task',id:task.id,day,list}}));
     App.memoFlow?.assigned(day,list).filter(t=>!t.archived).forEach(task=>items.push({task,ref:{kind:'queue',id:task.id}}));
     (d.memoProjects||[]).filter(t=>(!t.archived||t.days?.[day])&&(!t.createdDay||t.createdDay<=day)&&(t.memoCategoryDays?.[day]||'extra')===list).forEach(task=>items.push({task,ref:{kind:'project',id:task.id,day}}));
     (d.daily||[]).filter(t=>(!t.archived||t.days?.[day])&&t.memoCategoryDays?.[day]===list).forEach(task=>items.push({task,ref:{kind:'daily',id:task.id,day}}));
@@ -164,6 +164,7 @@
   function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
   function startRef(ref, now = Date.now(), itemId = null) {
     summaryCache = null; const d = state(), found = resolve(ref); if (!found || found.task.archived) throw new Error('任务已删除或停用，请重新选择');
+    App.memoReview?.assertExecutable(found.ref);
     if (isDone({ ref: found.ref })) throw new Error('任务已完成；取消完成后再计时');
     const running = active(); if (running && timerKey(running.ref) === timerKey(found.ref) && (itemId == null || running.itemId === itemId)) return running;
     if (running) pauseCore(running, now);
@@ -188,6 +189,7 @@
     if (!M().validDate(input.day) || !Number.isFinite(input.start) || !['point', 'span'].includes(input.type) || (input.type === 'span' && (!Number.isFinite(input.end) || input.end <= input.start || input.end - input.start > 86400000))) throw new Error('请填写有效的日期和时间，时间段最长24小时');
     const found = resolve(input.ref); if (!found) throw new Error('关联任务已移动，请重新选择');
     const old = id && d.items.find(p => p.id === id && !p.deleted); if (id && !old) throw new Error('计划已删除');
+    if(old?.memoReviewRoundId&&!input.reviewSync){if(input.type!=='point')throw Error('复习到期是时间点；请另加学习时段');App.memoReview.rescheduleCore(old.memoReviewRoundId,input.start);return old;}
     const next = Object.assign(old || { id: S().uid(), createdAt: new Date().toISOString() }, input, { ref: clone(found.ref), updatedAt: new Date().toISOString() });
     if (!old) d.items.push(next); return next;
   }
@@ -267,7 +269,7 @@
   }
   function visibleRecords(day, now = Date.now()) {
     const base = dayStart(day), end = base + 86400000, d = state();
-    const plans = d.items.filter(p => !p.deleted && !p.suspendedByArchive && p.start < end && (p.type === 'point' ? p.start >= base : p.end > base));
+    const plans = d.items.filter(p => !p.deleted && !p.suspendedByArchive && !p.suspendedByReview && p.start < end && (p.type === 'point' ? p.start >= base : p.end > base));
     const sessions = d.sessions.filter(s => s.chunks.some(c => c.start < end && (c.end ?? now) > base));
     const legacy = legacyRecords(day).filter(x => showHidden || !x.record.memoHidden);
     const matches = title => !keyword || String(title).toLocaleLowerCase().includes(keyword.toLocaleLowerCase());
@@ -445,6 +447,7 @@
         if (act === 'pause-session' && session) return perform(() => pauseCore(session, Date.now()));
         if (act === 'resume-session' && session) return startUI(session.ref, session.itemId || null);
         if (act === 'stop-session' && session) return perform(() => stopSession(session, Date.now()));
+        if (act === 'unschedule' && p?.memoReviewRoundId) return App.memoReview.manage(App.memoReview.round(p.memoReviewRoundId).seriesId);
         if (act === 'unschedule' && p) return App.ui.confirm('移除这项时间安排并结束它关联的活动计时？任务、积分与历史执行保留。', '移除安排', () => perform(() => { stopCore(p.id); p.deleted = true; }));
         if (act === 'legacy-add') return legacyModal(null);
         if (act === 'legacy-edit') return legacyModal(id);
