@@ -1266,3 +1266,75 @@ test('173.3 structured copy checkpoints persist, preserve future baselines and e
  const clock=Date.now();class Later extends Date{constructor(...args){super(...(args.length?args:[clock+86400000]));}static now(){return clock+86400000;}}next.ctx.Date=Later;assert.doesNotMatch(h.F.copyQuote(M.shiftDay(day,1)).text,/积分流水补记|任务汇总修订/);
  const malformed=copy(b.S.data());malformed.memoFlow.reportFacts.ledger.old.points='bad';const bad=browser({initial:malformed});assert.equal(await bad.S.load(),false);assert(bad.S.status().readOnly);
 });
+
+function executionReportHarness(b, at='2026-10-28T12:00:00+08:00') {
+ const h=flowHarness(b);financeHarness(b);vm.runInContext(source('js/memo-report.js'),b.ctx);
+ let time=Date.parse(at);class Clock extends Date{constructor(...args){super(...(args.length?args:[time]));}static now(){return time;}}
+ b.ctx.Date=Clock;return {...h,R:b.ctx.App.memoReport,setTime:at=>{time=Date.parse(at);}};
+}
+test('173.4 unfinished timers export every actual chunk without mutating notes or sessions',async()=>{
+ const b=browser();await b.S.load();const {P,F,M}=executionReportHarness(b),day=M.userDay(),ref={kind:'queue',id:'open'};
+ b.S.data().queue=[{id:'open',text:'未完成的复盘'}];const base=Date.parse(day+'T09:10:00+08:00');
+ const s=P.startRef(ref,base);P.pauseCore(s,base+25*60000);P.startRef(ref,base+50*60000);P.pauseCore(s,base+68*60000);
+ const raw=JSON.stringify(P.state().sessions),notes=JSON.stringify(b.S.data().memoNotes),q=F.copyQuote(day);
+ assert.match(q.text,/未完成的复盘〔未完成/);assert.match(q.text,/09:10:00 — .*09:35:00/);assert.match(q.text,/10:00:00 — .*10:18:00/);
+ assert.match(q.text,/有效合计：43分00秒/);assert.equal(q.factSnapshot.execution[day].segments.length,2);
+ assert.equal(JSON.stringify(P.state().sessions),raw);assert.equal(JSON.stringify(b.S.data().memoNotes),notes);assert.equal(F.state().lastCopy,undefined);
+});
+test('173.4 running copies update a stable segment and never stop the live timer',async()=>{
+ const b=browser();await b.S.load();const {P,F,M,setTime}=executionReportHarness(b,'2026-10-28T10:05:00+08:00'),day=M.userDay();
+ b.S.data().queue=[{id:'live',text:'运行中任务'}];const s=P.startRef({kind:'queue',id:'live'},Date.parse(day+'T10:00:00+08:00'));
+ const a=F.copyQuote(day);F.markCopyCore(a);setTime(day+'T10:10:00+08:00');const z=F.copyQuote(day);
+ assert.equal(a.factSnapshot.execution[day].actualMs,300000);assert.equal(z.factSnapshot.execution[day].actualMs,600000);
+ assert.equal(a.factSnapshot.execution[day].segments[0].id,z.factSnapshot.execution[day].segments[0].id);
+ assert.match(z.text,/进行中；结束点为复制时刻/);assert.equal(s.status,'running');assert.equal(s.chunks[0].end,null);
+ assert.equal(F.state().lastCopy.text,a.text);
+});
+test('173.4 all task kinds split at 04:00, keep midnight intact and union cross-task overlap',async()=>{
+ const b=browser();await b.S.load();const {P,M}=executionReportHarness(b,'2026-10-29T05:00:00+08:00'),day='2026-10-28',ref={kind:'queue',id:'boundary'};
+ b.S.data().queue=[{id:'boundary',text:'跨日任务'},{id:'same-name',text:'跨日任务'}];
+ const edge=Date.parse('2026-10-29T04:00:00+08:00');const run=P.startRef(ref,edge-600000);P.stopRef(ref,edge+1200000);
+ P.state().sessions.push({id:'overlap',ref:{kind:'queue',id:'same-name'},title:'跨日任务',status:'ended',chunks:[{start:edge+600000,end:edge+1800000}]});
+ const raw=JSON.stringify(P.state().sessions),index=P.executionIndex(edge+3600000,'2026-10-29');
+ assert.equal(index[day].actualMs,600000);assert.equal(index['2026-10-29'].actualMs,1800000);
+ assert.equal(index[day].segments[0].id,index['2026-10-29'].segments[0].id);assert(index[day].segments[0].clipped);
+ assert.notEqual(index['2026-10-29'].segments[0].taskKey,index['2026-10-29'].segments[1].taskKey);
+ const midnight=Date.parse('2026-10-29T00:00:00+08:00');run.chunks.push({start:midnight-600000,end:midnight+600000});
+ assert.equal(P.executionIndex(edge+3600000,'2026-10-29')[day].segments.length,2);run.chunks.pop();assert.equal(JSON.stringify(P.state().sessions),raw);
+});
+test('173.4 timer-only historical corrections repeat that day and persist without task or ledger dumps',async()=>{
+ const b=browser();await b.S.load();const {P,F,M,setTime}=executionReportHarness(b),day=M.userDay(),old=M.shiftDay(day,-1);
+ b.S.data().queue=[{id:'old-timer',text:'往日计时'}];const ref={kind:'queue',id:'old-timer'},base=Date.parse(old+'T10:00:00+08:00');
+ const s=P.startRef(ref,base);P.pauseCore(s,base+600000);F.markCopyCore(F.copyQuote(day));
+ P.startRef(ref,base+1200000);P.pauseCore(s,base+1800000);const q=F.copyQuote(day);
+ assert.match(q.text,/执行明细修订/);assert.doesNotMatch(q.text,/任务汇总修订|积分流水补记/);F.markCopyCore(q);
+ assert.match(F.copyQuote(day).text,/执行明细修订/);assert.equal(await b.S.save(),true);
+ const next=browser({shared:b});assert.equal(await next.S.load(),true);const h=executionReportHarness(next);
+ assert.match(h.F.copyQuote(day).text,/执行明细修订/);
+ h.F.markCopyCore(h.F.copyQuote(old));assert(h.F.state().reportFacts.execution[day]);
+ setTime('2026-10-29T12:00:00+08:00');assert.doesNotMatch(F.copyQuote('2026-10-29').text,/执行明细修订/);
+});
+test('173.4 unavailable task links preserve raw history, duplicate references do not add elapsed time',async()=>{
+ const b=browser();await b.S.load();const {P,F,M,A}=executionReportHarness(b),day=M.userDay(),ref={kind:'queue',id:'gone'},base=Date.parse(day+'T09:00:00+08:00');
+ b.S.data().queue=[{id:'gone',text:'保留历史名字'}];const s=P.startRef(ref,base);P.stopRef(ref,base+600000);
+ P.state().sessions.push(copy(s));b.S.data().queue=[];
+ const q=F.copyQuote(day);assert.match(q.text,/保留历史名字〔历史记录，关联已不可用〕/);
+ assert.equal(q.factSnapshot.execution[day].segments.length,1);assert.equal(q.factSnapshot.execution[day].actualMs,600000);
+ F.markCopyCore(q);assert.equal(await b.S.save(),true);
+ const bad=copy(b.S.data());bad.memoFlow.reportFacts.execution[day].segments[0].end='bad';
+ const rejected=browser({initial:bad});assert.equal(await rejected.S.load(),false);assert(rejected.S.status().readOnly);
+});
+test('173.4 first execution checkpoint seeds unknown old history and exports only selected day',async()=>{
+ const b=browser();await b.S.load();const {P,F,M}=executionReportHarness(b),day=M.userDay(),old=M.shiftDay(day,-1);
+ b.S.data().queue=[{id:'old',text:'首次升级旧片段'}];const ref={kind:'queue',id:'old'},base=Date.parse(old+'T10:00:00+08:00');P.startRef(ref,base);P.stopRef(ref,base+600000);
+ const q=F.copyQuote(day);assert.doesNotMatch(q.text,/首次升级旧片段|执行明细修订/);assert(q.factSnapshot.execution[old]);F.markCopyCore(q);
+ assert.doesNotMatch(F.copyQuote(day).text,/执行明细修订/);assert.match(F.copyQuote(old).text,/首次升级旧片段/);
+});
+test('173.4 repeated tasks use each execution day for completion status across 04:00',async()=>{
+ const b=browser();await b.S.load();const {P}=executionReportHarness(b,'2026-10-29T05:00:00+08:00');
+ b.S.data().memoProjects=[{id:'project-boundary',text:'每日推进',days:{'2026-10-28':true}}];
+ const edge=Date.parse('2026-10-29T04:00:00+08:00'),ref={kind:'project',id:'project-boundary',day:'2026-10-28'};
+ P.state().sessions.push({id:'project-run',ref,title:'每日推进',status:'ended',chunks:[{start:edge-600000,end:edge+600000}]});
+ const x=P.executionIndex(edge+3600000,'2026-10-29');
+ assert.equal(x['2026-10-28'].segments[0].status,'已完成');assert.equal(x['2026-10-29'].segments[0].status,'未完成');
+});

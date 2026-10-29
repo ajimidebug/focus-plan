@@ -231,7 +231,14 @@
           !Number.isFinite(f.penalty) || f.penalty < 0 ||
           !Number.isFinite(f.dailyCap) || f.dailyCap < 0) throw new Error('新流程记录结构异常');
       const object=x=>!!x&&typeof x==='object'&&!Array.isArray(x);
+      const execution=x=>object(x)&&Object.entries(x).every(([day,v])=>/^\d{4}-\d{2}-\d{2}$/.test(day)&&object(v)&&
+        Number.isFinite(v.actualMs)&&v.actualMs>=0&&Array.isArray(v.segments)&&v.segments.every(c=>object(c)&&
+          typeof c.id==='string'&&typeof c.taskKey==='string'&&typeof c.title==='string'&&typeof c.status==='string'&&
+          Number.isFinite(c.start)&&Number.isFinite(c.end)&&c.end>c.start&&Number.isFinite(c.rawStart)&&
+          (c.rawEnd===null||Number.isFinite(c.rawEnd)&&c.rawEnd>=c.rawStart)&&
+          typeof c.ongoing==='boolean'&&typeof c.clipped==='boolean'&&typeof c.overlap==='boolean'));
       const checkpoint=x=>object(x)&&x.version===1&&object(x.days)&&object(x.ledger)&&
+        (x.execution===undefined||execution(x.execution))&&
         Object.entries(x.days).every(([day,v])=>/^\d{4}-\d{2}-\d{2}$/.test(day)&&object(v)&&
           (v.legacyPending===day||Array.isArray(v.columns)&&Array.isArray(v.habits)&&Array.isArray(v.goals)))&&
         Object.entries(x.ledger).every(([id,v])=>object(v)&&v.id===id&&Number.isFinite(v.points));

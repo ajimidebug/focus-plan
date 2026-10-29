@@ -89,6 +89,42 @@
     let right=-Infinity;segments.forEach(c=>{c.overlap=c.start<right;right=Math.max(right,c.end);});
     return {day,segments,actualMs:unionMs(segments),overlap:segments.some(c=>c.overlap)};
   }
+  // A read-only projection of actual chunks. Assignment/completion dates never
+  // decide which user day receives elapsed time; missing tasks retain session titles.
+  function executionIndex(now = Date.now(), throughDay = M().userDay(now)) {
+    const days = {}, sessions = S().data().memoSchedule?.sessions || [];
+    const limit = Math.min(now, dayStart(M().shiftDay(throughDay, 1)));
+    sessions.forEach(s => {
+      const found = resolve(s.ref), r = found?.ref || s.ref, taskKey = timerKey(r);
+      const title = found?.task.text || s.title || '历史任务（关联已不可用）';
+      chunks([s], limit).forEach(c => {
+        for (let day = M().userDay(c.start); day <= throughDay; day = M().shiftDay(day, 1)) {
+          const left = dayStart(day), right = dayStart(M().shiftDay(day, 1));
+          if (left >= c.end) break;
+          const start = Math.max(left, c.start), end = Math.min(right, c.end);
+          if (end <= start) continue;
+          const ongoing = c.rawEnd === null && s.status === 'running' && end === now && now < right;
+          const status = !found ? '历史记录，关联已不可用' : found.task.archived ? '已停用' : isDone({ref:repeats(r)?{...r,day}:r}) ? '已完成' : s.status === 'paused' ? '未完成，已暂停' : '未完成';
+          (days[day] || (days[day] = {segments:[],actualMs:0})).segments.push({
+            id:c.id, taskKey, title, status, start, end,
+            rawStart:c.rawStart, rawEnd:c.rawEnd, ongoing,
+            clipped:start !== c.rawStart || (c.rawEnd !== null && end !== c.rawEnd) || end === right && c.rawEnd === null
+          });
+        }
+      });
+    });
+    Object.values(days).forEach(x => {
+      x.segments.sort((a,b) => a.start-b.start || a.end-b.end || a.id.localeCompare(b.id));
+      // The same stable ID/range is a reference, never an extra contribution.
+      const seen = new Set(); x.segments = x.segments.filter(c => {
+        const k = JSON.stringify([c.id,c.start,c.end]); if (seen.has(k)) return false; seen.add(k); return true;
+      });
+      let right = -Infinity;
+      x.segments.forEach(c => { c.overlap = c.start < right; right = Math.max(right,c.end); });
+      x.actualMs = unionMs(x.segments);
+    });
+    return days;
+  }
   function columnItems(day,list) {
     const d=S().data(),items=(d.days[day]?.tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed).map(task=>({task,ref:{kind:'task',id:task.id,day,list}}));
     App.memoFlow?.assigned(day,list).filter(t=>!t.archived).forEach(task=>items.push({task,ref:{kind:'queue',id:task.id}}));
@@ -242,6 +278,7 @@
       const controls = $('mw-live-controls'), shown = current || paused[0];
       if (controls) { const signature = shown ? shown.id + ':' + shown.status : ''; if (controls.dataset.session !== signature) { controls.dataset.session = signature; const ref = shown && esc(JSON.stringify(shown.ref)); controls.innerHTML = shown ? (shown.status === 'running' ? '<button class="btn btn-small" data-schedule-command="pause" data-schedule-ref="' + ref + '">暂停</button>' : '<button class="btn btn-small" data-schedule-command="start" data-session-id="' + esc(shown.id) + '" data-schedule-ref="' + ref + '">继续</button>') + '<button class="btn btn-small" data-schedule-command="end" data-schedule-ref="' + ref + '">结束</button>' : ''; } }
       App.memoFloat?.update(current||paused[0],paused);
+      App.memoActions?.tick?.();
       const back = $('schedule-active'); if (back) back.hidden = !current && !paused.length;
       document.querySelectorAll('[data-task-timing]').forEach(el=>{const t=timing(JSON.parse(el.dataset.taskTiming),now);el.textContent=timingText(t);});
       if (!mode || document.hidden || !$('view-memo-timeaxis')?.classList.contains('active') && !$('view-tasks')?.classList.contains('active')) return;
@@ -429,5 +466,5 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } }); window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();
   }
-  App.memoSchedule = { setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
+  App.memoSchedule = { setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
 })();

@@ -37,11 +37,40 @@ function report(day,legacyGoals=false,finance=true){
 function stripFinance(text){return String(text).replace(/【积分汇总】[\s\S]*?(?=【打卡安排】|【习惯打卡】|【截止目标】|$)/,'');}
 function ledgerSnapshot(e){return {id:e.id,at:e.at||null,date:e.date||null,type:e.type||'',points:Number(e.points)||0,note:e.note||'',effectiveAt:e.effectiveAt||null,refundOf:e.refundOf||null,itemSnapshot:e.itemSnapshot||null};}
 function ledgerDay(e){return A.memoFinance?.postingDay(e)||e.date;}
+const emptyExecution=()=>({segments:[],actualMs:0});
+function executionText(day,x,now,revision=false){
+ const clock=at=>M().naturalDay(at)+' '+new Date(at+8*3600000).toISOString().slice(11,19);
+ const span=ms=>Math.floor(ms/60000)+'分'+String(Math.floor(ms/1000)%60).padStart(2,'0')+'秒';
+ const lines=['===== 用户日 '+day+' · '+(revision?'执行明细修订（替换此前该日执行明细）':'执行明细')+' =====',
+  '北京时间04:00分日；快照截至 '+clock(now)+'。同编号及重合区间不重复累计；运行中片段以后续快照替换。'];
+ const groups=new Map();
+ x.segments.forEach(c=>{if(!groups.has(c.taskKey))groups.set(c.taskKey,[]);groups.get(c.taskKey).push(c);});
+ groups.forEach(cs=>{
+  lines.push(cs[0].title+'〔'+(cs.some(c=>c.ongoing)?'进行中':cs[0].status)+'〕');
+  cs.forEach((c,i)=>lines.push((i+1)+'. '+clock(c.start)+' — '+clock(c.end)+'｜'+span(c.end-c.start)+'〔片段 '+c.id+'〕'+
+   (c.ongoing?'〔进行中；结束点为复制时刻〕':'')+(c.clipped?'〔按用户日截取；原始起点 '+clock(c.rawStart)+(c.rawEnd!==null?'，终点 '+clock(c.rawEnd):'')+'〕':'')+(c.overlap?'〔与其他片段重合，合计已去重〕':'')));
+  lines.push('该任务当日有效合计：'+span(A.memoSchedule.unionMs(cs)));
+ });
+ if(!x.segments.length)lines.push('本用户日无可列出的有效计时片段；旧快照另列，不推测缺失起止点。');
+ lines.push('本用户日有效合计（跨任务重合已去重）：'+span(x.actualMs));
+ return lines.join('\n');
+}
 function attach(q){
+ const now=Date.parse(q.at),executions=A.memoSchedule.executionIndex(now,q.day);
  const f=A.memoFlow.state(),same=f.factCarry?.day===M().userDay()&&f.factCarry.selected===q.day;
  const base=clone(same?f.factCarry.base:f.reportFacts||{version:1,days:{},ledger:{}}),current={version:1,days:{...base.days},ledger:{...base.ledger}};
+ // First use seeds unknown historical copy state, without dumping all old timers.
+ const tracked=base.execution!==undefined;
+ if(!tracked)base.execution=clone(executions);
+ current.execution={...base.execution};
  const prior=f.reportCarry?.day===M().userDay()&&f.reportCarry.selected===q.day?f.reportCarry.base:(f.reportCopies||{});
- const reportSnapshots={},reportBase=clone(prior),lines=[report(q.day).text];
+ const reportSnapshots={},reportBase=clone(prior),lines=[report(q.day,false,false).text,executionText(q.day,executions[q.day]||emptyExecution(),now)];
+ if(A.memoFinance)lines.push(A.memoFinance.postingSummary(q.day).text);
+ for(const day of [...new Set([...Object.keys(base.execution),...Object.keys(executions),q.day])].filter(k=>M().validDate(k)&&k<=q.day).sort()){
+  const next=executions[day]||emptyExecution(),old=base.execution[day]||emptyExecution();
+  current.execution[day]=next;
+  if(tracked&&day!==q.day&&stable(old)!==stable(next))lines.push(executionText(day,next,now,true));
+ }
  const dates=new Set([...days(),...['daily','memoProjects','checkins'].flatMap(k=>(S().data()[k]||[]).flatMap(t=>Object.keys(t.days||{}))),q.day,...Object.keys(f.reportFacts?.days||{}),...Object.keys(f.reportCopies||{})]);
  for(const day of [...dates].filter(k=>M().validDate(k)&&k<=q.day).sort()){
   const fact=facts(day);current.days[day]=fact;reportSnapshots[day]=report(day).text;
@@ -73,7 +102,7 @@ function attach(q){
  }
  if(financial.length)lines.push('【积分流水补记／修订 · 仅以下受影响记录】\n'+financial.join('\n'));
  const supplements=(S().data().memoEvents||[]).filter(e=>e.active&&e.kind!=='cancellation'&&(e.sourceDay===q.day||e.noteDay===q.day||q.snapshots[e.noteDay])&&e.timing?.executionText&&!q.text.includes(e.timing.executionText));
- if(supplements.length)lines.push('【已保存执行快照 · 按片段编号及起止区间去重】\n'+supplements.map(e=>e.title+'〔完成记录 '+e.id+'〕\n'+e.timing.executionText).join('\n'));
+ if(supplements.length)lines.push('【已保存执行快照 · 历史引用；与上述执行明细同编号或区间不重复累计】\n'+supplements.map(e=>e.title+'〔完成记录 '+e.id+'〕\n'+e.timing.executionText).join('\n'));
  return Object.assign(q,{text:lines.join('\n\n')+'\n\n'+q.text,reportSnapshots,reportBase,factSnapshot:current,factBase:base});
 }
 function mark(q){
@@ -81,4 +110,4 @@ function mark(q){
  f.reportCopies=Object.assign({},f.reportCopies,q.reportSnapshots);f.reportCarry={day:M().userDay(),selected:q.day,base:q.reportBase};
  if(q.factSnapshot){f.reportFacts=clone(q.factSnapshot);f.factCarry={day:M().userDay(),selected:q.day,base:clone(q.factBase)};}
 }
-A.memoReport={report,legacyReport,facts,attach,mark};})();
+A.memoReport={report,legacyReport,facts,executionText,attach,mark};})();

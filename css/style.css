@@ -2260,8 +2260,8 @@ details.mw-task-extras .mw-task-secondary>details[open]{flex-basis:100%;}
 }
 
 /* 172: original three parallel vertical columns, visible without disclosure. */
-.mw-overview{overflow-x:auto;overscroll-behavior-x:contain;margin:8px 0 14px;}
-.mw-overview .cal-cols{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px;min-width:540px;}
+.mw-overview{margin:8px 0 14px;min-width:0;}
+.mw-overview .cal-cols{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important;min-width:0;}
 .mw-overview .cal-col{min-width:0;}
 /* Navigation is a full-width, equal 3-cell row on every screen size. */
 .mw-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}
@@ -2272,7 +2272,7 @@ details.mw-task-extras .mw-task-secondary>details[open]{flex-basis:100%;}
 .mw-day-shortcuts [data-mw="today"][aria-pressed="true"]{background:#1649a4;color:#fff;border-color:#082f78;box-shadow:inset 0 0 0 1px #d3e4ff;}
 body[data-theme="dark"] .mw-day-shortcuts [data-mw="today"]:not([aria-pressed="true"]),
 body[data-theme="purple"] .mw-day-shortcuts [data-mw="today"]:not([aria-pressed="true"]){background:#7b5117;color:#fff2ca;border-color:#edbf62;}
-@media(max-width:420px){.mw-overview .cal-cols{min-width:510px;}.mw-day-shortcuts>.btn{padding:8px 3px;font-size:14px;}}
+@media(max-width:420px){.mw-day-shortcuts>.btn{padding:8px 3px;font-size:14px;}}
 
 /* 172: explicitly distinguish penalty rules in habit editor and keep hidden fields hidden. */
 #ck-penalty-field[hidden], .modal .field[hidden]{display:none!important;}
@@ -2430,3 +2430,41 @@ body .habit-plan-goal-done small,body #checkin-view .ck-row.done:not([data-habit
 .execution-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;background:var(--bg);border-radius:6px;padding:8px;max-height:220px;overflow:auto;}
 .points-day-rows p{border-top:1px solid var(--line);padding:8px 0;overflow-wrap:anywhere;font-size:12px;}
 @media(max-width:400px){.memo-layout .brand{max-width:44%;}.memo-layout .brand h1{font-size:19px;}.memo-layout #stat-bar{right:10px;}.stat-points-group{max-width:49vw;}}
+
+/* 173.4: three simultaneous columns, with readable names and no inner carousel. */
+.mw-overview.card{padding:10px 6px;}
+.mw-overview .cal-col{padding:6px 4px!important;max-width:100%;}
+.mw-overview .cal-col-head{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:5px 3px!important;overflow-wrap:anywhere;}
+.mw-overview .mw-column-count{white-space:normal;overflow-wrap:anywhere;}
+.mw-overview .ov-task-name,.mw-overview .habit-plan-row>span:first-child{display:block;-webkit-line-clamp:unset;min-height:0;max-height:none;overflow:visible;white-space:normal;overflow-wrap:anywhere;word-break:break-word;}
+body .mw-overview [data-overview-ref]{padding:7px 4px!important;min-height:44px;}
+.mw-overview .cal-task{min-width:0;}
+.mw-overview .mw-score{white-space:normal;overflow-wrap:anywhere;}
+.mw-overview .habit-plan-row{width:100%;text-align:left;min-height:44px;}
+.mw-overview .habit-plan-meta>*{min-width:0;max-width:100%;overflow-wrap:anywhere;}
+.mw-overview .mw-column-extra,.mw-overview .mw-completed>summary{overflow-wrap:anywhere;}
+.mw-overview .ov-task-name{font-size:13.5px;line-height:1.45;}
+
+/* Task completion dialogs use their existing stationary footer, not page-fixed controls. */
+.modal.task-action-modal .modal-actions{display:flex;flex-direction:column;flex-wrap:nowrap;align-items:stretch;gap:7px;}
+.task-action-modal .ma-timer-panel{display:flex;flex-direction:column;gap:5px;min-width:0;}
+.task-action-modal #ma-timer-state{font-size:12px;line-height:1.45;color:var(--muted);margin:0;overflow-wrap:anywhere;}
+.task-action-modal #ma-timer{flex:none;width:100%;min-height:48px;background:var(--primary);border-color:var(--primary);color:white;font-size:16px;font-weight:700;}
+.task-action-modal .modal-actions>[data-act="commit"]{flex:none;min-height:44px;background:var(--card);color:var(--primary);border:1px solid var(--primary);}
+.task-action-modal .ma-secondary{display:flex;flex:none;align-items:center;flex-wrap:wrap;gap:6px;}
+.task-action-modal .ma-secondary .btn{min-width:0;min-height:44px;height:44px;max-height:44px;padding:8px 5px;flex:1 1 70px;font-size:12px;white-space:normal;}
+.task-action-modal #memo-action-error{margin:0;font-size:12px;overflow-wrap:anywhere;}
+.task-action-modal #memo-action-error:empty{display:none;}
+.task-action-modal .ma-meter .float-meter-text{font-size:11px;line-height:1.3;}
+.task-action-modal .ma-meter .float-meter-track{height:4px;margin:3px 0;}
+.task-action-modal [data-status="paused"] .float-meter-fill{opacity:.4;}
+@media(max-height:500px){.task-action-modal .ma-meter .float-meter-text{display:none;}.task-action-modal .modal-actions{gap:5px!important;}.task-action-modal .ma-secondary .btn{min-height:36px;}}
+@media(max-height:450px){
+ .modal-mask .modal.task-action-modal{padding:8px;}
+ .task-action-modal .modal-heading{font-size:15px;margin-bottom:4px;}
+ .task-action-modal .modal-date-context{padding:4px 8px;font-size:12px;line-height:1.3;}
+ .task-action-modal .modal-date-context small{display:none;}
+ .modal.task-action-modal .modal-actions{padding-top:4px;padding-bottom:0;margin-top:4px;gap:4px!important;}
+ .task-action-modal #ma-timer-state{font-size:11px;}
+ .task-action-modal .ma-secondary .btn{height:36px;min-height:36px;max-height:36px;}
+}

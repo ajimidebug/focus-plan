@@ -270,9 +270,29 @@
     const ref={kind:spec.kind,id:spec.id,day:spec.day,list:spec.list};
     function saveEstimate(){const n=Number(m.querySelector('#ma-estimate').value)||0;if(n<0||n>1440)throw Error('预计用时应在0—1440分钟之间');const task=App.memoSchedule.find(ref);if(!task)throw Error('任务已移动或停用');if(['checkin','project','daily'].includes(spec.kind))(task.memoEstimatedDays||(task.memoEstimatedDays={}))[spec.day||M().userDay()]=n;else task.estimatedMinutes=n;}
     const timerButton=m.querySelector('#ma-timer');
-    function timerState(){const candidate=App.memoSchedule.timing(ref).session,active=candidate?.status!=='ended'?candidate:null;timerButton.textContent=active?.status==='running'?'暂停计时':active?'继续计时':'开始计时';const t=App.memoSchedule.timing(ref);m.querySelector('#ma-timer-state').textContent=(active?.status==='running'?'计时中':active?'已暂停':'尚未开始计时')+(t.session?' · '+App.memoSchedule.timingText(t).replace('\n',' · '):'');return active;}
+    function timerState(){const t=App.memoSchedule.timing(ref),candidate=t.session,active=candidate?.status!=='ended'?candidate:null;
+      timerButton.textContent=active?.status==='running'?'Ⅱ 暂停计时':active?'▶ 继续计时':'▶ 开始计时';
+      m.querySelector('#ma-timer-state').textContent=(active?.status==='running'?'计时中':active?'已暂停':candidate?'上次计时已结束':'尚未开始计时')+' · '+App.memoSchedule.timingText(t).replace('\n',' · ');
+      return active;
+    }
     timerButton.hidden=!!(spec.day&&spec.day!==M().userDay());timerState();
-    timerButton.onclick=async()=>{if(committing)return;timerButton.disabled=true;try{if(unsettled){if(await transaction(()=>{})){timerState();App.ui.toast('保存已完成');}return;}if(spec.day&&spec.day!==M().userDay())throw Error('日期已改变，请重新打开');const active=timerState();if(await transaction(()=>{saveEstimate();if(active?.status==='running')App.memoSchedule.pauseCore(active,Date.now());else App.memoSchedule.startRef(ref);})){if(textarea.value===initialText&&active?.status!=='running'){App.ui.closeModal();refresh();App.ui.toast('计时已开始；其他任务的运行计时会自动暂停');}else timerState();}}catch(e){m.querySelector('#memo-action-error').textContent=e.message;timerButton.textContent=unsettled?'重试保存':timerButton.textContent;}finally{timerButton.disabled=false;}};
+    timerButton.onclick=async()=>{
+      if(committing)return;timerButton.disabled=true;
+      try{
+        if(unsettled){
+          if(await transaction(()=>{})){m.querySelector('#memo-action-error').textContent='';timerState();App.ui.toast('保存已完成');}
+          return;
+        }
+        if(spec.day&&spec.day!==M().userDay())throw Error('日期已改变，请重新打开');
+        const active=timerState();timerButton.textContent='保存中…';
+        if(await transaction(()=>{saveEstimate();if(active?.status==='running')App.memoSchedule.pauseCore(active,Date.now());else App.memoSchedule.startRef(ref);})){
+          m.querySelector('#memo-action-error').textContent='';
+          if(textarea.value===initialText&&active?.status!=='running'){App.ui.closeModal();refresh();App.ui.toast('计时已开始；其他任务的运行计时会自动暂停');}
+          else timerState();
+        }else timerState();
+      }catch(e){m.querySelector('#memo-action-error').textContent=e.message;if(unsettled)timerButton.textContent='重试保存';else timerState();}
+      finally{timerButton.disabled=false;if(m.isConnected&&!unsettled)m._timerTick?.();}
+    };
     const habitPlan=spec.kind==='checkin'&&App.memoFinance?.plans(spec.day).find(x=>x.it.id===spec.id);let chosenList=habitPlan?.r?.list||spec.list||sourceTask?.assignment?.list||sourceTask?.memoCategoryDays?.[spec.day]||'extra';
     function applyCategory(){if(!App.memoOrganize)return;const latest=App.memoSchedule.resolve(ref);const current=(spec.kind==='checkin'&&App.memoFinance?.plans(spec.day).find(x=>x.it.id===spec.id)?.r.list)||latest?.ref.list||latest?.task.assignment?.list||latest?.task.memoCategoryDays?.[spec.day]||'extra';if(chosenList!==current){const updated=App.memoOrganize.change(ref,chosenList);Object.assign(ref,updated);Object.assign(spec,updated);if(spec.kind==='task')spec.list=chosenList;}}
     if(App.memoOrganize&&sourceTask&&!sourceTask.done&&!sourceTask.doneAt&&!sourceTask.days?.[spec.day]&&(spec.kind!=='checkin'||habitPlan)){
@@ -288,6 +308,32 @@
     m.querySelector('#memo-action-info').textContent = '本次积分 ' + (previewPoints > 0 ? '+' : '') + (previewPoints || 0) + '；写入 ' + day + ' 的笔记（04:00分日）。';
     if (spec.kind === 'checkin') m.querySelector('#memo-action-info').textContent += '（' + (App.memoCurrency?.ruleLabel?.() || '旧连续倍率') + '）';
     bindCommit(m, () => {saveEstimate();const submittedAt=new Date().toISOString();const currentDay=M().userDay(submittedAt);if(currentDay!==day)throw Error('已跨过用户日，请关闭后重新打开任务');const finalText=textarea.value===initialText?stamp(submittedAt,currentDay)+'【'+label+'】'+spec.title+suffix+'\n'+timingSnapshot(spec,Date.parse(submittedAt)).text:textarea.value;applyCategory();return completeCore(spec,finalText,submittedAt,[...m.querySelectorAll('[data-reward]:checked')].map(x=>({kind:x.dataset.reward,points:m.querySelector('[data-reward-points="'+x.dataset.reward+'"]').value})));}, spec.kind==='checkin'?()=>App.checkin?.focusItem?.(spec.id):null);
+    // Reuse the existing fixed footer and the original handlers. Only the body
+    // scrolls, so starting a task stays reachable beneath long completion notes.
+    m.classList.add('task-action-modal');
+    const doc=m.ownerDocument,footer=m.querySelector('.modal-actions'),secondary=doc.createElement('div');secondary.className='ma-secondary';
+    const finish=m.querySelector('[data-act="commit"]');
+    [...footer.children].filter(el=>el!==finish).forEach(el=>secondary.appendChild(el));
+    const panel=doc.createElement('div');panel.className='ma-timer-panel';
+    const meter=doc.createElement('div');meter.className='ma-meter';meter.innerHTML='<span class="float-meter-text"></span><div class="float-meter-track"><span class="float-meter-fill"></span></div>';
+    panel.append(m.querySelector('#ma-timer-state'),meter,timerButton);
+    footer.prepend(panel);footer.append(finish,secondary,m.querySelector('#memo-action-error'));
+    m._timerTick=()=>{
+      if(committing||unsettled||timerButton.disabled)return;
+      const active=timerState(),t=App.memoSchedule.timing(ref),expected=Number(m.querySelector('#ma-estimate').value),valid=Number.isFinite(expected)&&expected>0;
+      const daily=['checkin','daily','project'].includes(ref.kind),ms=valid?(daily?t.dayMs:t.allMs):t.currentMs,over=valid&&ms>expected*60000;
+      const seconds=Math.floor(Math.max(0,over?ms-expected*60000:ms)/1000),hours=Math.floor(seconds/3600),rest=seconds%3600;
+      const bounded=valid&&!over,fill=bounded?Math.min(100,ms/(expected*60000)*100):seconds>0&&rest===0?100:rest/36;
+      const detail=bounded?(daily?'今日预计 ':'预计总用时 ')+expected+'分钟 · 已用 '+Math.floor(ms/60000)+'分钟':(over?'超时刻度 · ':'本次用时刻度 · ')+(hours?hours+'小时＋':'')+Math.floor(rest/60)+'分'+String(rest%60).padStart(2,'0')+'秒';
+      panel.dataset.status=active?.status||'ended';panel.classList.toggle('float-overtime',over);
+      meter.querySelector('.float-meter-text').textContent=detail;
+      const track=meter.querySelector('.float-meter-track');track.setAttribute('role',bounded?'progressbar':'img');track.setAttribute('aria-label',detail);
+      ['aria-valuemin','aria-valuemax','aria-valuenow'].forEach(name=>track.removeAttribute(name));
+      if(bounded){track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax','100');track.setAttribute('aria-valuenow',String(Math.round(fill)));}
+      track.style.setProperty('--meter-tick',bounded?Math.min(100,15/expected*100)+'%':'25%');meter.querySelector('.float-meter-fill').style.width=fill+'%';
+      pre.textContent=timingSnapshot(spec,Date.now()).executionText;
+    };
+    m._timerTick();m.querySelector('#ma-estimate').addEventListener('input',m._timerTick);
   }
   function cancelEvent(event) {
     if (committing || unsettled) return;
@@ -553,5 +599,5 @@
     });
   }
 
-  App.memoActions = { deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, completeCore, timingSnapshot, undoCore, latest, passage, commit: transaction };
+  App.memoActions = { tick:()=>App.ui.query?.('.task-action-modal')?._timerTick?.(), deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, completeCore, timingSnapshot, undoCore, latest, passage, commit: transaction };
 })();
