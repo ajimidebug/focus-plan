@@ -193,10 +193,10 @@
     return '<article class="mw-history-row" '+refAttrs(x.ref)+'><strong>' + esc(t.text) + '</strong><p>' + esc(day + ' · ' + names[list] + ' · ' + status + (status === '未完成' ? (day < S().data().memoFlow?.startedDay ? ' · 旧任务，待安排' : list !== 'required' ? ' · 待重新安排' : '') : '')) + '</p>' + (!t.memoMovedTo && !t.memoDismissed ? (t.done || t.doneAt ? button('open-day', '查看当天', refAttrs(Object.assign({}, x.ref, {day}))) : button('assign', '重新安排', refAttrs(x.ref)) + '<details class="mw-row-more"><summary>更多</summary><div class="mw-secondary-actions">' + button('backfill','补记完成',refAttrs(x.ref))+button('edit','编辑',refAttrs(x.ref))+button('enqueue','暂不安排',refAttrs(x.ref))+button('dismiss','不再安排',refAttrs(x.ref))+'</div></details>') : t.memoDismissed ? button('restore-pending', '恢复待安排', refAttrs(x.ref)) : '') + '</article>';
   }
   function backlog() {
-    const rows = datedTasks().filter(x => (x.day || x.ref.day) < M().userDay() && !x.task.done && !x.task.doneAt && !x.task.memoMovedTo && !x.task.memoDismissed);
+    const rows = datedTasks().filter(x => (x.day || x.ref.day) < M().userDay() && !x.task.done && !x.task.doneAt && !x.task.memoMovedTo && !x.task.memoDismissed && !A.memoReview?.hidden(x.task,x.list||x.ref.list||x.task.assignment?.list));
     return '<details class="mw-backlog"><summary>往日未完成（' + rows.length + '）</summary>' + rows.sort((a,b) => (a.day || a.ref.day).localeCompare(b.day || b.ref.day)).map(historyRow).join('') + '</details>';
   }
-  function pendingRows(){return datedTasks().filter(x=>(x.day||x.ref.day)<M().userDay()&&!x.task.done&&!x.task.doneAt&&!x.task.memoMovedTo&&!x.task.memoDismissed);}
+  function pendingRows(){return datedTasks().filter(x=>(x.day||x.ref.day)<M().userDay()&&!x.task.done&&!x.task.doneAt&&!x.task.memoMovedTo&&!x.task.memoDismissed&&!A.memoReview?.hidden(x.task,x.list||x.ref.list||x.task.assignment?.list));}
   function pendingHTML(){
     const rows=pendingRows();
     if(!rows.length)return '<p class="hint">暂无需要重新安排的任务</p>';
@@ -263,7 +263,7 @@
         if (act === 'backfill') return A.memoFlow.backfill(ref);
         if (act === 'assign') return assignmentEditor(ref);
         if (act === 'restore-pending') return commit(() => { const t = ref.kind==='queue' ? A.memoFlow.queues().find(t=>t.id===ref.id) : S().data().days[ref.day]?.tasks[ref.list]?.find(t=>t.id===ref.id); if(t)delete t.memoDismissed; });
-        if (act === 'dismiss') return commit(() => { const t = A.memoSchedule.find(ref); if (t) { A.memoSchedule.stopRef(ref); t.memoDismissed = new Date().toISOString(); } });
+        if (act === 'dismiss') return commit(() => { const t = A.memoSchedule.find(ref); if(t?.memoReviewRoundId){A.memoReview.cancelCore(t.memoReviewRoundId);return;} if (t) { A.memoSchedule.stopRef(ref); t.memoDismissed = new Date().toISOString(); } });
         if (act === 'complete') return complete(ref);
         if (act === 'today' || act === 'tomorrow' || act === 'yesterday') { taskDay = act === 'today' ? M().userDay() : M().shiftDay(M().userDay(), act==='yesterday'?-1:1); return renderTasks(); }
         if (act === 'restore-daily') return commit(() => { S().data().daily.find(p => p.id === ref.id).archived = false; A.memoSchedule.state().items.filter(p => p.ref.kind === 'daily' && p.ref.id === ref.id).forEach(p => delete p.suspendedByArchive); });

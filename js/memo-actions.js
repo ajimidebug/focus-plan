@@ -29,7 +29,7 @@
   }
   function taskLists(day) {
     const key = Object.keys(S().data().days).find(k => S().data().days[k] === day);
-    return ['required', 'ideal', 'extra'].map(k => (day.tasks[k] || []).filter(t => !t.fromQueue && !t.fromDaily && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed && !App.memoReview?.hidden(t,k)).concat((App.memoFlow?.assigned(key, k) || []).map(t => Object.assign({}, t, { done: !!t.doneAt })),(App.memoFlow?.deferred?.(key,k)||[]).filter(x=>!x.closed).map(x=>Object.assign({},x.task,{done:false}))));
+    return ['required', 'ideal', 'extra'].map(k => (day.tasks[k] || []).filter(t => !t.fromQueue && !t.fromDaily && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed && !App.memoReview?.hidden(t,k)).concat((App.memoFlow?.assigned(key, k) || []).filter(t=>!App.memoReview?.hidden(t,k)).map(t => Object.assign({}, t, { done: !!t.doneAt })),(App.memoFlow?.deferred?.(key,k)||[]).filter(x=>!x.closed).map(x=>Object.assign({},x.task,{done:false}))));
   }
   function rewardSpec(spec) { const a = spec.kind === 'queue' && App.memoFlow?.assignment(spec.id); return a ? Object.assign({}, spec, { kind: 'task', day: a.day, list: a.list }) : spec; }
   function eligible(day, kind) {

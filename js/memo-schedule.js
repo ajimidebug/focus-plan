@@ -41,7 +41,7 @@
   function timerKey(ref) { const r = canonical(ref); return repeats(r) ? JSON.stringify([r.kind, r.id]) : key(r); }
   function sources(forDay) {
     const d = S().data(), out = [], dayKey = forDay || selectedDay || M().userDay();
-    (d.queue || []).filter(t=>!t.memoDismissed&&!t.archived&&(!t.assignment||t.assignment.day===dayKey)).forEach(t => out.push({ ref: { kind: 'queue', id: t.id }, title: t.text, label: '队列 · ' + t.text }));
+    (d.queue || []).filter(t=>!t.memoDismissed&&!t.archived&&!App.memoReview?.hidden(t,t.assignment?.list)&&(!t.assignment||t.assignment.day===dayKey)).forEach(t => out.push({ ref: { kind: 'queue', id: t.id }, title: t.text, label: '队列 · ' + t.text }));
     const day = S().getDay(dayKey);
     ['required', 'ideal', 'extra'].forEach(list => (day.tasks[list] || []).filter(t => !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed && !App.memoReview?.hidden(t,list)).forEach(t => { const found = resolve({ kind: 'task', id: t.id, day: dayKey, list }); if (found) out.push({ ref: found.ref, title: found.task.text, label: '当天 · ' + found.task.text }); }));
     (d.daily || []).filter(t=>!t.archived).forEach(t => out.push({ ref: { kind: 'daily', id: t.id, day: dayKey }, title: t.text, label: '基础 · ' + t.text }));
@@ -127,7 +127,7 @@
   }
   function columnItems(day,list) {
     const d=S().data(),items=(d.days[day]?.tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed&&!App.memoReview?.hidden(t,list)).map(task=>({task,ref:{kind:'task',id:task.id,day,list}}));
-    App.memoFlow?.assigned(day,list).filter(t=>!t.archived).forEach(task=>items.push({task,ref:{kind:'queue',id:task.id}}));
+    App.memoFlow?.assigned(day,list).filter(t=>!t.archived&&!App.memoReview?.hidden(t,list)).forEach(task=>items.push({task,ref:{kind:'queue',id:task.id}}));
     (d.memoProjects||[]).filter(t=>(!t.archived||t.days?.[day])&&(!t.createdDay||t.createdDay<=day)&&(t.memoCategoryDays?.[day]||'extra')===list).forEach(task=>items.push({task,ref:{kind:'project',id:task.id,day}}));
     (d.daily||[]).filter(t=>(!t.archived||t.days?.[day])&&t.memoCategoryDays?.[day]===list).forEach(task=>items.push({task,ref:{kind:'daily',id:task.id,day}}));
     const seen=new Set();return items.flatMap(x=>{const found=resolve(x.ref);if(!found||seen.has(key(found.ref)))return [];seen.add(key(found.ref));return [{task:found.task,ref:found.ref,done:isDone({ref:found.ref})}];});
