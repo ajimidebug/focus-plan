@@ -74,7 +74,7 @@
   function longOverdue(now = Date.now()) {
     const today=M().userDay(now),out=[];
     Object.entries(S().data().days).filter(([day])=>day<today).sort(([a],[b])=>a.localeCompare(b)).forEach(([day,d])=>{
-      (d.tasks.extra||[]).filter(t=>!t.done&&!t.doneAt&&!t.archived&&!t.fromDaily&&!t.fromQueue&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed).forEach(task=>out.push({task,ref:{kind:'task',id:task.id,day,list:'extra'},day}));
+      (d.tasks.extra||[]).filter(t=>!t.done&&!t.doneAt&&!t.archived&&!t.fromDaily&&!t.fromQueue&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed&&!t.memoReviewHidden).forEach(task=>out.push({task,ref:{kind:'task',id:task.id,day,list:'extra'},day}));
     });
     (S().data().queue||[]).filter(t=>!t.doneAt&&!t.done&&!t.archived&&!t.memoDismissed&&t.assignment?.list==='extra'&&t.assignment.day<today).forEach(task=>out.push({task,ref:{kind:'queue',id:task.id},day:task.assignment.day}));
     return out;

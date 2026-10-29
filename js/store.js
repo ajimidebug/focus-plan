@@ -224,6 +224,18 @@
       if (!Array.isArray(day.timeline) || !Array.isArray(day.sessions)) throw new Error('时间线结构异常');
       clean.days[key] = day;
     });
+    // Review metadata is optional in v1; unknown module versions are protected.
+    if (clean.memoReview !== undefined) {
+      const x=clean.memoReview, obj=v=>!!v&&typeof v==='object'&&!Array.isArray(v), ref=v=>obj(v)&&['task','queue'].includes(v.kind)&&typeof v.id==='string'&&(v.kind==='queue'||typeof v.day==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v.day)&&['required','ideal','extra'].includes(v.list));
+      if(!obj(x)||x.version!==1||!Array.isArray(x.series)||!Array.isArray(x.rounds))throw Error('复习数据版本或结构不兼容');
+      const ids=new Set(),numbers=new Set();
+      x.series.forEach(v=>{if(!obj(v)||typeof v.id!=='string'||!v.id||ids.has(v.id)||typeof v.text!=='string'||!v.text.trim()||!Number.isFinite(v.points)||v.points<0||!Number.isFinite(v.estimatedMinutes)||v.estimatedMinutes<0||v.estimatedMinutes>1440||!['required','ideal','extra'].includes(v.list)||typeof v.paused!=='boolean'||v.source!=null&&!ref(v.source))throw Error('复习系列结构异常');ids.add(v.id);});
+      const seen=new Set();
+      x.rounds.forEach(r=>{const key=r.seriesId+':'+r.n;if(!obj(r)||typeof r.id!=='string'||!r.id||seen.has(r.id)||!ids.has(r.seriesId)||!Number.isSafeInteger(r.n)||r.n<1||numbers.has(key)||!Number.isFinite(r.due)||r.due<=0||!Number.isFinite(r.originalDue)||r.originalDue<=0||!['pending','done','cancelled'].includes(r.status)||!['','no','partial','yes'].includes(r.result)||!Array.isArray(r.history)||r.taskRef!=null&&!ref(r.taskRef)||r.at!=null&&!Number.isFinite(Date.parse(r.at))||r.status==='pending'&&!ref(r.taskRef))throw Error('复习轮次结构异常');seen.add(r.id);numbers.add(key);});
+      const roundIds=new Set(x.rounds.map(r=>r.id));
+      const tasks=Object.values(clean.days).flatMap(day=>Object.values(day.tasks).flat()).concat(clean.queue||[],clean.queueDone||[]);
+      tasks.forEach(t=>{if(t.memoReviewRoundId!==undefined&&(!roundIds.has(t.memoReviewRoundId)||typeof t.memoReviewRoundId!=='string'))throw Error('复习任务关联异常');});
+    }
     // Reject malformed optional memo modules before a snapshot is accepted.
     if (clean.memoFlow !== undefined) {
       const f = clean.memoFlow;
