@@ -216,6 +216,9 @@
     el.style.left = x + 'px';
     el.style.top = y + 'px';
     document.body.appendChild(el);
+    // Clamp decorative feedback to the usable viewport, including wide point values.
+    const width=document.documentElement.clientWidth, box=el.getBoundingClientRect();
+    el.style.left=Math.max(12,Math.min(x,width-box.width-12))+'px';
     setTimeout(function () { el.remove(); }, 1050);
   }
   function floatAt(originEl, text, cls) {

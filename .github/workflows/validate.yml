@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, fix-173.1-float-memo-ledger-20261027, feat-review-1737-20261029, feat-1738-cycle-checkin]
+    branches: [main, fix-173.1-float-memo-ledger-20261027, feat-review-1737-20261029, feat-1738-cycle-checkin, fix-17381-root-width]
   workflow_dispatch:
 
 permissions:

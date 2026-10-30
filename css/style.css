@@ -2560,3 +2560,12 @@ body #mw-live,body[data-view="tasks"] #mw-live.mw-local-timer{top:var(--float-to
 .schedule-chart .schedule-block.completion-marker{font-size:10px;padding:1px;}
 .review-suggestion{font-size:12px;line-height:1.6;color:var(--ink);padding:7px;border-radius:6px;background:color-mix(in srgb,var(--primary) 8%,var(--card));}
 @media(max-width:400px){.task-action-modal .ma-secondary .btn{flex-basis:85px;}.schedule-chart .schedule-legend{font-size:11px;}}
+
+/* 173.8.1: the document never pans horizontally; local scrollers remain independent. */
+html{overflow-x:clip;overscroll-behavior-x:none;}
+body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:clip;}
+.memo-layout main,.memo-layout .view{min-width:0;}
+#toast-root{width:max-content;max-width:calc(100% - 24px);}
+#toast-root .toast{max-width:100%;overflow-wrap:anywhere;word-break:normal;}
+.float-points{max-width:calc(100% - 24px);overflow-wrap:anywhere;}
+@supports not (overflow:clip){html{overflow-x:hidden;}}
