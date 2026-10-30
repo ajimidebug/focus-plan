@@ -35,16 +35,18 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Run real-browser responsive and dialog checks
         run: |
-          node test/browser-smoke.mjs
-          node test/interaction-1739.browser.cjs
-          node test/interaction-1732.browser.cjs
-          node test/interaction-1733.browser.cjs
-          node test/interaction-1734.browser.cjs
-          node test/points-account.browser.cjs
-          node test/interaction-1735.browser.cjs
-          node test/interaction-1736.browser.cjs
-          node test/interaction-1737.browser.cjs
-          node test/interaction-1738.browser.cjs
+          status=0
+          node test/browser-smoke.mjs || status=1
+          node test/interaction-1739.browser.cjs || status=1
+          node test/interaction-1732.browser.cjs || status=1
+          node test/interaction-1733.browser.cjs || status=1
+          node test/interaction-1734.browser.cjs || status=1
+          node test/points-account.browser.cjs || status=1
+          node test/interaction-1735.browser.cjs || status=1
+          node test/interaction-1736.browser.cjs || status=1
+          node test/interaction-1737.browser.cjs || status=1
+          node test/interaction-1738.browser.cjs || status=1
+          exit "$status"
       - name: Ensure validation does not publish or mutate source branch
         run: |
           echo "Prepared artifacts are local to this runner."
