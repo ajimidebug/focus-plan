@@ -22,7 +22,8 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   }
   await page.locator('#mw-today [data-overview-ref]').filter({hasText:'ideal延期未完成'}).click();
   const geometry=()=>page.locator('.task-action-modal').evaluate(e=>{const primary=[...e.querySelector('.ma-primary').children].filter(x=>!x.hidden),secondary=[...e.querySelector('.ma-secondary').children];return {primary:primary.map(x=>({top:x.getBoundingClientRect().top,bottom:x.getBoundingClientRect().bottom,height:x.getBoundingClientRect().height,text:x.textContent})),secondary:secondary.map(x=>({top:x.getBoundingClientRect().top,height:x.getBoundingClientRect().height,text:x.textContent})),cancelColor:getComputedStyle(e.querySelector('[data-act="cancel"]')).borderTopColor,req:getComputedStyle(e).getPropertyValue('--req').trim(),bodyWidth:e.querySelector('.modal-body').scrollWidth,clientWidth:e.querySelector('.modal-body').clientWidth};});
-  await page.clock.runFor(1500);let g=await geometry();
+  // The fake timer advances date updates, while CSS animations use the browser timeline.
+  await page.clock.runFor(1500);await page.locator('.task-action-modal').evaluate(e=>Promise.all(e.getAnimations({subtree:true}).map(a=>a.finished)));let g=await geometry();
   check(g.primary.length===2&&Math.abs(g.primary[0].top-g.primary[1].top)<1&&g.primary.every(x=>x.height>=44),'primary controls share a row '+width+': '+JSON.stringify(g));
   check(g.primary[1].text==='确认完成','short confirmation label survives date tick '+width);
   check(g.secondary.map(x=>x.text).join('|')==='保存修改|编辑任务|调整安排|取消','secondary order '+width);
