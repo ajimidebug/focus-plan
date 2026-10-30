@@ -25,7 +25,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
    check(Math.abs(colors.p-100/3)<.01&&Math.abs(colors.c-100/12)<.01&&colors.left===colors.p,'two proportional nonoverlapping session colors '+width+' '+theme);
    check(colors.b.includes('linear-gradient')&&colors.a!=='rgba(0, 0, 0, 0)','both colors drawn '+width+' '+theme);
    check((await page.locator('#mw-live .float-current').innerText()).includes('0:25:00'),'collapsed headline is cumulative '+width);
-   const bar=page.locator('.mw-overview [data-overview-list="ideal"] .mw-column-meter');
+   const bar=page.locator('#mw-today .mw-overview [data-overview-list="ideal"] .mw-column-meter');
    check(await bar.getAttribute('aria-label')==='理想任务：1/3，未完成延期1项','deferred count excludes completed target '+width);
    check(await bar.locator('.mw-column-deferred').evaluate(e=>parseFloat(e.style.width)>33),'deferred segment drawn '+width);
    const bounds=await page.evaluate(()=>({root:document.documentElement.scrollWidth,width:document.documentElement.clientWidth,body:document.body.scrollWidth,bodyWidth:document.body.clientWidth}));
