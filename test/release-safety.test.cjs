@@ -942,11 +942,13 @@ test('173.5 automatic carry is idempotent and backfill closes the continuation w
  const ref={kind:'task',id:'carry-copy',day,list:'required'};F.moveCore(ref,old,'required');A.completeCore({kind:'task',id:ref.id,day:old,list:'required',title:'必做任务'},'',day+'T07:00:00+08:00');assert.equal(P.columnItems(day,'required').length,0);assert.equal(F.deferred(day,'required')[0].closed,true);assert.equal(b.ctx.App.memoFinance.column(day,'required').total,0);
  const raw=JSON.stringify(b.S.data().ledger);F.settleCore(Date.parse(day+'T08:00:00+08:00'));assert.equal(JSON.stringify(b.S.data().ledger),raw);assert(b.S.validate(b.S.data()));
 });
-test('173.5 shared meter switches after the exact threshold and preserves hourly overtime semantics',async()=>{
+test('173.9 cumulative ruler retains the expected landmark and extends without hourly reset',async()=>{
  const b=browser();await b.S.load();const {P}=flowHarness(b),meter=P.meterState;
  assert.equal(meter(59000,1).state,'expected');assert.equal(meter(60000,1).fill,100);assert.equal(meter(60000,1).over,false);
- const over=meter(61000,1);assert.equal(over.state,'overtime');assert.equal(over.bounded,false);assert.equal(over.fill,1/36);assert.match(over.detail,/超时 0分01秒/);
- assert.equal(meter(3660000,1).fill,100);assert.match(meter(3661000,1).detail,/1小时＋0分01秒/);assert.equal(meter(30000,0).state,'unbounded');
+ const over=meter(61000,1,false,30000);assert.equal(over.state,'overtime');assert.equal(over.bounded,false);
+ assert.equal(over.rangeMs,120000);assert.equal(over.fill,61000/120000*100);assert.equal(over.previous,25);assert.equal(over.current,over.fill-25);assert.equal(over.expectedPosition,50);assert.match(over.detail,/超时 0分01秒/);
+ const hour=meter(3661000,1);assert.match(hour.detail,/1小时＋0分01秒/);assert(hour.fill>40);assert.equal(hour.fill,3661000/hour.rangeMs*100);
+ const none=meter(83*60000,0,false,60*60000);assert.equal(none.state,'unbounded');assert.equal(none.rangeMs,120*60000);assert.equal(none.previous,50);assert.match(none.detail,/累计用时刻度/);
 });
 test('unified point detail nets canceled rewards without rewriting or hiding ledger events',async()=>{
  const b=browser();await b.S.load();memoHarness(b);const F=financeHarness(b),day=b.ctx.App.memoCore.userDay(),at=day+'T12:00:00+08:00';
@@ -1594,4 +1596,36 @@ test('173.8 changing a future rule back reuses retired occurrence identity witho
 });
 test('173.8 recurring deletion and unfinished recovery preserve one occurrence and no reward',async()=>{
  const b=browser();await b.S.load();const {Cycle:C,M,A}=recurrenceHarness(b),s=C.newSeriesCore({text:'删除恢复',list:'ideal',points:1,rule:{kind:'days',every:2,anchor:M.userDay()}}),o=C.state().occurrences.find(o=>o.seriesId===s.id&&o.day===M.userDay());const entry=A.deleteCore(o.taskRef,'隔离测试');assert.equal(o.status,'retired');A.restoreCore(entry.id,true);assert.equal(C.occurrence(o.id).status,'pending');assert(C.taskOf(C.occurrence(o.id)));assert.equal(b.S.pointsTotal(),0);
+});
+
+test('173.9 session colors use union totals across stop, restart, pause and persisted reload',async()=>{
+ const b=browser();await b.S.load();const {P}=scheduleHarness(b),ref={kind:'queue',id:'cumulative'},base=Date.parse(actionAt);
+ b.S.data().queue=[{id:ref.id,text:'累计测试'}];
+ const first=P.startRef(ref,base);P.stopRef(ref,base+20*60000);
+ const second=P.startRef(ref,base+30*60000);P.pauseCore(second,base+35*60000);
+ let q=P.meterTiming(ref,second,base+40*60000);assert.equal(q.totalMs,25*60000);assert.equal(q.previousMs,20*60000);assert.equal(q.currentMs,5*60000);
+ assert.equal(P.meterTiming(ref,second,base+50*60000).totalMs,q.totalMs);
+ await b.S.save();const c=browser({shared:b});await c.S.load();const H=scheduleHarness(c),saved=H.P.state().sessions.find(s=>s.id===second.id);
+ q=H.P.meterTiming(ref,saved,base+50*60000);assert.equal(q.previousMs,20*60000);assert.equal(q.currentMs,5*60000);
+ H.P.startRef(ref,base+50*60000);q=H.P.meterTiming(ref,saved,base+52*60000);assert.equal(q.totalMs,27*60000);assert.equal(q.currentMs,7*60000);
+ H.P.stopRef(ref,base+52*60000);q=H.P.meterTiming(ref,saved,base+60*60000);assert.equal(q.previousMs,q.totalMs);assert.equal(q.currentMs,0);assert.equal(first.id===second.id,false);
+});
+test('173.9 overlapping sessions never inflate either colored segment',async()=>{
+ const b=browser();await b.S.load();const {P}=scheduleHarness(b),ref={kind:'queue',id:'overlap'},base=Date.parse(actionAt);
+ b.S.data().queue=[{id:ref.id,text:'重叠'}];const first=P.startRef(ref,base);P.stopRef(ref,base+20*60000);const current=P.startRef(ref,base+10*60000);P.pauseCore(current,base+25*60000);
+ const q=P.meterTiming(ref,current,base+30*60000);assert.equal(q.totalMs,25*60000);assert.equal(q.previousMs,20*60000);assert.equal(q.currentMs,5*60000);
+});
+test('173.9 daily colors split at 04:00 while ordinary task totals survive the boundary',async()=>{
+ const b=browser();await b.S.load();const {P}=flowHarness(b,'2026-10-18'),day='2026-10-19',base=Date.parse(day+'T03:50:00+08:00'),now=base+20*60000;
+ b.S.data().checkins=[{id:'daily-colors',text:'每日',days:{}}];const ref={kind:'checkin',id:'daily-colors',day:'2026-10-18'},s=P.startRef(ref,base);
+ let q=P.meterTiming(ref,s,now);assert.equal(q.totalMs,10*60000);assert.equal(q.currentMs,10*60000);assert.equal(q.previousMs,0);
+ b.S.data().queue=[{id:'ordinary-colors',text:'普通'}];const ordinary={kind:'queue',id:'ordinary-colors'},t=P.startRef(ordinary,base);P.pauseCore(t,now);
+ q=P.meterTiming(ordinary,t,now);assert.equal(q.totalMs,20*60000);
+});
+test('173.9 deferred columns preserve historical obligations and completed priority without mutating records',async()=>{
+ const b=browser();await b.S.load();const {F,P,M,A}=flowHarness(b),C=financeHarness(b),day=M.userDay(),next=M.shiftDay(day,1);
+ b.S.getDay(day).tasks.ideal=[{id:'delayed-color',text:'延期',points:1},{id:'normal-color',text:'普通',points:1}];
+ F.moveCore({kind:'task',id:'delayed-color',day,list:'ideal'},next,'ideal');
+ const before=JSON.stringify(b.S.data());let old=C.column(day,'ideal'),current=C.column(next,'ideal');assert.equal(old.total,2);assert.equal(old.deferred,1);assert.equal(old.deferredPercent,50);assert.equal(current.deferred,1);assert.equal(JSON.stringify(b.S.data()),before);
+ A.completeCore({kind:'task',id:'delayed-color',day:next,list:'ideal',title:'延期'},'',next+'T12:00:00+08:00');current=C.column(next,'ideal');old=C.column(day,'ideal');assert.equal(current.done,1);assert.equal(current.deferred,0);assert.equal(old.done,0);assert.equal(old.deferred,1);assert.equal(old.total,2);
 });

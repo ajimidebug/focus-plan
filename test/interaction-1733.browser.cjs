@@ -59,7 +59,7 @@ async function run(){
    const meter=page.locator('#float-meter .float-meter-track');
    check(await meter.getAttribute('role')==='img','overtime is elapsed scale '+width);
    check(await meter.getAttribute('aria-valuenow')===null,'overtime has no completion percent '+width);
-   check(Math.abs(await page.locator('.float-meter-fill').evaluate(e=>parseFloat(e.style.width))-20)<1,'12 overtime minutes fill 20 percent hour scale '+width);
+   check(Math.abs(await page.locator('.float-meter-fill').evaluate(e=>parseFloat(e.style.width))-65)<1,'cumulative 52 minutes fills 65 percent of 80 minute axis '+width);
    check(await meter.evaluate(e=>getComputedStyle(e,'::after').backgroundImage!=='none'),'ticks overlay fill '+width);
    if(await page.locator('#mw-live').evaluate(e=>e.classList.contains('float-collapsed')))await page.locator('[data-float-toggle]').click();
    check(/40分钟 · 超时 12分/.test(await page.locator('.float-meter-text').innerText()),'overtime scope explicit '+width);
@@ -68,8 +68,8 @@ async function run(){
    check(await page.locator('.float-meter-fill').evaluate(e=>e.style.width)===paused,'paused scale frozen '+width);
    check(await page.locator('.float-meter-fill').evaluate(e=>Number(getComputedStyle(e).opacity))>=.65,'paused meter remains readable '+width);
    const setMinutes=async minutes=>page.evaluate(minutes=>{const P=App.memoSchedule,s=P.timing({kind:'queue',id:'meter'}).session;s.chunks[0].start=s.chunks[0].end-minutes*60000;P.tick();},minutes);
-   await setMinutes(100);check(Number(await page.locator('.float-meter-fill').evaluate(e=>parseFloat(e.style.width)))===100,'exact overtime hour keeps full segment '+width);
-   await setMinutes(100+1/60);check(Number(await page.locator('.float-meter-fill').evaluate(e=>parseFloat(e.style.width)))<1,'overtime hour rollover retains hour text '+width);
+   await setMinutes(100);check(Number(await page.locator('.float-meter-fill').evaluate(e=>parseFloat(e.style.width)))===62.5,'100 cumulative minutes uses 160 minute axis '+width);
+   await setMinutes(100+1/60);check(Number(await page.locator('.float-meter-fill').evaluate(e=>parseFloat(e.style.width)))>60,'cumulative fill does not reset at the overtime hour '+width);
    check(/1小时＋0分01秒/.test(await page.locator('.float-meter-text').innerText()),'overtime hour count retained '+width);
    await setMinutes(20);check(await meter.getAttribute('role')==='progressbar'&&Number(await meter.getAttribute('aria-valuenow'))===50,'before estimate uses bounded time progress '+width);await setMinutes(52);
    // Commit with an edited note; snapshot must reflect submit-time effective chunks independently.

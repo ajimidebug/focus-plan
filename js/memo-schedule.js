@@ -151,14 +151,36 @@
   }
   function timingText(t) { return (t.day === M().userDay() ? '今日 ' : t.day + ' ') + duration(t.dayMs) + ' · 累计 ' + duration(t.allMs) + '\n' + (t.session?.status === 'ended' ? '上次 ' : '本次 ') + duration(t.currentMs); }
   function duration(ms) { const sec = Math.floor(Math.max(0, ms) / 1000); return Math.floor(sec / 3600) + ':' + String(Math.floor(sec / 60) % 60).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0'); }
-  function meterState(ms,expected,daily=false){
-    ms=Math.max(0,Number(ms)||0);expected=Number(expected);
-    const valid=Number.isFinite(expected)&&expected>0,over=valid&&ms>expected*60000,bounded=valid&&!over;
-    const seconds=Math.floor(Math.max(0,over?ms-expected*60000:ms)/1000),hours=Math.floor(seconds/3600),rest=seconds%3600;
-    const fill=bounded?Math.min(100,ms/(expected*60000)*100):seconds>0&&rest===0?100:rest/36;
-    const prefix=(daily?'今日预计 ':'预计总用时 ')+expected+'分钟 · ';
-    const detail=bounded?prefix+(ms===expected*60000?'达到预计时长':'剩余 '+duration(expected*60000-ms)):(over?prefix+'超时 ':'用时刻度 · ')+(hours?hours+'小时＋':'')+Math.floor(rest/60)+'分'+String(rest%60).padStart(2,'0')+'秒';
-    return {valid,over,bounded,fill,detail,tick:bounded?Math.min(100,15/expected*100)+'%':'25%',state:over?'overtime':bounded?'expected':'unbounded'};
+  // Read-only display projection. Attribute overlaps to prior sessions first so
+  // the two colors always add up to the existing union-of-intervals total.
+  function meterTiming(ref, session = null, now = Date.now()) {
+    const t = timing(ref, now), r = canonical(ref), daily = repeats(r);
+    const sessions = summaryCache?.timerIndex?.get(timerKey(r)) || [];
+    const day = M().userDay(now), from = daily ? dayStart(day) : -Infinity;
+    const to = daily ? dayStart(M().shiftDay(day, 1)) : now;
+    const current = session && session.status !== 'ended' ? session : null;
+    const totalMs = daily ? t.todayMs : t.allMs;
+    const previousMs = Math.min(totalMs, unionMs(chunks(sessions.filter(s => s !== current && (!current || s.id !== current.id)), now, from, to)));
+    return { totalMs, previousMs, currentMs: Math.max(0, totalMs - previousMs), daily };
+  }
+  function meterState(ms, expected, daily = false, previousMs = 0) {
+    ms = Math.max(0, Number(ms) || 0); expected = Number(expected);
+    previousMs = Math.min(ms, Math.max(0, Number(previousMs) || 0));
+    const valid = Number.isFinite(expected) && expected > 0, limit = valid ? expected * 60000 : 0;
+    const over = valid && ms > limit, bounded = valid && !over;
+    // Expected time is a fixed landmark. Extend the SAME cumulative axis in
+    // doubling steps; never reset elapsed time to an hourly remainder.
+    let rangeMs = valid ? limit : 3600000;
+    while (rangeMs < ms) rangeMs *= 2;
+    const fill = Math.min(100, ms / rangeMs * 100), previous = previousMs / rangeMs * 100;
+    const stepMinutes = rangeMs / 60000 / 4;
+    const seconds = Math.floor(Math.max(0, over ? ms - limit : ms) / 1000), hours = Math.floor(seconds / 3600), rest = seconds % 3600;
+    const elapsedLabel = (hours ? hours + '小时＋' : '') + Math.floor(rest / 60) + '分' + String(rest % 60).padStart(2, '0') + '秒';
+    const prefix = (daily ? '今日预计 ' : '预计总用时 ') + expected + '分钟 · ';
+    const detail = bounded ? prefix + (ms === limit ? '达到预计时长' : '剩余 ' + duration(limit - ms)) : over ? prefix + '超时 ' + elapsedLabel : (daily ? '今日累计刻度 · ' : '累计用时刻度 · ') + elapsedLabel;
+    return { valid, over, bounded, fill, previous, current: fill - previous, rangeMs, stepMinutes,
+      expectedPosition: valid ? limit / rangeMs * 100 : null, detail, tick: '25%',
+      state: over ? 'overtime' : bounded ? 'expected' : 'unbounded' };
   }
   function active() { return state().sessions.find(s => s.status === 'running'); }
   function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
@@ -495,5 +517,5 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } }); window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();
   }
-  App.memoSchedule = { invalidate:()=>{summaryCache=null;},meterState,setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
+  App.memoSchedule = { invalidate:()=>{summaryCache=null;},meterTiming,meterState,setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
 })();

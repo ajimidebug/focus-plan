@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, fix-173.1-float-memo-ledger-20261027, feat-review-1737-20261029, feat-1738-cycle-checkin, fix-17381-root-width]
+    branches: [main, fix-173.1-float-memo-ledger-20261027, feat-review-1737-20261029, feat-1738-cycle-checkin, fix-17381-root-width, fix-1739-layout-cumulative-20261030]
   workflow_dispatch:
 
 permissions:
@@ -44,6 +44,7 @@ jobs:
           node test/interaction-1736.browser.cjs
           node test/interaction-1737.browser.cjs
           node test/interaction-1738.browser.cjs
+          node test/interaction-1739.browser.cjs
       - name: Ensure validation does not publish or mutate source branch
         run: |
           echo "Prepared artifacts are local to this runner."

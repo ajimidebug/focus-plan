@@ -263,7 +263,7 @@
     const sourceTask=spec.kind==='checkin'?(S().data().checkins||[]).find(t=>t.id===spec.id):App.memoSchedule.find(spec);
     const initialEstimate=sourceTask?.memoEstimatedDays?.[spec.day]??sourceTask?.estimatedMinutes??'';
     const m = App.ui.openModal('确认' + (spec.kind === 'checkin' ? '打卡' : '完成'),
-      '<p class="action-task-title">'+E(spec.title)+'</p><label for="ma-remark">本次备注（选填）</label><textarea id="ma-remark" rows="2" placeholder="记录这次完成的情况，可留空"></textarea><label>预计用时（分钟，选填）<input id="ma-estimate" type="number" min="0" max="1440" value="'+E(initialEstimate)+'"></label><p id="ma-timer-state"></p><button class="btn" id="ma-timer" type="button">开始计时</button><details class="action-passage" open><summary>完成说明（可编辑）</summary><p class="hint">时间只表示本次勾选时刻。可补充、改写或清空；清空后仍完成并记积分。</p>' +
+      '<p class="action-task-title">'+E(spec.title)+'</p><label for="ma-remark">本次备注（选填）</label><textarea id="ma-remark" rows="2" placeholder="记录这次完成的情况，可留空"></textarea><label>预计用时（分钟，选填）<input id="ma-estimate" type="number" min="0" max="1440" value="'+E(initialEstimate)+'"></label><button class="btn" id="ma-timer" type="button">开始计时</button><details class="action-passage" open><summary>完成说明（可编辑）</summary><p class="hint">时间只表示本次勾选时刻。可补充、改写或清空；清空后仍完成并记积分。</p>' +
       '<label for="memo-action-text">写入笔记的文段</label><textarea id="memo-action-text" class="memo-action-text"></textarea>' +
       options.map(kind => '<div class="field"><label><input type="checkbox" data-reward="' + kind + '" checked> 同时领取' + (kind === 'base' ? '保底' : '额外全部完成（含选做，非全勤）') + '奖励</label><input type="number" min="0" data-reward-points="' + kind + '" value="' + Number(kind === 'base' ? settings.baseRewardPoints : settings.perfectRewardPoints) + '"></div>').join('') +
       '</details><p class="hint" id="memo-action-info"></p><p id="memo-action-error" role="alert"></p>',
@@ -281,14 +281,13 @@
     const remember=()=>completionDrafts.set(draftId,{remark:remark.value,text:textarea.value,custom:textarea.value!==initialText,estimate:m.querySelector('#ma-estimate').value});
     remark.addEventListener('input',()=>{if(textarea.value===initialText){textarea.value=stamp(at,day)+'【'+label+'】'+spec.title+suffix+'\n'+(remark.value.trim()?'本次备注：'+remark.value.trim()+'\n':'')+timingSnapshot(spec,Date.parse(at)).text;initialText=textarea.value;}remember();});textarea.addEventListener('input',remember);m.querySelector('#ma-estimate').addEventListener('input',remember);
     if(['task','queue'].includes(spec.kind)){const assign=document.createElement('button');assign.type='button';assign.className='btn';assign.textContent='调整安排';assign.onclick=()=>{if(!App.memoActions.busy()){remember();App.memoWorkspace.assignmentEditor(ref,()=>{const next=Object.assign({},spec,App.memoSchedule.canonical(ref));completionDrafts.set(draftKey(next),completionDrafts.get(draftId));complete(next);});}};m.querySelector('.modal-actions').prepend(assign);}
-    const detail=document.createElement('details');detail.className='execution-detail';const title=document.createElement('summary');title.textContent='查看执行时段（确认时更新）';const pre=document.createElement('pre');pre.textContent=timingSnapshot(spec,Date.parse(at)).executionText;detail.append(title,pre);m.querySelector('#ma-timer-state').after(detail);
+    const detail=document.createElement('details');detail.className='execution-detail';const title=document.createElement('summary');title.textContent='查看执行时段（确认时更新）';const pre=document.createElement('pre');pre.textContent=timingSnapshot(spec,Date.parse(at)).executionText;detail.append(title,pre);m.querySelector('.action-passage').after(detail);
     const editButton=document.createElement('button');editButton.type='button';editButton.className='btn';editButton.textContent='编辑任务';editButton.onclick=()=>{if(textarea.value!==initialText||remark.value.trim())return App.ui.toast('请先完成本次记录，再编辑任务');App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list});};if(spec.kind!=='checkin')m.querySelector('.modal-actions').prepend(editButton);
     const ref={kind:spec.kind,id:spec.id,day:spec.day,list:spec.list};
     function saveEstimate(){const n=Number(m.querySelector('#ma-estimate').value)||0;if(n<0||n>1440)throw Error('预计用时应在0—1440分钟之间');const task=App.memoSchedule.find(ref);if(!task)throw Error('任务已移动或停用');if(['checkin','project','daily'].includes(spec.kind))(task.memoEstimatedDays||(task.memoEstimatedDays={}))[spec.day||M().userDay()]=n;else task.estimatedMinutes=n;}
     const timerButton=m.querySelector('#ma-timer');
     function timerState(){const t=App.memoSchedule.timing(ref),candidate=t.session,active=candidate?.status!=='ended'?candidate:null;
       timerButton.textContent=active?.status==='running'?'Ⅱ 暂停计时':active?'▶ 继续计时':'▶ 开始计时';
-      m.querySelector('#ma-timer-state').textContent=(active?.status==='running'?'计时中':active?'已暂停':candidate?'上次计时已结束':'尚未开始计时')+' · '+App.memoSchedule.timingText(t).replace('\n',' · ');
       return active;
     }
     timerButton.hidden=!!(spec.day&&spec.day!==M().userDay());timerState();
@@ -331,24 +330,15 @@
     const finish=m.querySelector('[data-act="commit"]');
     [...footer.children].filter(el=>el!==finish).forEach(el=>secondary.appendChild(el));
     const panel=doc.createElement('div');panel.className='ma-timer-panel';
-    const meter=doc.createElement('div');meter.className='ma-meter';meter.innerHTML='<span class="float-meter-text"></span><div class="float-meter-track"><span class="float-meter-fill"></span></div>';
-    panel.append(m.querySelector('#ma-timer-state'),meter,timerButton);
+    panel.append(timerButton);
     footer.prepend(panel);footer.append(finish,secondary,m.querySelector('#memo-action-error'));
     m._timerTick=()=>{
       if(committing||unsettled||timerButton.disabled)return;
-      const active=timerState(),t=App.memoSchedule.timing(ref),expected=Number(m.querySelector('#ma-estimate').value),valid=Number.isFinite(expected)&&expected>0;
-      const daily=['checkin','daily','project'].includes(ref.kind),ms=valid?(daily?t.dayMs:t.allMs):t.currentMs,over=valid&&ms>expected*60000;
-      const {bounded,fill,detail,tick,state}=App.memoSchedule.meterState(ms,expected,daily);
-      panel.dataset.status=active?.status||'ended';panel.classList.toggle('float-overtime',over);
-      panel.dataset.meterState=state;
-      meter.querySelector('.float-meter-text').textContent=detail;
-      const track=meter.querySelector('.float-meter-track');track.setAttribute('role',bounded?'progressbar':'img');track.setAttribute('aria-label',detail);
-      ['aria-valuemin','aria-valuemax','aria-valuenow'].forEach(name=>track.removeAttribute(name));
-      if(bounded){track.setAttribute('aria-valuemin','0');track.setAttribute('aria-valuemax','100');track.setAttribute('aria-valuenow',String(Math.round(fill)));}
-      track.style.setProperty('--meter-tick',tick);track.setAttribute('aria-valuetext',detail);meter.querySelector('.float-meter-fill').style.width=fill+'%';
-      pre.textContent=timingSnapshot(spec,Date.now()).executionText;
+      timerState();
+      if(detail.open)pre.textContent=timingSnapshot(spec,Date.now()).executionText;
     };
-    m._timerTick();m.querySelector('#ma-estimate').addEventListener('input',m._timerTick);
+    detail.addEventListener('toggle',()=>{if(detail.open)pre.textContent=timingSnapshot(spec,Date.now()).executionText;});
+    m._timerTick();
     remark.focus({preventScroll:true});
   }
   function cancelEvent(event) {

@@ -47,19 +47,18 @@ async function run(){
    const session=await page.evaluate(async()=>{const s=App.memoSchedule.startRef({kind:'queue',id:'meter'},Date.now()-59000);await App.store.save();App.memoSchedule.tick();return s.id;});
    check(await page.locator('#mw-live .float-meter-track').evaluate(e=>e.getBoundingClientRect().height)>=6,'visible collapsed meter stays at least six px '+width);
    await page.evaluate(()=>App.memoActions.queue('meter'));
-   const footer=page.locator('.task-action-modal .float-meter-track'),footerFill=page.locator('.task-action-modal .float-meter-fill'),floatTrack=page.locator('#mw-live .float-meter-track');
-   check(await footer.getAttribute('role')==='progressbar','footer starts in expected mode '+width);
-   const drawing=await footerFill.evaluate(e=>({display:getComputedStyle(e).display,width:e.getBoundingClientRect().width,height:parseFloat(getComputedStyle(e).height),image:getComputedStyle(e).backgroundImage}));
-   check(drawing.display==='block'&&drawing.width>5&&drawing.height>=8&&drawing.image.includes('linear-gradient'),'footer fill actually renders '+width+': '+JSON.stringify(drawing));
+   const footerFill=page.locator('#mw-live .float-meter-fill'),floatTrack=page.locator('#mw-live .float-meter-track');
+   check(await page.locator('.task-action-modal .float-meter-track,#ma-timer-state').count()===0,'dialog has no timer meter or summary '+width);
+   check(await floatTrack.getAttribute('role')==='progressbar','floating ruler starts in expected mode '+width);
    await page.locator('#memo-action-text').fill('计时期间保留草稿');
    await page.clock.runFor(2100);await page.evaluate(()=>App.memoSchedule.tick());
    check(await page.locator('#mw-live').getAttribute('data-meter-state')==='overtime','float automatically crosses threshold '+width);
-   check(await page.locator('.ma-timer-panel').getAttribute('data-meter-state')==='overtime','open dialog automatically crosses threshold '+width);
-   check(await footer.getAttribute('role')==='img'&&await floatTrack.getAttribute('role')==='img','both switch to time scale '+width);
+   check(/暂停计时/.test(await page.locator('#ma-timer').innerText()),'dialog timer button remains current '+width);
+   check(await floatTrack.getAttribute('role')==='img','floating ruler switches to cumulative time scale '+width);
    check(await page.evaluate(id=>App.memoSchedule.state().sessions.length===1&&App.memoSchedule.state().sessions[0].id===id,session),'threshold never creates a session '+width);
    check(await floatTrack.evaluate(e=>parseFloat(getComputedStyle(e,'::before').width)>=3),'visible state marker at first overtime second '+width);
    check((await page.locator('#mw-live .float-clock').innerText()).includes('超时'),'collapsed overtime text visible '+width);
-   check(await footerFill.evaluate(e=>getComputedStyle(e).backgroundImage.includes('244, 180, 74')),'footer changes to warm gradient '+width);
+   check(await floatTrack.evaluate(e=>getComputedStyle(e).backgroundImage.includes('linear-gradient')),'overtime has highlighted background region '+width);
    if(width===390){
     await page.evaluate(()=>{window.__save=App.store.save;App.store.save=async()=>false;});await page.locator('#ma-timer').click();
     await page.waitForFunction(()=>App.memoActions.busy()&&document.querySelector('#ma-timer').textContent==='重试保存');

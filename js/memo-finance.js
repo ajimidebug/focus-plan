@@ -120,11 +120,12 @@ function accountHTML(scope='today'){
  (f.unknown?'<p class="hint">'+f.unknown+'条旧流水缺少可靠入账时间，仍保留在总积分及完整账本中，可在全部历史流水查看。</p>':'');
 }
 function column(day,list){
- const tasks=A.memoSchedule.columnItems(day,list).map(x=>({id:A.memoSchedule.key(x.ref),title:x.task.text,done:x.done,target:true,kind:x.ref.kind,backfillDay:x.task.backfillDay||'',originalDay:x.task.originalDay||''}));
- (A.memoFlow?.deferred?.(day,list)||[]).forEach(x=>tasks.push({id:'deferred:'+x.ref.kind+':'+day+':'+x.ref.id,title:x.task.text,done:false,target:!x.closed,kind:x.ref.kind,deferredTo:x.toDay,deferredClosed:x.closed,backfillDay:'',originalDay:x.task.originalDay||''}));
+ const tasks=A.memoSchedule.columnItems(day,list).map(x=>({id:A.memoSchedule.key(x.ref),title:x.task.text,done:x.done,target:true,kind:x.ref.kind,deferred:!!A.memoFlow?.isCarried(x.task)||!!(x.task.originalDay&&x.task.originalDay<day),backfillDay:x.task.backfillDay||'',originalDay:x.task.originalDay||''}));
+ (A.memoFlow?.deferred?.(day,list)||[]).forEach(x=>tasks.push({id:'deferred:'+x.ref.kind+':'+day+':'+x.ref.id,title:x.task.text,done:false,target:!x.closed,kind:x.ref.kind,deferredTo:x.toDay,deferredClosed:x.closed,deferred:true,backfillDay:'',originalDay:x.task.originalDay||''}));
  const habits=plans(day).filter(x=>!x.r.hidden&&x.r.list===list).map(x=>{const mode=A.memoPenalty?.policy(x.it,day).mode||'reward';return {id:'habit:'+x.it.id,title:x.it.text,kind:'checkin',mode,count:x.n,goal:x.r.target,target:mode!=='punch'&&x.r.target>0,done:mode!=='punch'&&x.r.target>0&&x.n>=x.r.target};});
  const items=tasks.concat(habits),targets=items.filter(x=>x.target),done=targets.filter(x=>x.done).length,total=targets.length,supervision=habits.filter(x=>x.mode==='punch').length;
- return {items,done,total,supervision,percent:total?Math.min(100,done/total*100):0,label:total?done+'/'+total:items.length?'无完成目标':'暂无任务'};
+ const deferred=targets.filter(x=>!x.done&&x.deferred).length;
+ return {items,done,total,supervision,deferred,deferredPercent:total?deferred/total*100:0,percent:total?Math.min(100,done/total*100):0,label:total?done+'/'+total:items.length?'无完成目标':'暂无任务'};
 }
 function note(entry){if(entry.memoPassage)return;const day=M().userDay(),at=entry.at||new Date().toISOString(),q=entry.itemSnapshot||{},text=M().clock(at)+'【积分'+(entry.type==='redeem'?'支出':'退回')+'】'+entry.note+'\n积分变动：'+entry.points+'分'+(q.amountCents!=null?'；金额：'+(q.amountCents/100).toFixed(2)+'元；比例：'+q.rate+'分/元':'')+'\n操作后余额：'+S().pointsTotal()+'分'+(q.note?'\n备注：'+q.note:'')+'\n',blocks=M().segments(M().read(day));blocks.push({id:S().uid(),text:(blocks.length?'\n':'')+text,financeId:entry.id});M().write(day,blocks.map(b=>b.text).join(''),at,blocks);entry.memoPassage=true;}
 function rules(){return S().data().memoHabitPlans||[];}

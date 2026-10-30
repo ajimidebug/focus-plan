@@ -2569,3 +2569,49 @@ body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:clip;}
 #toast-root .toast{max-width:100%;overflow-wrap:anywhere;word-break:normal;}
 .float-points{max-width:calc(100% - 24px);overflow-wrap:anywhere;}
 @supports not (overflow:clip){html{overflow-x:hidden;}}
+
+/* 173.9: bound the root document, not only the task board. Use hidden on
+ * both roots for Android viewport compatibility; component scrollers remain. */
+html{width:100%;max-width:100%;min-width:0;overflow-x:hidden;overscroll-behavior-x:none;}
+body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:hidden;overscroll-behavior-x:none;}
+.memo-layout :is(main,#app-header,footer,.release-panel,.view){min-width:0;max-width:100%;}
+.memo-layout main{width:100%;overflow-wrap:anywhere;}
+.memo-layout :is(.header-top,#stat-bar,.mw-toolbar,.cal-cols,.cal-col,.mw-overview,.schedule-card){min-width:0;max-width:100%;}
+.memo-layout main :is(input,textarea,select){min-width:0;max-width:100%;box-sizing:border-box;}
+.memo-layout .mw-overview .cal-cols{width:100%;overflow:visible;}
+.mw-overview .cal-col-head{overflow-wrap:anywhere;}
+.mw-column-meter{display:flex;}
+.mw-column-meter>span{flex:none;height:100%;}
+.mw-column-meter>.mw-column-deferred{background:#d9bd8b;opacity:.65;box-shadow:inset 0 0 0 1px #a8804033;}
+.mw-column-deferred-label{display:block;font-size:10px;color:var(--muted);margin:-4px 0 6px;overflow-wrap:anywhere;}
+
+/* Settings meet the timer button directly; no timer summary or meter footer. */
+.modal-mask .modal.task-action-modal{width:100%;max-width:400px;padding:14px;}
+.task-action-modal .modal-body{padding-bottom:0;}
+.modal.task-action-modal .modal-actions{gap:6px;margin-top:6px;padding-top:6px;}
+.task-action-modal .ma-timer-panel{gap:0;}
+.task-action-modal #ma-timer{min-height:44px;}
+.task-action-modal .execution-detail{margin:6px 0;}
+.task-action-modal .execution-detail>summary{min-height:36px;display:flex;align-items:center;}
+
+/* One cumulative ruler: muted previous sessions + bright current session.
+ * Overtime is a background region and landmark, preserving session colors. */
+#mw-live #float-meter{gap:2px;}
+#mw-live .float-meter-scale{display:flex;justify-content:space-between;padding:0 10px;font-size:10px;line-height:1.3;color:var(--muted);font-variant-numeric:tabular-nums;}
+#mw-live .float-meter-track{border-radius:0;}
+#mw-live .float-meter-previous,#mw-live .float-meter-fill{position:absolute;top:0;height:100%;min-height:inherit;transition:none;border-radius:0;}
+#mw-live .float-meter-previous{left:0;background:#9ecbcf;box-shadow:inset 0 0 0 1px #5a9da540;}
+#mw-live .float-meter-fill{display:block;background:linear-gradient(90deg,#31d6ac,#16b7cf 60%,#448df4);box-shadow:0 0 7px #20c9c755;opacity:1;}
+#mw-live.float-overtime .float-meter-track{background:linear-gradient(to right,color-mix(in srgb,#148fad 15%,var(--card)) 0 var(--expected-position),color-mix(in srgb,#ef704f 27%,var(--card)) var(--expected-position) 100%);}
+#mw-live .float-expected-mark{position:absolute;top:0;bottom:0;width:2px;transform:translateX(-2px);background:var(--ink);z-index:2;}
+#mw-live.float-overtime .float-expected-mark{background:#c15136;}
+#mw-live .float-meter-track::after{z-index:3;}
+#mw-live[data-status="paused"] :is(.float-meter-fill,.float-meter-previous){opacity:.75;box-shadow:none;}
+#mw-live .float-current{font-size:13px;}
+
+@media(max-width:700px),(max-height:500px) and (max-width:1000px){
+  body.memo-layout{padding-bottom:var(--app-nav-room,calc(80px + env(safe-area-inset-bottom)));}
+  .memo-layout #mobile-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));position:fixed;left:0;right:0;bottom:var(--nav-inset,0px);width:100%;max-width:100%;min-width:0;transform:none;opacity:1;visibility:visible;transition:none;}
+  .memo-layout #mobile-nav .mn-btn{width:100%;min-width:0;overflow-wrap:anywhere;}
+}
+@media(max-height:450px){.modal-mask .modal.task-action-modal{padding:8px;}}

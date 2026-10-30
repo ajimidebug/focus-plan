@@ -70,7 +70,7 @@ async function run(){
    check(/暂停计时/.test(await page.locator('#ma-timer').innerText()),'running timer changes action '+width);
    check(await page.evaluate(()=>App.store.data().ledger.length)===0,'starting never grants points '+width);
    await page.clock.runFor(2100);await page.evaluate(()=>App.memoSchedule.tick());
-   check((await page.locator('#ma-timer-state').innerText()).includes('0:00:02'),'footer clock updates '+width);
+   check(await page.locator('#ma-timer-state,.ma-meter').count()===0,'dialog omits timer summary and meter '+width);
    check((await page.locator('#memo-action-text').inputValue()).includes('保留用户修改'),'clock does not replace draft '+width);
    await page.locator('#ma-timer').click();await page.waitForFunction(()=>document.querySelector('#ma-timer')?.textContent.includes('继续计时')&&!document.querySelector('#ma-timer').disabled);check(/继续计时/.test(await page.locator('#ma-timer').innerText()),'pause becomes continue '+width);
    if(width===390){
