@@ -6,7 +6,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});try{
  for(const width of [320,360,390,430,1280]){
   const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',timezoneId:'Asia/Shanghai'}),page=await context.newPage(),errors=[];
-  page.on('pageerror',e=>errors.push(e.message));await page.clock.install({time:new Date('2026-10-30T12:00:00+08:00')});
+  page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-10-30T12:00:00+08:00'));
   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>App?.app?.ready);
   await page.evaluate(async()=>{const S=App.store,M=App.memoCore,day=M.userDay(),old=M.shiftDay(day,-1);for(const list of ['required','ideal','extra'])S.getDay(day).tasks[list]=[{id:list+'-late-done',text:list+'延期完成',done:true,originalDay:old,points:1},{id:list+'-done',text:list+'当日完成',done:true,points:1},{id:list+'-pending',text:list+'普通未完成',points:1},{id:list+'-late',text:list+'延期未完成',originalDay:old,points:1}];await S.save();App.app.switchView('tasks');App.memoWorkspace.enter('today',day);});
   for(const theme of ['default','dark']){
@@ -22,8 +22,8 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   }
   await page.locator('#mw-today [data-overview-ref]').filter({hasText:'ideal延期未完成'}).click();
   const geometry=()=>page.locator('.task-action-modal').evaluate(e=>{const primary=[...e.querySelector('.ma-primary').children].filter(x=>!x.hidden),secondary=[...e.querySelector('.ma-secondary').children];return {primary:primary.map(x=>({top:x.getBoundingClientRect().top,bottom:x.getBoundingClientRect().bottom,height:x.getBoundingClientRect().height,text:x.textContent})),secondary:secondary.map(x=>({top:x.getBoundingClientRect().top,height:x.getBoundingClientRect().height,text:x.textContent})),cancelColor:getComputedStyle(e.querySelector('[data-act="cancel"]')).borderTopColor,req:getComputedStyle(e).getPropertyValue('--req').trim(),bodyWidth:e.querySelector('.modal-body').scrollWidth,clientWidth:e.querySelector('.modal-body').clientWidth};});
-  // The fake timer advances date updates, while CSS animations use the browser timeline.
-  await page.clock.runFor(1500);await page.locator('.task-action-modal').evaluate(e=>Promise.all(e.getAnimations({subtree:true}).map(a=>a.finished)));let g=await geometry();
+  // Keep Date deterministic while real timers, animations and viewport events continue.
+  await page.waitForTimeout(1500);await page.locator('.task-action-modal').evaluate(e=>Promise.all(e.getAnimations({subtree:true}).map(a=>a.finished)));let g=await geometry();
   check(g.primary.length===2&&Math.abs(g.primary[0].top-g.primary[1].top)<1&&g.primary.every(x=>x.height>=44),'primary controls share a row '+width+': '+JSON.stringify(g));
   check(g.primary[1].text==='确认完成','short confirmation label survives date tick '+width);
   check(g.secondary.map(x=>x.text).join('|')==='保存修改|编辑任务|调整安排|取消','secondary order '+width);
@@ -33,7 +33,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   await page.locator('#ma-remark').fill('四段进度验收');await page.locator('#ma-timer').click();await page.waitForFunction(()=>document.querySelector('#ma-timer')?.textContent.includes('暂停计时')&&!document.querySelector('#ma-timer').disabled);
   g=await geometry();check(Math.abs(g.primary[0].top-g.primary[1].top)<1&&g.primary[0].text.includes('暂停'),'running state stays in primary row '+width);
   await page.locator('#ma-timer').click();await page.waitForFunction(()=>document.querySelector('#ma-timer')?.textContent.includes('继续计时')&&!document.querySelector('#ma-timer').disabled);
-  if(width===320){await page.setViewportSize({width,height:350});await page.clock.runFor(100);g=await geometry();check(g.primary.every(x=>x.bottom<=350)&&g.secondary.every(x=>x.top>=g.primary[0].bottom),'both rows reachable in short viewport');await page.setViewportSize({width,height:844});}
+  if(width===320){await page.setViewportSize({width,height:350});await page.waitForFunction(()=>document.querySelector('.modal-mask')?.style.height==='350px');g=await geometry();check(g.primary.every(x=>x.bottom<=350)&&g.secondary.every(x=>x.top>=g.primary[0].bottom),'both rows reachable in short viewport: '+JSON.stringify(g));await page.setViewportSize({width,height:844});}
   await page.locator('.modal [data-act="commit"]').click();await page.getByRole('dialog').waitFor({state:'hidden'});
   let values=await page.evaluate(()=>App.memoFinance.column(App.memoCore.userDay(),'ideal').segments.map(x=>x.count));check(values.join(',')==='2,1,1,0','completion moves the right gray segment to the far-left deep segment '+width);
   await page.evaluate(async()=>{const e=App.store.data().memoEvents.find(e=>e.active&&e.sourceId==='ideal-late');App.memoActions.undoCore(e.id);await App.store.save();App.memoWorkspace.render();});
