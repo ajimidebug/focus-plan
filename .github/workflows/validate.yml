@@ -36,6 +36,7 @@ jobs:
       - name: Run real-browser responsive and dialog checks
         run: |
           node test/browser-smoke.mjs
+          node test/interaction-1739.browser.cjs
           node test/interaction-1732.browser.cjs
           node test/interaction-1733.browser.cjs
           node test/interaction-1734.browser.cjs
@@ -44,7 +45,6 @@ jobs:
           node test/interaction-1736.browser.cjs
           node test/interaction-1737.browser.cjs
           node test/interaction-1738.browser.cjs
-          node test/interaction-1739.browser.cjs
       - name: Ensure validation does not publish or mutate source branch
         run: |
           echo "Prepared artifacts are local to this runner."

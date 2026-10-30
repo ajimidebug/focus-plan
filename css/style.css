@@ -2571,9 +2571,9 @@ body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:clip;}
 @supports not (overflow:clip){html{overflow-x:hidden;}}
 
 /* 173.9: bound the root document, not only the task board. Use hidden on
- * both roots for Android viewport compatibility; component scrollers remain. */
+ * the document root for Android viewport compatibility; body clip preserves sticky descendants. */
 html{width:100%;max-width:100%;min-width:0;overflow-x:hidden;overscroll-behavior-x:none;}
-body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:hidden;overscroll-behavior-x:none;}
+body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:clip;overscroll-behavior-x:none;}
 .memo-layout :is(main,#app-header,footer,.release-panel,.view){min-width:0;max-width:100%;}
 .memo-layout main{width:100%;overflow-wrap:anywhere;}
 .memo-layout :is(.header-top,#stat-bar,.mw-toolbar,.cal-cols,.cal-col,.mw-overview,.schedule-card){min-width:0;max-width:100%;}
@@ -2615,3 +2615,5 @@ body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:hidden;overscr
   .memo-layout #mobile-nav .mn-btn{width:100%;min-width:0;overflow-wrap:anywhere;}
 }
 @media(max-height:450px){.modal-mask .modal.task-action-modal{padding:8px;}}
+
+@supports not (overflow:clip){body.memo-layout{overflow-x:hidden;}}

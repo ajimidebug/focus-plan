@@ -11,7 +11,7 @@ const ASSETS = [
   },
   {
     "url": "./css/style.css?v=173.9.0",
-    "sha256": "2a903d203c971553849f092d092b235effbbc97a45eea7847e4f17dd44ad4a18"
+    "sha256": "2af6f67369e8bd2a5ba570b90f4469f60d065736345afba17d69667f17b21aef"
   },
   {
     "url": "./css/katex.css?v=173.9.0",
