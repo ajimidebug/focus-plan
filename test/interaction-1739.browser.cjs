@@ -7,7 +7,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});try{
  for(const width of [320,360,390,430,1280]){
   const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',timezoneId:'Asia/Shanghai'}),page=await context.newPage(),errors=[];
-  page.on('pageerror',e=>errors.push(e.message));await page.clock.install({time:new Date('2026-10-30T12:00:00+08:00')});
+  page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-10-30T12:00:00+08:00'));
   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>App?.app?.ready);
   await page.evaluate(async()=>{
    const S=App.store,M=App.memoCore,P=App.memoSchedule,day=M.userDay(),old=M.shiftDay(day,-1),d=S.data();
@@ -33,11 +33,12 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   }
   if(width<700){
    const anchor=await page.locator('#mobile-nav').boundingBox();
-   for(const top of [200,100000,0]){await page.evaluate(top=>window.scrollTo({left:999,top,behavior:'instant'}),top);await page.clock.runFor(50);const nav=await page.locator('#mobile-nav').boundingBox();check(nav&&Math.abs(nav.x)<1&&Math.abs(nav.width-width)<1&&Math.abs(nav.y-anchor.y)<1,'nav stays full-width and visible on scroll '+width+' '+top);check(await page.evaluate(()=>window.scrollX)===0,'no whole-page horizontal pan '+width);check(await page.locator('#app-header').evaluate(e=>getComputedStyle(e).position==='static'),'task header preserves existing scroll behavior '+width);}
+   for(const top of [200,100000,0]){await page.evaluate(top=>window.scrollTo({left:999,top,behavior:'instant'}),top);await page.waitForTimeout(50);const nav=await page.locator('#mobile-nav').boundingBox();check(nav&&Math.abs(nav.x)<1&&Math.abs(nav.width-width)<1&&Math.abs(nav.y-anchor.y)<1,'nav stays full-width and visible on scroll '+width+' '+top);check(await page.evaluate(()=>window.scrollX)===0,'no whole-page horizontal pan '+width);check(await page.locator('#app-header').evaluate(e=>getComputedStyle(e).position==='static'),'task header preserves existing scroll behavior '+width);}
    const probe=await page.evaluate(()=>{const e=document.createElement('div');e.style.cssText='width:1800px;height:1px';document.querySelector('main').append(e);window.scrollTo({left:999,top:window.scrollY,behavior:'instant'});const result={x:window.scrollX,root:document.documentElement.scrollWidth,width:document.documentElement.clientWidth};e.remove();return result;});check(probe.x===0&&probe.root<=probe.width+1,'oversized child cannot move root or navigation '+width);
-   await page.setViewportSize({width,height:400});await page.clock.runFor(100);check(await page.locator('#mobile-nav').evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1;}),'nav visible after viewport shrinks '+width);await page.setViewportSize({width,height:844});
+   await page.setViewportSize({width,height:400});await page.waitForTimeout(100);check(await page.locator('#mobile-nav').evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1;}),'nav visible after viewport shrinks '+width);await page.setViewportSize({width,height:844});
   }
   await page.evaluate(()=>App.memoWorkspace.complete({kind:'task',id:'normal-color',day:App.memoCore.userDay(),list:'ideal'}));
+  await page.locator('.task-action-modal').evaluate(e=>Promise.all(e.getAnimations({subtree:true}).map(a=>a.finished)));
   check(await page.locator('#ma-timer-state,.task-action-modal .float-meter-track,.task-action-modal .ma-meter').count()===0,'no dialog meter or summary '+width);
   check(await page.locator('.task-action-modal').evaluate(e=>e.getBoundingClientRect().width<=400),'compact modal width '+width);
   await page.locator('#ma-remark').fill('保留草稿');await page.locator('#ma-timer').click();await page.waitForFunction(()=>document.querySelector('#ma-timer')?.textContent.includes('暂停计时')&&!document.querySelector('#ma-timer').disabled);
