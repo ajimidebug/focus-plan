@@ -1629,3 +1629,23 @@ test('173.9 deferred columns preserve historical obligations and completed prior
  const before=JSON.stringify(b.S.data());let old=C.column(day,'ideal'),current=C.column(next,'ideal');assert.equal(old.total,2);assert.equal(old.deferred,1);assert.equal(old.deferredPercent,50);assert.equal(current.deferred,1);assert.equal(JSON.stringify(b.S.data()),before);
  A.completeCore({kind:'task',id:'delayed-color',day:next,list:'ideal',title:'延期'},'',next+'T12:00:00+08:00');current=C.column(next,'ideal');old=C.column(day,'ideal');assert.equal(current.done,1);assert.equal(current.deferred,0);assert.equal(old.done,0);assert.equal(old.deferred,1);assert.equal(old.total,2);
 });
+
+test('173.9.1 progress has four exclusive ordered buckets and completion undo preserves totals',async()=>{
+ const b=browser();await b.S.load();const {M,A}=flowHarness(b),C=financeHarness(b),day=M.userDay(),old=M.shiftDay(day,-1);
+ b.S.getDay(day).tasks.ideal=[{id:'late-done',text:'延期完成',done:true,originalDay:old},{id:'done',text:'当日完成',done:true},{id:'pending',text:'普通未完成',points:1},{id:'late-pending',text:'延期未完成',originalDay:old,points:1}];
+ const before=JSON.stringify(b.S.data()),first=C.column(day,'ideal');assert.equal(JSON.stringify(b.S.data()),before);assert.equal(first.total,4);assert.deepEqual(copy(first.segments.map(x=>x.state)),['late-done','done','pending','deferred']);assert.deepEqual(copy(first.segments.map(x=>x.count)),[1,1,1,1]);assert(first.segments.every(x=>x.percent===25));
+ const e=A.completeCore({kind:'task',id:'late-pending',day,list:'ideal',title:'延期未完成'},'',day+'T12:00:00+08:00');let next=C.column(day,'ideal');assert.equal(next.total,4);assert.deepEqual(copy(next.segments.map(x=>x.count)),[2,1,1,0]);A.undoCore(e.id);next=C.column(day,'ideal');assert.deepEqual(copy(next.segments.map(x=>x.count)),[1,1,1,1]);assert.equal(next.segments.reduce((n,x)=>n+x.count,0),next.total);
+ assert(C.column(day,'extra').segments.every(x=>x.count===0&&x.percent===0));
+});
+test('173.9.1 queue deferral follows original dated assignment, not creation or same-day category changes',async()=>{
+ const b=browser();await b.S.load();const {M,F}=flowHarness(b),C=financeHarness(b),day=M.userDay(),old=M.shiftDay(day,-1),future=M.shiftDay(day,2);
+ b.S.data().queue=['forward','category','earlier','created'].map(id=>({id,text:id,points:1,createdDay:old}));
+ const ref=id=>({kind:'queue',id});F.moveCore(ref('forward'),old,'ideal');F.moveCore(ref('forward'),day,'ideal');F.moveCore(ref('category'),day,'required');F.moveCore(ref('category'),day,'ideal');F.moveCore(ref('earlier'),future,'ideal');F.moveCore(ref('earlier'),day,'ideal');F.moveCore(ref('created'),day,'ideal');
+ const q=C.column(day,'ideal');assert.equal(q.total,4);assert.equal(q.deferred,1);assert.deepEqual(copy(q.items.filter(x=>x.deferred).map(x=>x.title)),['forward']);
+});
+test('173.9.1 on-time backfill wins over stale carry markers and day-scoped projects stay ordinary',async()=>{
+ const b=browser();await b.S.load();const {M}=flowHarness(b),C=financeHarness(b),day=M.userDay(),old=M.shiftDay(day,-1);
+ b.S.getDay(day).tasks.ideal=[{id:'on-time',text:'按时补记',done:true,originalDay:old,backfillDay:old,carried:true},{id:'late',text:'延期补记',done:true,originalDay:old,backfillDay:day}];
+ b.S.data().memoProjects=[{id:'daily-project',text:'每日推进',createdDay:old,originalDay:old,carried:true,days:{[day]:Date.now()},memoCategoryDays:{[day]:'ideal'}}];
+ const q=C.column(day,'ideal');assert.equal(q.total,3);assert.equal(q.lateDone,1);assert.deepEqual(copy(q.segments.map(x=>x.count)),[1,2,0,0]);
+});

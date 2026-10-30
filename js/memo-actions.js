@@ -268,7 +268,7 @@
       options.map(kind => '<div class="field"><label><input type="checkbox" data-reward="' + kind + '" checked> 同时领取' + (kind === 'base' ? '保底' : '额外全部完成（含选做，非全勤）') + '奖励</label><input type="number" min="0" data-reward-points="' + kind + '" value="' + Number(kind === 'base' ? settings.baseRewardPoints : settings.perfectRewardPoints) + '"></div>').join('') +
       '</details><p class="hint" id="memo-action-info"></p><p id="memo-action-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="commit">确认完成</button>', { lock: true, cancelOnBackdrop: true });
-    App.ui.dateContext(m,{day:spec.day||sourceTask?.assignment?.day||day,label:'完成归属',saveSelector:'[data-act=commit]',saveLabel:'确认完成 · '});
+    App.ui.dateContext(m,{day:spec.day||sourceTask?.assignment?.day||day,label:'完成归属',saveSelector:'[data-act=commit]',saveLabel:'确认完成 · ',shortSaveLabel:spec.kind==='checkin'?'确认打卡':'确认完成'});
     const textarea = m.querySelector('#memo-action-text');
     textarea.value = stamp(at, day) + '【' + label + '】' + spec.title + suffix + (timingSnapshot(spec, Date.parse(at)).text ? '\n' + timingSnapshot(spec, Date.parse(at)).text.replace(/\n$/, '') : '');
     const reviewChoice=App.memoReview?.completionFields(spec,m);
@@ -329,9 +329,10 @@
     const doc=m.ownerDocument,footer=m.querySelector('.modal-actions'),secondary=doc.createElement('div');secondary.className='ma-secondary';
     const finish=m.querySelector('[data-act="commit"]');
     [...footer.children].filter(el=>el!==finish).forEach(el=>secondary.appendChild(el));
-    const panel=doc.createElement('div');panel.className='ma-timer-panel';
-    panel.append(timerButton);
-    footer.prepend(panel);footer.append(finish,secondary,m.querySelector('#memo-action-error'));
+    const panel=doc.createElement('div');panel.className='ma-timer-panel ma-primary';panel.setAttribute('role','group');panel.setAttribute('aria-label','计时与完成');
+    panel.append(timerButton,finish);
+    secondary.style.setProperty('--ma-secondary-count',String(Math.max(1,secondary.children.length)));
+    footer.prepend(panel);footer.append(secondary,m.querySelector('#memo-action-error'));
     m._timerTick=()=>{
       if(committing||unsettled||timerButton.disabled)return;
       timerState();

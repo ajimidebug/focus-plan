@@ -2399,9 +2399,9 @@ body .habit-plan-goal-done small,body #checkin-view .ck-row.done:not([data-habit
 .mw-column-count{font-size:11px;font-weight:500;color:var(--muted);white-space:nowrap;}
 .mw-column-meter{height:4px;border-radius:4px;background:var(--line);overflow:hidden;margin:0 0 8px;}
 .mw-column-meter>span{display:block;height:100%;background:var(--primary);border-radius:inherit;}
-[data-overview-list="required"] .mw-column-meter>span{background:var(--req);}
-[data-overview-list="ideal"] .mw-column-meter>span{background:var(--ideal);}
-[data-overview-list="extra"] .mw-column-meter>span{background:var(--extra);}
+[data-overview-list="required"]{--column-color:var(--req);}
+[data-overview-list="ideal"]{--column-color:var(--ideal);}
+[data-overview-list="extra"]{--column-color:var(--extra);}
 .mw-column-extra{display:block;color:var(--muted);font-size:10px;margin:-4px 0 5px;}
 #mw-live .float-meter-track{position:relative;}
 #mw-live .float-meter-track::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(to right,transparent 0,transparent calc(var(--meter-tick,25%) - 1px),color-mix(in srgb,var(--ink) 45%,transparent) calc(var(--meter-tick,25%) - 1px),color-mix(in srgb,var(--ink) 45%,transparent) var(--meter-tick,25%));}
@@ -2441,7 +2441,7 @@ body .mw-overview [data-overview-ref]{padding:7px 4px!important;min-height:44px;
 .task-action-modal .ma-timer-panel{display:flex;flex-direction:column;gap:5px;min-width:0;}
 .task-action-modal #ma-timer-state{font-size:12px;line-height:1.45;color:var(--muted);margin:0;overflow-wrap:anywhere;}
 .task-action-modal #ma-timer{flex:none;width:100%;min-height:48px;background:var(--primary);border-color:var(--primary);color:white;font-size:16px;font-weight:700;}
-.task-action-modal .modal-actions>[data-act="commit"]{flex:none;min-height:44px;background:var(--card);color:var(--primary);border:1px solid var(--primary);}
+.task-action-modal .ma-primary>[data-act="commit"]{flex:none;min-height:44px;background:var(--card);color:var(--primary);border:1px solid var(--primary);}
 .task-action-modal .ma-secondary{display:flex;flex:none;align-items:center;flex-wrap:wrap;gap:6px;}
 .task-action-modal .ma-secondary .btn{min-width:0;min-height:44px;height:44px;max-height:44px;padding:8px 5px;flex:1 1 70px;font-size:12px;white-space:normal;}
 .task-action-modal #memo-action-error{margin:0;font-size:12px;overflow-wrap:anywhere;}
@@ -2582,7 +2582,7 @@ body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:clip;overscrol
 .mw-overview .cal-col-head{overflow-wrap:anywhere;}
 .mw-column-meter{display:flex;}
 .mw-column-meter>span{flex:none;height:100%;}
-.mw-column-meter>.mw-column-deferred{background:#d9bd8b;opacity:.65;box-shadow:inset 0 0 0 1px #a8804033;}
+.mw-column-meter>.mw-column-deferred{background:#d9dde1;opacity:1;box-shadow:none;}
 .mw-column-deferred-label{display:block;font-size:10px;color:var(--muted);margin:-4px 0 6px;overflow-wrap:anywhere;}
 
 /* Settings meet the timer button directly; no timer summary or meter footer. */
@@ -2617,3 +2617,15 @@ body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:clip;overscrol
 @media(max-height:450px){.modal-mask .modal.task-action-modal{padding:8px;}}
 
 @supports not (overflow:clip){body.memo-layout{overflow-x:hidden;}}
+
+/* 173.9.1: four exclusive progress states, all completed segments at the left. */
+.mw-column-meter>span{border-radius:0;min-width:0;}
+.mw-column-meter>.mw-column-late-done{background:color-mix(in srgb,var(--column-color,var(--primary)) 72%,#172934);}
+.mw-column-meter>.mw-column-done{background:var(--column-color,var(--primary));}
+.mw-column-meter>.mw-column-pending{background:var(--line);}
+.modal.task-action-modal .ma-primary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;min-width:0;}
+.modal.task-action-modal .ma-primary:has(#ma-timer[hidden]){grid-template-columns:minmax(0,1fr);}
+.task-action-modal .ma-primary>.btn{width:100%;min-width:0;min-height:44px;white-space:normal;padding:8px 5px;line-height:1.3;}
+.task-action-modal .ma-secondary{display:grid;grid-template-columns:repeat(var(--ma-secondary-count,4),minmax(0,1fr));gap:5px;min-width:0;}
+.task-action-modal .ma-secondary .btn{width:100%;min-width:0;min-height:44px;height:auto;max-height:none;font-size:12px;padding:8px 3px;line-height:1.3;}
+.task-action-modal .ma-secondary>[data-act="cancel"]{border:1px solid var(--req);color:var(--req);background:var(--card);}

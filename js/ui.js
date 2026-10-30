@@ -161,7 +161,10 @@
       }
       if (options.choiceSelector) modal.querySelectorAll(options.choiceSelector).forEach(button => { if (!button.dataset.dateLabel) button.dataset.dateLabel = button.textContent; if (!button.disabled) button.textContent = button.dataset.dateLabel + (valid ? ' · ' + day.slice(5) : ''); });
       const save = options.saveSelector && modal.querySelector(options.saveSelector);
-      if (save && !save.disabled && !/重试|重新/.test(save.textContent)) save.textContent = valid ? (options.saveLabel || '保存到') + day : '保存';
+      if (save && !save.disabled && !/重试|重新/.test(save.textContent)) {
+        save.textContent = options.shortSaveLabel || (valid ? (options.saveLabel || '保存到') + day : '保存');
+        if(options.shortSaveLabel)save.setAttribute('aria-label',options.shortSaveLabel+(valid?' · '+day:''));
+      }
       modal.querySelector('[data-act="save-start"]')?.toggleAttribute('hidden', valid && day !== today || !!options.noStart);
     };
     modal.addEventListener('input', update); modal.addEventListener('change', update);

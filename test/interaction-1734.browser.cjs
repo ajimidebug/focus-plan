@@ -56,7 +56,7 @@ async function run(){
    await page.locator('.modal').evaluate(e=>e.getAnimations().forEach(a=>a.finish()));
    check(await page.locator('.task-action-modal .modal-actions #ma-timer').count()===1,'original timer moved into footer '+width);
    const footer=await page.locator('#ma-timer').evaluate(e=>{const r=e.getBoundingClientRect(),p=e.closest('.modal-actions').getBoundingClientRect();return {height:r.height,width:r.width,footer:p.width,bottom:r.bottom};});
-   check(footer.height>=44&&footer.width>=footer.footer-2,'full-width prominent timer '+width+': '+JSON.stringify(footer));
+   check(footer.height>=44&&footer.width>=footer.footer*.4&&footer.width<=footer.footer*.55,'paired prominent timer '+width+': '+JSON.stringify(footer));
    check(footer.bottom<=height,'timer visible immediately '+width);
    check(await page.locator('.modal-body').evaluate(e=>e.clientHeight>=60),'body retains a reachable scroll area '+width);
    await page.locator('#memo-action-text').fill('保留用户修改的完成说明\n'+('正文内容\n'.repeat(30)));
