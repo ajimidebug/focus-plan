@@ -81,12 +81,17 @@ function openModal(title:string,bodyHTML:string,actionsHTML:string,opts:any={}) 
   }
   if(opts.closeIcon){const button=document.createElement('button');button.className='modal-x';button.textContent='×';button.setAttribute('aria-label','关闭');button.onclick=()=>{if(!A().memoActions?.busy())closeModal()};modal.append(button)}
   let lastFocused:HTMLElement|null=null
-  modal.addEventListener('focusin',event=>{lastFocused=event.target as HTMLElement})
+  modal.addEventListener('focusin',event=>{if(event.target!==modal)lastFocused=event.target as HTMLElement})
+  const focusInitial=()=>{
+    if(!modal.isConnected||modal.contains(document.activeElement)&&document.activeElement!==modal)return
+    const target=lastFocused?.isConnected?lastFocused:modal.querySelector<HTMLElement>('[autofocus],#ma-remark,input:not([type=hidden]):not([type=checkbox]):not([type=radio]),textarea,[contenteditable=true]')||modal
+    target.focus({preventScroll:true})
+  }
   modal.addEventListener('input',()=>{screen.dirtyDialogs=1})
   screen.modalCount=1
   // The returned DOM is synchronous for existing domain form handlers. Quasar
   // takes ownership of placement, focus trapping and scroll locking on mount.
-  modalApp=createApp({render:()=>h(QDialog,{modelValue:true,persistent:true,noShake:true,noFocus:true,noRefocus:true,transitionDuration:0,onShow:()=>{if(lastFocused?.isConnected)lastFocused.focus({preventScroll:true})},role:'presentation','aria-modal':undefined},()=>h('div',{class:'framework-dialog-layer legacy-host',ref:(el:any)=>{if(el&&root.parentNode!==el){const focused=root.contains(document.activeElement)?document.activeElement as HTMLElement:null;el.append(root);focused?.focus({preventScroll:true})}}}))}).use(Quasar)
+  modalApp=createApp({render:()=>h(QDialog,{modelValue:true,persistent:true,noShake:true,noFocus:true,noRefocus:true,transitionDuration:0,onShow:focusInitial,role:'presentation','aria-modal':undefined},()=>h('div',{class:'framework-dialog-layer legacy-host',ref:(el:any)=>{if(el&&root.parentNode!==el){const focused=root.contains(document.activeElement)?document.activeElement as HTMLElement:null;el.append(root);focused?.focus({preventScroll:true})}}}))}).use(Quasar)
   const mountPoint=document.createElement('div');mountPoint.className='framework-dialog-mount';document.body.append(mountPoint)
   const app=modalApp,unmount=app.unmount.bind(app);let mounted=false
   app.unmount=()=>{if(mounted)unmount();mountPoint.remove()}
@@ -100,7 +105,7 @@ function openModal(title:string,bodyHTML:string,actionsHTML:string,opts:any={}) 
   document.addEventListener('pointerdown',down,true);document.addEventListener('pointerup',up,true);document.addEventListener('click',click,true);document.addEventListener('keydown',key,true)
   root._disposeModal=()=>{document.removeEventListener('pointerdown',down,true);document.removeEventListener('pointerup',up,true);document.removeEventListener('click',click,true);document.removeEventListener('keydown',key,true)}
   opts.onOpen?.(modal)
-  requestAnimationFrame(()=>{if(modal.isConnected&&!modal.contains(document.activeElement))modal.focus({preventScroll:true})})
+  requestAnimationFrame(focusInitial)
   return modal
 }
 function toast(message:string,timeout=2800) { Notify.create({message:String(message),timeout,position:'top',classes:'framework-notification',textColor:'white',color:'grey-9',multiLine:true}) }
