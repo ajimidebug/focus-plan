@@ -246,7 +246,7 @@ details.task-details summary:hover { text-decoration: underline; }
 .sub-item.fail .sub-text { color: var(--req); }
 .sub-item .sub-meta { color: #8a919c; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .sub-item .running-txt { color: var(--req); font-weight: 600; }
-..task-stat { font-size: 11.5px; color: #6b7280; padding: 4px 0 2px; }
+.task-stat { font-size: 11.5px; color: #6b7280; padding: 4px 0 2px; }
 .honor-wall{display:flex;flex-direction:row;flex-wrap:wrap;gap:26px;padding:8px 0}
 .honor-item{display:flex;flex-direction:column;align-items:center;gap:8px}
 .honor-avatar{width:76px;height:76px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.3);box-shadow:0 6px 16px rgba(0,0,0,.25)}

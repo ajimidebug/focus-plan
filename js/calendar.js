@@ -354,6 +354,7 @@
       '<b style="font-size:16px;min-width:120px;text-align:center">' + calMonth.getFullYear() + ' 年 ' + (calMonth.getMonth() + 1) + ' 月</b>' +
       '<button class="btn btn-small" id="cal-next">›</button>' +
       '<button class="btn btn-small" id="cal-today" style="margin-left:8px">回到今天</button></div>';
+    if (App.framework) return html + '<div id="framework-calendar"></div>';
     html += '<div class="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px">';
     html += WD.map(function (w) { return '<div class="cal-wd" style="text-align:center;font-size:11.5px;color:var(--muted)">' + w + '</div>'; }).join('');
     for (let i = 0; i < lead; i++) html += '<div class="cal-day empty"></div>';
@@ -573,6 +574,7 @@
       dayPanelHTML(selKey);
     App.ui.barChart(document.getElementById('cal-bars'), bars);
     bind();
+    if(App.framework) App.framework.calendar(document.getElementById('framework-calendar'),keyOf(new Date(calMonth.getFullYear(),calMonth.getMonth(),1)),selKey,k=>{selKey=k;render();});
   }
 
   function bind() {

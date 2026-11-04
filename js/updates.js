@@ -14,6 +14,7 @@
     if (byId('storage-status')) byId('storage-status').dataset.state = status.phase;
   }
   function busyReason() {
+    if (App.framework?.busy()) return '请先保存并关闭正在操作的窗口';
     if (!ready) return '正在读取记录';
     if (App.store.status().readOnly) return '记录处于保护状态';
     if (App.memo && App.memo.busy()) return '笔记尚未安全保存';

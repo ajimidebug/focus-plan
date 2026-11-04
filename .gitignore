@@ -1,0 +1,16 @@
+node_modules/
+.quasar/
+dist/
+test-results/
+playwright-report/
+*.log
+public/legacy-core.js
+public/js/
+public/css/
+public/assets/
+public/icon.svg
+public/manifest.webmanifest
+public/version.html
+src/legacy-template.html
+src/css/legacy.css
+.openai/

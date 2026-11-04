@@ -51,6 +51,7 @@
 
   /* ---------- 弹窗 ---------- */
   function openModal(title, bodyHTML, actionsHTML, opts) {
+    if (App.framework && uiDoc() === document) return App.framework.openModal(title, bodyHTML, actionsHTML, opts);
     opts = opts || {};
     const root = layerEl('modal-root');
     // 弹窗开在小窗里时，先把小窗临时放大一点，不然 330px 宽太挤
@@ -173,6 +174,7 @@
     update(); return update;
   }
   function closeModal() {
+    if (App.framework) App.framework.closeModal();
     const clear = function (d) { if (!d) return; const r = d.getElementById('modal-root'); if (r) {r._disposeModal?.();r._disposeModal=null;r.innerHTML = '';} };
     clear(document);
     if (App.tasks && App.tasks.floatDoc) { try { clear(App.tasks.floatDoc()); } catch (e) { /* 忽略 */ } }
@@ -200,6 +202,7 @@
 
   /* ---------- Toast ---------- */
   function toast(msg, ms) {
+    if (App.framework && uiDoc() === document) return App.framework.toast(msg, ms);
     const root = layerEl('toast-root');
     const el = root.ownerDocument.createElement('div');
     el.className = 'toast';
@@ -251,6 +254,7 @@
    * dataArr: [{label, study, extend, fun}]  分钟数
    */
   function barChart(container, dataArr) {
+    if (App.framework) return App.framework.barChart(container, dataArr);
     container.innerHTML = '';
     const W = 640, H = 236, padL = 40, padR = 18, padT = 26, padB = 34;
     const plotW = W - padL - padR, plotH = H - padT - padB;
@@ -319,6 +323,7 @@
   }
   /** 折线图 values: 分钟数数组（最近 N 天） */
   function lineChart(container, values, labels) {
+    if (App.framework) return App.framework.lineChart(container, values, labels);
     container.innerHTML = '';
     const W = 600, H = 220, padL = 40, padR = 12, padT = 14, padB = 26;
     const plotW = W - padL - padR, plotH = H - padT - padB;

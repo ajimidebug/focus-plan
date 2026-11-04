@@ -242,6 +242,7 @@
       pipWin = pw;
       const doc = pw.document;
       doc.documentElement.className = 'pip';
+      if (App.framework) doc.body.classList.add('legacy-host');
       // ① 主题变量
       const cs = getComputedStyle(document.body);
       let vc = ':root{';

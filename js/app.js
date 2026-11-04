@@ -522,5 +522,5 @@
     refreshStats: refreshStats
   };
 
-  init().catch(function () { if (App.updates) App.updates.showBlocked('启动未完成，未清除记录。请先导出数据后重试。'); });
+  if (!window.__FRAMEWORK_BOOT) init().catch(function () { if (App.updates) App.updates.showBlocked('启动未完成，未清除记录。请先导出数据后重试。'); });
 })();

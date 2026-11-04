@@ -2,7 +2,7 @@
  * cumulative session colors and compact completion dialogs. */
 'use strict';
 const {chromium}=require('playwright'),http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const root=path.resolve(__dirname,'..');let checks=0;const check=(v,m)=>{assert.ok(v,m);checks++;};
+const root=path.resolve(process.env.FOCUS_TEST_ROOT||path.resolve(__dirname,'..'));let checks=0;const check=(v,m)=>{assert.ok(v,m);checks++;};
 const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://localhost').pathname,file=path.resolve(root,'.'+(name==='/'?'/index.html':name));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}fs.readFile(file,(e,b)=>{if(e){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':file.endsWith('.json')?'application/json':'text/html');res.end(b);});});
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});try{
  for(const width of [320,360,390,430,1280]){

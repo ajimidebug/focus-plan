@@ -1,0 +1,10 @@
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+const require=createRequire(import.meta.url);
+const root=path.dirname(require.resolve('@quasar/app-vite/package.json'));
+const args=process.argv.slice(2).filter(x=>x!=='--strictPort').map(x=>x==='--host'?'--hostname':x);
+if(!args.includes('--hostname'))args.push('--hostname','0.0.0.0');
+const child=spawn(process.execPath,[path.join(root,'bin/quasar.js'),'dev',...args],{stdio:'inherit'});
+for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>child.kill(signal));
+child.on('exit',code=>process.exit(code??1));

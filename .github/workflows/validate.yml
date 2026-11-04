@@ -1,23 +1,19 @@
 name: Validate focus-plan changes
-
 on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, fix-173.1-float-memo-ledger-20261027, feat-review-1737-20261029, feat-1738-cycle-checkin, fix-17381-root-width, fix-1739-layout-cumulative-20261030, fix-17391-progress-dialog-20261030]
+    branches: [main, feat/quasar-174]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: focus-plan-validation-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,58 +21,45 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Prepare temporary release assets
-        run: node scripts/prepare-release.mjs ci-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Run release and regression checks
-        run: node scripts/check-release.mjs
-      - name: Install headless Chromium smoke-test dependencies
-        run: |
-          npm install --no-save --no-audit --no-fund playwright@1.57.0
-          npx playwright install --with-deps chromium
-      - name: Run real-browser responsive and dialog checks
-        run: |
-          status=0
-          node test/browser-smoke.mjs || status=1
-          node test/interaction-17391.browser.cjs || status=1
-          node test/interaction-1739.browser.cjs || status=1
-          node test/interaction-1732.browser.cjs || status=1
-          node test/interaction-1733.browser.cjs || status=1
-          node test/interaction-1734.browser.cjs || status=1
-          node test/points-account.browser.cjs || status=1
-          node test/interaction-1735.browser.cjs || status=1
-          node test/interaction-1736.browser.cjs || status=1
-          node test/interaction-1737.browser.cjs || status=1
-          node test/interaction-1738.browser.cjs || status=1
-          exit "$status"
-      - name: Ensure validation does not publish or mutate source branch
-        run: |
-          echo "Prepared artifacts are local to this runner."
-          git status --short
-  prepare-release:
-    needs: check
-    if: >
-      (github.event_name == 'push' && github.ref == 'refs/heads/fix-173.1-float-memo-ledger-20261027') ||
-      (github.event_name == 'pull_request' && github.head_ref == 'fix-173.1-float-memo-ledger-20261027')
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/prepare-release.mjs 174.0.0
+      - run: npm run check
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-spa
+          path: dist/spa/
+          include-hidden-files: true
+  browser:
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      contents: write
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        script: [browser-smoke.mjs, interaction-1732.browser.cjs, interaction-1733.browser.cjs, interaction-1734.browser.cjs, interaction-1735.browser.cjs, interaction-1736.browser.cjs, interaction-1737.browser.cjs, interaction-1738.browser.cjs, interaction-1739.browser.cjs, interaction-17391.browser.cjs, points-account.browser.cjs, task-workspace.browser.cjs, framework.browser.cjs]
+    env:
+      FOCUS_TEST_ROOT: dist/spa
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: true
-          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Prepare final 173.1.0 release assets
-        run: node scripts/prepare-release.mjs 173.1.0
-      - name: Verify exact release artifact before upload
-        run: node scripts/check-release.mjs
-      - name: Commit only verified release assets to the review branch
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html sw.js version.json js/
-          git diff --cached --quiet || git commit -m "build: prepare verified 173.1.0 release artifacts [skip ci]"
-          git push origin HEAD:fix-173.1-float-memo-ledger-20261027
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-spa
+          path: dist/spa
+      - run: npx playwright install --with-deps chromium
+      - run: node test/${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-${{ matrix.script }}
+          path: test-results/
+          if-no-files-found: ignore

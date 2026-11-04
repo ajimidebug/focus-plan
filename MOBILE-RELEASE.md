@@ -1,3 +1,5 @@
+> 174 起采用构建发布：main 保存源码，gh-pages 发布 dist/spa；框架与恢复审计见 [docs/174-framework.md](docs/174-framework.md)。下方旧版发布方式仅供历史参考。
+
 # 手机使用与发布维护
 
 此 Fork 面向小米14／安卓版 Edge 的直接网页使用。原项目归属及说明保留在 README.md。

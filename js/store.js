@@ -516,12 +516,12 @@
         rows.push([k, hhmmOf(r.start), hhmmOf(r.end), r.minutes, r.content, r.category, r.countAsStudy ? '是' : '否', r.auto ? '自动' : '手动', r.taskText || '', r.note || '']);
       });
     });
-    download('focus-plan-timeline-' + todayKey() + '.csv', '\ufeff' + rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n'));
+    download('focus-plan-timeline-' + todayKey() + '.csv', '\ufeff' + (App.framework ? App.framework.csv(rows) : rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n')));
     const rows2 = [['日期', '类型', '积分变动', '休闲变动(分钟)', '说明']];
     data.ledger.forEach(function (e) {
       rows2.push([e.date, e.type, e.points || 0, e.leisure || 0, e.note || '']);
     });
-    download('focus-plan-ledger-' + todayKey() + '.csv', '\ufeff' + rows2.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n'));
+    download('focus-plan-ledger-' + todayKey() + '.csv', '\ufeff' + (App.framework ? App.framework.csv(rows2) : rows2.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n')));
   }
   /** 💾 v113：用一份备份/导出的 JSON **把本地数据整个换掉**。
    *  ⚠️ 老的 importJSON 只搬了 settings / days / ledger ——

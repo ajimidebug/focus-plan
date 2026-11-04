@@ -7,7 +7,7 @@ import { resolve, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
-const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const root = resolve(process.env.FOCUS_TEST_ROOT || fileURLToPath(new URL('..', import.meta.url)));
 const mime = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
   '.css':'text/css; charset=utf-8', '.json':'application/json', '.svg':'image/svg+xml',
   '.webmanifest':'application/manifest+json', '.woff2':'font/woff2' };

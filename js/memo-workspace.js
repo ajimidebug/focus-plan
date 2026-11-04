@@ -71,11 +71,12 @@
   function renderTasks() {
     taskDay = taskDay || M().userDay();if(A.memoRecurrence?.needsDay(taskDay)&&!A.memoActions.busy()){const requestedDay=taskDay;commit(()=>A.memoRecurrence.ensureCore(requestedDay));return;} const day = S().getDay(taskDay), occurrenceDay = taskDay === M().userDay() ? M().userDay() : taskDay;
     const root = $('mw-today');
-    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + '<div class="mw-day-shortcuts" role="group" aria-label="快捷日期">'+button('yesterday','昨天')+button('today','今天')+button('tomorrow','明天')+'</div>' + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + button('ddl', '截止日期', 'id="mw-ddl"') + '</div>' + (A.memoReview?.summary(taskDay)||'') + overviewHTML(taskDay) + (A.memoFinance?.panel(taskDay)||'') + '<div class="mw-full-list">' + ['required', 'ideal', 'extra'].map(list => {
+    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + '<div class="mw-day-shortcuts" role="group" aria-label="快捷日期">'+button('yesterday','昨天')+button('today','今天')+button('tomorrow','明天')+'</div>' + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + button('ddl', '截止日期', 'id="mw-ddl"') + '</div>' + (A.memoReview?.summary(taskDay)||'') + (A.framework ? '<div data-framework-overview></div>' : overviewHTML(taskDay)) + (A.memoFinance?.panel(taskDay)||'') + '<div class="mw-full-list">' + ['required', 'ideal', 'extra'].map(list => {
       const items = taskItems(taskDay,list);
       return '<section class="mw-group" id="mw-column-'+list+'"><div class="mw-group-head"><h2>' + names[list] + '<small> · 待做 ' + (items.filter(x => !x.deferred&&!doneFor(x.task, x.ref)).length+(A.memoFinance?.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode!=='punch'&&x.n<x.r.target).length||0)) + ((A.memoFinance?.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode==='punch').length||0)?' · 监督 '+A.memoFinance.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode==='punch').length:'') + '</small></h2>' + button('add-' + list, '＋ 添加', 'aria-label="添加' + names[list] + '"') + '</div>' + categoryBody(items,taskDay,list) + (list==='required'?(A.memoGoals?.html(taskDay,false)||''):'') + (list === 'extra' ? (A.memoRecurrence?.registry()||'')+(A.memoReview?.registry()||'')+'<details class="mw-project-help"><summary>项目说明与已停用项目</summary><p class="hint">长期拓展是三栏分类；长期项目是持续任务实体；积分习惯仅为安排引用，不会生成第二条积分任务。一次性任务保留日期，每日推进项目可以停用。</p>' + (S().data().daily || []).filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-daily', '恢复基础任务', refAttrs({ kind: 'daily', id: p.id })) + '</p>').join('') + projects().filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-project', '恢复项目', refAttrs({ kind: 'project', id: p.id })) + '</p>').join('') + '</details>' : '') + '</section>';
     }).join('') + '</div>' + backlog() + ((S().data().daily || []).some(t => !t.archived) ? '<section class="mw-group"><h2>原有基础任务</h2>' + taskSection(S().data().daily.filter(t => !t.archived&&!t.memoCategoryDays?.[occurrenceDay]).map(task => ({ task, ref: { kind: 'daily', id: task.id, day: occurrenceDay } }))) + '</section>' : '');
     ['yesterday','today','tomorrow'].forEach((k,i)=>{const b=root.querySelector('[data-mw="'+k+'"]');b?.setAttribute('aria-pressed',String(taskDay===M().shiftDay(M().userDay(),i-1)));});
+    if (A.framework) A.framework.overview(root.querySelector('[data-framework-overview]'), taskDay);
     A.ms?.refresh();
     $('mw-day').onchange = e => { if (M().validDate(e.target.value)) { taskDay = e.target.value; renderTasks(); } };
   }
@@ -149,6 +150,7 @@
       if(submitting)return;submitting=true;const actions=[...m.querySelectorAll('.modal-actions button')];actions.forEach(x=>x.disabled=true);
       try { if(!taskSaved){if (await A.memoActions.commit(() => {
         const text = q('#mw-title').value.trim(); if (!text) throw new Error('请填写任务名称'); if (!existing && text.includes('\n')) throw new Error('一次添加一个任务，正文说明可写在备注中');
+        if(A.framework){const checked=A.framework.validateTask(text,q('#mw-estimate').value);if(!checked.success)throw Error(checked.error.issues[0].message);}
         const selectedList = q('#mw-list')?.value || list;
         const d = S().data(), isProject = kind === 'project' || convert || (selectedList === 'extra' && q('[name="mw-repeat"]:checked')?.value === 'daily');
         const current=existing?A.memoSchedule.find(ref):null;if(existing&&!current)throw new Error('任务已移动或删除，请重新打开');
@@ -283,5 +285,5 @@
     A.memoReview?.init();A.memoRecurrence?.init();
     render();
   }
-  A.memoWorkspace = { assignmentEditor, complete, score, scoreBand, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory };
+  A.memoWorkspace = { assignmentEditor, complete, score, scoreBand, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
 })();
