@@ -25,6 +25,7 @@ const base = 'http://127.0.0.1:'+server.address().port;
 const browser=await chromium.launch({headless:true,executablePath:process.env.FOCUS_BROWSER_EXECUTABLE || undefined,args:JSON.parse(process.env.FOCUS_BROWSER_ARGS || '["--no-sandbox"]')});
 try {
   for (const width of [320,350,550,770,1280]) {
+    console.log('Smoke viewport',width);
     const context=await browser.newContext({viewport:{width,height:width===550?350:Math.max(550,Math.round(width*.8))},serviceWorkers:'block'});
     const page=await context.newPage();
     const errors=[];

@@ -23,7 +23,6 @@ body.framework-layout { margin:0; padding:0; background:var(--bg); color:var(--i
 .boot-error { padding:24px; color:#991b1b; }
 .legacy-host #app-header,.legacy-host #mobile-nav,.legacy-host #mn-sheet { display:none!important; }
 .legacy-host main { max-width:1160px!important; padding:14px 16px 24px!important; margin:auto!important; min-width:0; }
-.legacy-host #mw-live { position:relative!important; top:auto!important; margin:0 auto!important; max-width:1128px; }
 .legacy-host #flow-save-error { max-width:1128px; margin:8px auto; }
 .legacy-host footer { text-align:center; color:var(--muted); font-size:11px; margin:12px 0 28px; }
 .legacy-host .card { box-shadow:none; border:1px solid var(--line); }
@@ -121,3 +120,6 @@ body[data-theme='dark'] .overview-task.done .ov-task-name,body[data-theme='purpl
 .shell-stats.legacy-host { max-width:1160px!important; margin:auto!important; padding:0!important; background:transparent!important; }
 .framework-layout .legacy-host .framework-overview .cal-col-head { display:flex!important; align-items:center; justify-content:space-between; }
 .framework-layout .legacy-host .framework-overview .q-badge { color:var(--ink)!important; background:transparent!important; border:1px solid var(--line); }
+
+.app-bottom-nav { bottom:var(--nav-inset,0px)!important; }
+.framework-layout .legacy-host .framework-overview .cal-col-head { flex-direction:row!important; }

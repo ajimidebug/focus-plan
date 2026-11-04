@@ -3,7 +3,7 @@
 (function () {
   'use strict';
   if (!window.__MEMO_MODE) return;
-  const nav = document.getElementById('mobile-nav');
+  const nav = window.App?.framework ? document.querySelector('.app-bottom-nav') : document.getElementById('mobile-nav');
   if (!nav) return;
   let frame = 0;
   const viewport = window.visualViewport;

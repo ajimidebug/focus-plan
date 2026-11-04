@@ -135,7 +135,7 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-viewport.js?v=174.0.0",
-    "sha256": "fda68f33ddc0638dcee5af46b9c538935d10661f6238a17b0b8b03add7279f79"
+    "sha256": "3316ce5e06adce7de43ebbc5dab910d0686e7c0a45aa7b7f19f065a88d13f6e2"
   },
   {
     "url": "./js/memo-wishlist.js?v=174.0.0",

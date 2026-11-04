@@ -80,15 +80,17 @@ function openModal(title:string,bodyHTML:string,actionsHTML:string,opts:any={}) 
     else if(!opts.lock)closeModal()
   }
   if(opts.closeIcon){const button=document.createElement('button');button.className='modal-x';button.textContent='×';button.setAttribute('aria-label','关闭');button.onclick=()=>{if(!A().memoActions?.busy())closeModal()};modal.append(button)}
+  let lastFocused:HTMLElement|null=null
+  modal.addEventListener('focusin',event=>{lastFocused=event.target as HTMLElement})
   modal.addEventListener('input',()=>{screen.dirtyDialogs=1})
   screen.modalCount=1
   // The returned DOM is synchronous for existing domain form handlers. Quasar
   // takes ownership of placement, focus trapping and scroll locking on mount.
-  modalApp=createApp({render:()=>h(QDialog,{modelValue:true,persistent:true,noShake:true,noFocus:true,noRefocus:true,role:'presentation','aria-modal':undefined},()=>h('div',{class:'framework-dialog-layer legacy-host',ref:(el:any)=>{if(el&&root.parentNode!==el)el.append(root)}}))}).use(Quasar)
+  modalApp=createApp({render:()=>h(QDialog,{modelValue:true,persistent:true,noShake:true,noFocus:true,noRefocus:true,transitionDuration:0,onShow:()=>{if(lastFocused?.isConnected)lastFocused.focus({preventScroll:true})},role:'presentation','aria-modal':undefined},()=>h('div',{class:'framework-dialog-layer legacy-host',ref:(el:any)=>{if(el&&root.parentNode!==el){const focused=root.contains(document.activeElement)?document.activeElement as HTMLElement:null;el.append(root);focused?.focus({preventScroll:true})}}}))}).use(Quasar)
   const mountPoint=document.createElement('div');mountPoint.className='framework-dialog-mount';document.body.append(mountPoint)
-  const app=modalApp,unmount=app.unmount.bind(app)
-  app.unmount=()=>{unmount();mountPoint.remove()}
-  app.mount(mountPoint)
+  const app=modalApp,unmount=app.unmount.bind(app);let mounted=false
+  app.unmount=()=>{if(mounted)unmount();mountPoint.remove()}
+  queueMicrotask(()=>{if(modalApp===app){mounted=true;app.mount(mountPoint)}})
   let pointer:any=null
   const isBackdrop=(target:any)=>target?.classList?.contains('q-dialog__backdrop')&&target.closest('.q-dialog')?.contains(root)
   const down=(event:PointerEvent)=>{pointer=isBackdrop(event.target)&&event.button===0?{x:event.clientX,y:event.clientY,id:event.pointerId}:null}
