@@ -53,7 +53,7 @@ async function run(){
    check(exported.text.includes('09:10:00 — 2026-10-29 09:35:00')&&exported.text.includes('10:00:00 — 2026-10-29 10:18:00'),'unfinished copied with both exact intervals '+width);
    check(exported.factSnapshot.execution[day].actualMs===43*60000,'copied time excludes gaps '+width);
    await page.locator('[data-overview-ref]').first().click();
-   await page.locator('.modal').evaluate(e=>e.getAnimations().forEach(a=>a.finish()));
+   await page.locator('.modal').waitFor({state:'visible'});await page.locator('.modal').evaluate(e=>e.getAnimations().forEach(a=>a.finish()));
    check(await page.locator('.task-action-modal .modal-actions #ma-timer').count()===1,'original timer moved into footer '+width);
    const footer=await page.locator('#ma-timer').evaluate(e=>{const r=e.getBoundingClientRect(),p=e.closest('.modal-actions').getBoundingClientRect();return {height:r.height,width:r.width,footer:p.width,bottom:r.bottom};});
    check(footer.height>=44&&footer.width>=footer.footer*.4&&footer.width<=footer.footer*.55,'paired prominent timer '+width+': '+JSON.stringify(footer));

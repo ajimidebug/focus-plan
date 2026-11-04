@@ -94,7 +94,7 @@ async function run(){
    const layout=await page.evaluate(()=>{const header=document.querySelector('#stat-bar').getBoundingClientRect(),brand=document.querySelector('.brand').getBoundingClientRect();return {scroll:document.documentElement.scrollWidth,width:innerWidth,overlap:header.left<brand.right&&header.top<brand.bottom&&header.bottom>brand.top};});
    check(layout.scroll<=layout.width+1,'no page horizontal overflow '+width);
    check(!layout.overlap,'large point header clears brand '+width);
-   check(await page.locator('#stat-points-today').evaluate(e=>{const h=document.querySelector('#app-header').getBoundingClientRect(),r=e.getBoundingClientRect();return r.bottom<=h.bottom+1;}),'daily flow remains inside adaptive header '+width);
+   check(await page.locator('#stat-points-today').evaluate(e=>{const h=document.querySelector(App.framework?'.app-topbar':'#app-header').getBoundingClientRect(),r=e.getBoundingClientRect();return r.bottom<=h.bottom+1;}),'daily flow remains inside adaptive header '+width);
    if(process.env.FOCUS_SCREENSHOT_DIR){fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR,{recursive:true});await page.screenshot({animations:'disabled',path:path.join(process.env.FOCUS_SCREENSHOT_DIR,'1733-tasks-'+width+'.png')});}
    check(errors.length===0,'no browser exceptions '+width+': '+errors.join(';'));
    await context.close();

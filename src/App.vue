@@ -24,9 +24,10 @@ function extra(kind:string) {
   if(kind==='trash')window.App.memoActions.trash()
   if(kind==='ddl')window.App.ms.open()
 }
-watch(()=>route.params.page,(v)=>{if(screen.ready){const page=typeof v==='string'&&views.has(v)?v:'memo';window.App.app.switchView(page)}})
+watch(()=>route.params.page,(v)=>{if(screen.ready){const page=typeof v==='string'&&views.has(v)?v:'memo';if(screen.view!==page)window.App.app.switchView(page)}})
 onMounted(async()=>{
   if(!host.value)return
+  await router.isReady()
   const requestedPage=String(route.params.page||'memo')
   host.value.innerHTML=legacyHTML
   try {

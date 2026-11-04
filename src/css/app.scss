@@ -117,3 +117,7 @@ html,body.framework-layout { max-width:100%; overflow-x:clip; }
 .framework-overview .mw-score { white-space:normal; overflow-wrap:anywhere; }
 body[data-theme='dark'] .overview-task.done,body[data-theme='purple'] .overview-task.done { background:#14332a; }
 body[data-theme='dark'] .overview-task.done .ov-task-name,body[data-theme='purple'] .overview-task.done .ov-task-name { color:#bbf7d0; }
+
+.shell-stats.legacy-host { max-width:1160px!important; margin:auto!important; padding:0!important; background:transparent!important; }
+.framework-layout .legacy-host .framework-overview .cal-col-head { display:flex!important; align-items:center; justify-content:space-between; }
+.framework-layout .legacy-host .framework-overview .q-badge { color:var(--ink)!important; background:transparent!important; border:1px solid var(--line); }

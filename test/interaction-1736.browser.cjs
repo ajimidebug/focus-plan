@@ -78,7 +78,7 @@ async function run(){
    await page.evaluate(day=>{App.app.switchView('tasks');App.memoWorkspace.enter('today',day);},day);
    for(const list of ['required','ideal','extra']){
     await page.locator('#mw-column-'+list+' [data-mw="add-'+list+'"]').click();
-    await page.locator('.modal').evaluate(e=>e.getAnimations().forEach(a=>a.finish()));
+    await page.locator('.modal').waitFor({state:'visible'});await page.locator('.modal').evaluate(e=>e.getAnimations().forEach(a=>a.finish()));
     const field=page.locator('#mw-points-field');
     check(await field.isVisible()===(list!=='required'),'required task keeps original no-individual-points rule '+width+' '+list);
     if(list!=='required'){

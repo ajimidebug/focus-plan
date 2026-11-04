@@ -9,14 +9,14 @@ for(const width of [320,390,1280]){
  const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',timezoneId:'Asia/Shanghai'}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.clock.setFixedTime(new Date('2026-11-04T12:00:00+08:00'));await page.goto(base+'/#/tasks');await page.waitForFunction(()=>App?.app?.ready&&document.querySelector('.framework-overview'));
  assert.equal(await page.locator('.bottom-grid button').count(),5);
- await page.getByRole('region',{name:'三栏任务概览'}).getByRole('button',{name:'添加理想任务',exact:true}).click();await page.getByRole('textbox',{name:'任务名称',exact:true}).fill('成熟框架验收');await page.getByRole('button',{name:'保存到 2026-11-04',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
- await page.getByRole('button',{name:'打开任务：成熟框架验收',exact:true}).click();
+ await page.getByRole('region',{name:'三栏任务概览'}).getByRole('button',{name:'概览：添加理想任务',exact:true}).click();await page.getByRole('textbox',{name:'任务名称',exact:true}).fill('成熟框架验收');await page.getByRole('button',{name:'保存到 2026-11-04',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
+ await page.getByRole('button',{name:/^打开任务：成熟框架验收/}).click();
  await page.getByRole('button',{name:'取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
- await page.getByRole('button',{name:'打开任务：成熟框架验收',exact:true}).click();await page.keyboard.press('Escape');await page.locator('.modal').waitFor({state:'detached'});
- await page.getByRole('button',{name:'打开任务：成熟框架验收',exact:true}).click();await page.locator('.q-dialog__backdrop').click({position:{x:2,y:2}});await page.locator('.modal').waitFor({state:'detached'});
- await page.getByRole('button',{name:'打开任务：成熟框架验收',exact:true}).click();await page.getByRole('checkbox',{name:'同时领取额外全部完成（含选做，非全勤）奖励'}).uncheck();await page.getByRole('button',{name:'确认完成 · 2026-11-04',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
+ await page.getByRole('button',{name:/^打开任务：成熟框架验收/}).click();await page.keyboard.press('Escape');await page.locator('.modal').waitFor({state:'detached'});
+ await page.getByRole('button',{name:/^打开任务：成熟框架验收/}).click();await page.locator('.q-dialog__backdrop').click({position:{x:2,y:2}});await page.locator('.modal').waitFor({state:'detached'});
+ await page.getByRole('button',{name:/^打开任务：成熟框架验收/}).click();await page.getByRole('checkbox',{name:'同时领取额外全部完成（含选做，非全勤）奖励'}).uncheck();await page.getByRole('button',{name:'确认完成 · 2026-11-04',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
  assert.equal(await page.evaluate(()=>App.store.pointsTotal()),1);
- await page.locator('.framework-overview .mw-completed summary').click();await page.getByRole('button',{name:'打开任务：成熟框架验收',exact:true}).click();await page.getByRole('button',{name:'确认取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});assert.equal(await page.evaluate(()=>App.store.pointsTotal()),0);
+ await page.locator('.framework-overview .mw-completed summary').click();await page.getByRole('button',{name:/^打开任务：成熟框架验收/}).click();await page.getByRole('button',{name:'确认取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});assert.equal(await page.evaluate(()=>App.store.pointsTotal()),0);
  const axe=await new AxeBuilder({page}).include('.app-topbar').include('.app-bottom-nav').include('.framework-overview').withTags(['wcag2a','wcag2aa']).analyze();fs.writeFileSync('test-results/axe-'+width+'.json',JSON.stringify(axe,null,2));assert.deepEqual(axe.violations.filter(v=>['critical','serious'].includes(v.impact)).map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],'new framework accessibility');
  await page.screenshot({path:'test-results/tasks-'+width+'.png',fullPage:true});
  for(const view of ['memo','timeline','checkin','memo-history','calendar','stats','cards','mistakes','sport','memo-review','settings','tasks']){

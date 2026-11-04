@@ -2,7 +2,7 @@
 'use strict';
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http'), assert = require('node:assert/strict');
 const { chromium } = require(require.resolve('playwright', { paths: [process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES || '', process.cwd()] }));
-const root = path.resolve(process.env.FOCUS_TEST_ROOT||path.resolve(__dirname, '..'));
+const root = path.resolve(__dirname, '..');
 const mime = { '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png' };
 let checks = 0;
 function check(value, message) { assert(value, message); checks++; }

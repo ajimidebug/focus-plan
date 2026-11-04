@@ -47,7 +47,7 @@ export async function startLegacy(state:any) {
     original(view)
     if(view==='memo-review')A().memoWorkspace.renderReview(A().store.getDay(A().memoCore.userDay()))
     state.view=target
-    if(router.currentRoute.value.params.page!==target)void router.replace('/'+target)
+    void router.replace('/'+target)
   }
   await A().app.init()
   if(!A().app.ready)throw Error(A().store.status().message)
@@ -84,7 +84,7 @@ function openModal(title:string,bodyHTML:string,actionsHTML:string,opts:any={}) 
   screen.modalCount=1
   // The returned DOM is synchronous for existing domain form handlers. Quasar
   // takes ownership of placement, focus trapping and scroll locking on mount.
-  modalApp=createApp({render:()=>h(QDialog,{modelValue:true,persistent:true,noShake:true,role:'presentation','aria-modal':undefined},()=>h('div',{class:'framework-dialog-layer legacy-host',ref:(el:any)=>{if(el&&root.parentNode!==el)el.append(root)}}))}).use(Quasar)
+  modalApp=createApp({render:()=>h(QDialog,{modelValue:true,persistent:true,noShake:true,noFocus:true,noRefocus:true,role:'presentation','aria-modal':undefined},()=>h('div',{class:'framework-dialog-layer legacy-host',ref:(el:any)=>{if(el&&root.parentNode!==el)el.append(root)}}))}).use(Quasar)
   const mountPoint=document.createElement('div');mountPoint.className='framework-dialog-mount';document.body.append(mountPoint)
   const app=modalApp,unmount=app.unmount.bind(app)
   app.unmount=()=>{unmount();mountPoint.remove()}

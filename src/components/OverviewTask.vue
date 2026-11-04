@@ -8,7 +8,7 @@ const labels=computed(()=>[A().tasks?.carryTagHTML?.(props.x.task),A().tasks?.le
 </script>
 <template>
   <HtmlIsland v-if="x.deferred" :html="A().memoWorkspace.deferredHTML(x,true)" />
-  <q-btn v-else flat no-caps class="cal-task overview-task" :class="{done}" :data-overview-ref="JSON.stringify(x.ref)" :data-carried="!!A().memoFlow.isCarried(x.task)" :data-category="category" :data-bounty="!!A().memoOrganize?.bounty(score)" :data-score="A().memoWorkspace.scoreBand(score)" :aria-label="'打开任务：'+x.task.text" @click.stop="A().memoWorkspace.complete(x.ref)">
+  <q-btn v-else flat no-caps class="cal-task overview-task" :class="{done}" :data-overview-ref="JSON.stringify(x.ref)" :data-carried="!!A().memoFlow.isCarried(x.task)" :data-category="category" :data-bounty="!!A().memoOrganize?.bounty(score)" :data-score="A().memoWorkspace.scoreBand(score)" :aria-label="'打开任务：'+x.task.text+(A().memoFlow.isCarried(x.task)?'，逾期顺延':'')+(score!==null?'，'+score+'分':'')" @click.stop="A().memoWorkspace.complete(x.ref)">
     <span class="ov-task-name">{{x.task.text}}{{done?' ✓':''}}</span>
     <span v-if="score!==null" class="mw-score">+{{score}}分</span>
     <HtmlIsland v-if="labels" :html="labels" class="overview-labels" />

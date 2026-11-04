@@ -13,6 +13,8 @@ const body=html.match(/<body[^>]*>([\s\S]*)<\/body>/)[1].replace(/<script\b[^>]*
 write('src/legacy-template.html',html.match(/<style id="pip-style">[\s\S]*?<\/style>/)[0]+'\n'+body);
 const css=await postcss([prefix({prefix:'.legacy-host',transform:(p,selector,prefixed)=>{
   if(selector.includes(':root')||/^html\b/.test(selector))return selector;
+  if(/^body[^\s]*$/.test(selector))return selector.replace(/^body(?:\.memo-layout)?/,'body.framework-layout');
+  selector=selector.replace(/^body\.memo-layout/,'body.framework-layout');
   if(selector.startsWith('.memo-layout'))return selector.replace(/^\.memo-layout/,p);
   if(/^body[^\s]*:has\(/.test(selector))return selector;
   if(/^body\[data-theme=[^\]]+\]$/.test(selector))return selector;

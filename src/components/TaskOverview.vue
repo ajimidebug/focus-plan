@@ -22,7 +22,7 @@ function expanded(key:string,defaultOpen=false){try{return (localStorage.getItem
         <template v-else><OverviewTask v-for="x in col.open" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" /></template>
         <HtmlIsland :html="A().memoFinance.planned(day,col.key,false)" />
         <details v-if="col.finished.length" class="mw-completed" :data-fold-key="'overview:'+day+':'+col.key" :open="expanded('task-fold:overview:'+day+':'+col.key)"><summary>已完成（{{col.finished.length}}）</summary><OverviewTask v-for="x in col.finished" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" done /></details>
-        <q-btn flat dense no-caps class="overview-add" :aria-label="'添加'+col.name+'任务'" @click.stop="A().memoWorkspace.editor(null,col.key)">＋ 添加</q-btn>
+        <q-btn flat dense no-caps class="overview-add" :aria-label="'概览：添加'+col.name+'任务'" @click.stop="A().memoWorkspace.editor(null,col.key)">＋ 添加</q-btn>
         <HtmlIsland v-if="col.key==='required'" :html="A().memoGoals?.html(day,true)||''" />
       </q-card>
     </div>

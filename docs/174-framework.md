@@ -42,7 +42,7 @@ npm test
 
 开发使用 `npm run develop`；构建结果 `dist/spa` 使用 HTTP 静态服务。根目录 index.html 是 Quasar 构建入口；legacy/index.html 是兼容 DOM 模板，均不作为正式部署文件直接上传。
 
-GitHub Actions 对同一个构建产物执行既有浏览器回归与 framework.browser.cjs，覆盖三栏、两行按钮、不同宽度、保存失败、计时与积分、导航、离线恢复及兼容界面读取。自动化结果以对应提交的 Actions 为准；浏览器模拟不替代实体手机、软键盘及系统画中画的人工验收。
+GitHub Actions 对同一个构建产物执行现行发布门禁中的 browser-smoke、173.2–173.9.1 浏览器回归、points-account 与 framework.browser.cjs（task-workspace 为较早归档测试，依赖已被后续版本替换的行内计时标记，未纳入门禁），覆盖三栏、两行按钮、不同宽度、保存失败、计时与积分、导航、离线恢复及兼容界面读取。自动化结果以对应提交的 Actions 为准；浏览器模拟不替代实体手机、软键盘及系统画中画的人工验收。
 
 新增 fast-check 性质测试独立验证完成/撤销序列及计时区间并集，并逐项验证生产 manifest 的实际内容。axe 对新增框架区域进行 WCAG 2 A/AA 扫描；这不代表遗留专用页面全部满足无障碍标准。
 

@@ -38,7 +38,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
    await page.setViewportSize({width,height:400});await page.waitForTimeout(100);check(await page.locator(navSelector).evaluate(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight+1;}),'nav visible after viewport shrinks '+width);await page.setViewportSize({width,height:844});
   }
   await page.evaluate(()=>App.memoWorkspace.complete({kind:'task',id:'normal-color',day:App.memoCore.userDay(),list:'ideal'}));
-  await page.locator('.task-action-modal').evaluate(e=>Promise.all(e.getAnimations({subtree:true}).map(a=>a.finished)));
+  await page.locator('.task-action-modal').waitFor({state:'visible'});await page.locator('.task-action-modal').evaluate(e=>Promise.all(e.getAnimations({subtree:true}).map(a=>a.finished)));
   check(await page.locator('#ma-timer-state,.task-action-modal .float-meter-track,.task-action-modal .ma-meter').count()===0,'no dialog meter or summary '+width);
   check(await page.locator('.task-action-modal').evaluate(e=>e.getBoundingClientRect().width<=400),'compact modal width '+width);
   await page.locator('#ma-remark').fill('保留草稿');await page.locator('#ma-timer').click();await page.waitForFunction(()=>document.querySelector('#ma-timer')?.textContent.includes('暂停计时')&&!document.querySelector('#ma-timer').disabled);
