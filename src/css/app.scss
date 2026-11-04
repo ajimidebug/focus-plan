@@ -123,3 +123,8 @@ body[data-theme='dark'] .overview-task.done .ov-task-name,body[data-theme='purpl
 
 .app-bottom-nav { bottom:var(--nav-inset,0px)!important; }
 .framework-layout .legacy-host .framework-overview .cal-col-head { flex-direction:row!important; }
+
+.legacy-host #mw-live { z-index:2100!important; }
+body[data-theme='dark'] .legacy-host .framework-selected-day,body[data-theme='purple'] .legacy-host .framework-selected-day { background:#1e3a5f!important; }
+.shell-stats.legacy-host #stat-bar .stat-label { opacity:1!important; color:var(--muted)!important; }
+.framework-layout .legacy-host .framework-overview .cal-col-head>span { color:var(--ink)!important; }

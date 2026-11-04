@@ -91,7 +91,7 @@ function openModal(title:string,bodyHTML:string,actionsHTML:string,opts:any={}) 
   screen.modalCount=1
   // The returned DOM is synchronous for existing domain form handlers. Quasar
   // takes ownership of placement, focus trapping and scroll locking on mount.
-  modalApp=createApp({render:()=>h(QDialog,{modelValue:true,persistent:true,noShake:true,noFocus:true,noRefocus:true,transitionDuration:0,onShow:focusInitial,role:'presentation','aria-modal':undefined},()=>h('div',{class:'framework-dialog-layer legacy-host',ref:(el:any)=>{if(el&&root.parentNode!==el){const focused=root.contains(document.activeElement)?document.activeElement as HTMLElement:null;el.append(root);focused?.focus({preventScroll:true})}}}))}).use(Quasar)
+  modalApp=createApp({render:()=>h(QDialog,{modelValue:true,persistent:true,noShake:true,noFocus:true,noRefocus:true,transitionShow:'fade',transitionHide:'fade',transitionDuration:0,onShow:focusInitial,role:'presentation','aria-modal':undefined},()=>h('div',{class:'framework-dialog-layer legacy-host',ref:(el:any)=>{if(el&&root.parentNode!==el){const focused=root.contains(document.activeElement)?document.activeElement as HTMLElement:null;el.append(root);focused?.focus({preventScroll:true})}}}))}).use(Quasar)
   const mountPoint=document.createElement('div');mountPoint.className='framework-dialog-mount';document.body.append(mountPoint)
   const app=modalApp,unmount=app.unmount.bind(app);let mounted=false
   app.unmount=()=>{if(mounted)unmount();mountPoint.remove()}
@@ -116,7 +116,8 @@ function chart(container:HTMLElement,type:'bar'|'line',data:any) {
   const canvas=document.createElement('canvas');container.append(canvas)
   const label=type==='bar'?'按日分类时长，单位分钟':'按日学习时长，单位分钟'
   canvas.setAttribute('role','img');canvas.setAttribute('aria-label',label)
-  const instance=new Chart(canvas,{type,data,options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:type==='bar',position:'bottom'}},scales:{y:{beginAtZero:true,stacked:type==='bar',title:{display:true,text:'分钟'}},x:{stacked:type==='bar',ticks:{maxTicksLimit:8}}}}})
+  const theme=getComputedStyle(container),ink=theme.getPropertyValue('--ink').trim(),muted=theme.getPropertyValue('--muted').trim(),line=theme.getPropertyValue('--line').trim()
+  const instance=new Chart(canvas,{type,data,options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:type==='bar',position:'bottom',labels:{color:ink}}},scales:{y:{beginAtZero:true,stacked:type==='bar',ticks:{color:muted},grid:{color:line},title:{display:true,text:'分钟',color:muted}},x:{stacked:type==='bar',ticks:{maxTicksLimit:8,color:muted},grid:{color:line}}}}})
   instances.set(container,()=>{instance.destroy();instances.delete(container)})
   const details=document.createElement('details');details.className='framework-chart-data';const summary=document.createElement('summary');summary.textContent='查看图表数据';details.append(summary)
   const table=document.createElement('table'),head=document.createElement('tr')
@@ -128,6 +129,6 @@ function lineChart(node:HTMLElement,values:number[],labels:string[]) { node?.nex
 function calendar(node:HTMLElement,month:string,selected:string,onSelect:(day:string)=>void) {
   const days=A().store.data().days
   const events=Object.keys(days).filter(k=>k.startsWith(month.slice(0,7))).flatMap(k=>{const d=days[k];const count=['required','ideal','extra'].reduce((n,c)=>n+(d.tasks?.[c]||[]).filter((t:any)=>!t.memoMovedTo&&!t.memoDismissed).length,0);return count?[{id:k,title:count+'项任务',start:k,allDay:true}]:[]})
-  mount(node,FullCalendar,{options:{plugins:[dayGridPlugin,interactionPlugin],locale:zh,firstDay:1,initialView:'dayGridMonth',initialDate:month,headerToolbar:false,height:'auto',fixedWeekCount:false,events,dayMaxEvents:1,editable:false,selectable:false,dateClick:(info:any)=>onSelect(info.dateStr),dayCellClassNames:(info:any)=>{const d=info.date;const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return key===selected?['framework-selected-day']:[]}}})
+  mount(node,FullCalendar,{options:{plugins:[dayGridPlugin,interactionPlugin],locale:zh,firstDay:1,initialView:'dayGridMonth',initialDate:month,headerToolbar:false,height:'auto',fixedWeekCount:false,events,dayMaxEvents:1,editable:false,selectable:false,dateClick:(info:any)=>onSelect(info.dateStr),dayCellDidMount:(info:any)=>{const n=info.el.querySelector('.fc-daygrid-day-number');if(!n)return;const d=info.date,key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');n.setAttribute('role','button');n.setAttribute('tabindex','0');n.setAttribute('aria-label','查看'+key+'任务');n.addEventListener('keydown',(e:KeyboardEvent)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(key)}})},dayCellClassNames:(info:any)=>{const d=info.date;const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return key===selected?['framework-selected-day']:[]}}})
 }
 function overview(node:HTMLElement,day:string) { mount(node,TaskOverview,{day,revision:screen.revision}) }
