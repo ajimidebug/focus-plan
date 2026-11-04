@@ -143,7 +143,7 @@ const ASSETS = [
   },
   {
     "url": "./js/memo-workspace.js?v=174.0.0",
-    "sha256": "8fa99efa29c38048116043bc4c1214ed56e42c67c93bedd2a3f8c27de8070d93"
+    "sha256": "d90493675a1b5482b0268735f0aa249dfeb5aa347e82855f939e6ebedc781d6c"
   },
   {
     "url": "./js/memo.js?v=174.0.0",

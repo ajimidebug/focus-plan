@@ -108,3 +108,12 @@ body.framework-layout .legacy-host .framework-overview .cal-col { min-width:0!im
   .legacy-host .framework-chart { height:230px; }
 }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
+
+html,body.framework-layout { max-width:100%; overflow-x:clip; }
+.q-page-container,.legacy-host { min-width:0; }
+.q-dialog .legacy-host .task-action-modal { max-width:400px!important; margin:auto; }
+.framework-overview .ov-task-name,.framework-overview .habit-plan-title { display:block; white-space:normal; overflow-wrap:anywhere; -webkit-line-clamp:none!important; }
+.framework-overview .q-focus-helper { display:none; }
+.framework-overview .mw-score { white-space:normal; overflow-wrap:anywhere; }
+body[data-theme='dark'] .overview-task.done,body[data-theme='purple'] .overview-task.done { background:#14332a; }
+body[data-theme='dark'] .overview-task.done .ov-task-name,body[data-theme='purple'] .overview-task.done .ov-task-name { color:#bbf7d0; }

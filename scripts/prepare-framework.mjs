@@ -15,6 +15,7 @@ const css=await postcss([prefix({prefix:'.legacy-host',transform:(p,selector,pre
   if(selector.includes(':root')||/^html\b/.test(selector))return selector;
   if(selector.startsWith('.memo-layout'))return selector.replace(/^\.memo-layout/,p);
   if(/^body[^\s]*:has\(/.test(selector))return selector;
+  if(/^body\[data-theme=[^\]]+\]$/.test(selector))return selector;
   if(/^body\b/.test(selector))return selector.replace(/^(body[^\s]*)(\s*)/,(_,body,space)=>body+' '+p+(space?' ':''));
   return prefixed;
 }})]).process(read('css/style.css'),{from:undefined});
