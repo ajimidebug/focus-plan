@@ -163,8 +163,33 @@
     if(!due.length || day!==M().userDay())return '';
     return '<details class="review-due"><summary>到期复习 '+due.length+'轮</summary>'+due.sort((a,b)=>a.due-b.due).map(r=>'<p>'+E(series(r.seriesId)?.text)+' · '+E(clock(r.due))+' <button class="btn btn-small" data-review-open="'+r.id+'">打开本轮</button></p>').join('')+'</details>';
   }
+
+  // Standalone audit exports preserve IDs and existing records; full browser backup remains the restore path.
+  function exportData(){
+    const d=S().data(),q=state(),roundIds=new Set(q.rounds.map(r=>r.id));
+    const tasks=q.rounds.filter(r=>r.taskRef).map(r=>{const f=P().resolve(r.taskRef);return f?{ref:clone(f.ref),task:clone(f.task)}:null}).filter(Boolean);
+    const plans=(d.memoSchedule?.items||[]).filter(p=>roundIds.has(p.memoReviewRoundId)).map(clone);
+    const events=(d.memoEvents||[]).filter(e=>roundIds.has(e.review?.roundId)).map(clone);
+    return {format:'focus-plan-review-export',version:1,exportedAt:new Date().toISOString(),
+      restoreAdvice:'独立报告供审计与人工核对；完整恢复请使用设置中的完整备份，不能把本报告直接当主数据导入。',
+      series:clone(q.series),rounds:clone(q.rounds),tasks,plans,events};
+  }
+  function exportCSV(){
+    const d=exportData(),names=new Map(d.series.map(x=>[x.id,x.text]));
+    const csv=x=>'"'+String(x??'').replace(/"/g,'""')+'"';
+    const rows=[['系列ID','系列名称','轮次ID','轮次','状态','当前计划','原定计划','实际完成','结果','本轮备注','下轮目标','本轮准备','调整次数']];
+    d.rounds.forEach(r=>rows.push([r.seriesId,names.get(r.seriesId)||'',r.id,r.n,r.status,new Date(r.due).toISOString(),new Date(r.originalDue??r.due).toISOString(),r.at||'',results[r.result||'']||'',r.memoThis||'',r.memoNext||'',r.prepNote||'',(r.history||[]).length]));
+    return '\uFEFF'+rows.map(row=>row.map(csv).join(',')).join('\r\n')+'\r\n';
+  }
+  function download(kind='json'){
+    const content=kind==='csv'?exportCSV():JSON.stringify(exportData(),null,2);
+    const blob=new Blob([content],{type:kind==='csv'?'text/csv;charset=utf-8':'application/json;charset=utf-8'});
+    const url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;link.download='focus-plan-reviews-'+M().userDay()+'.'+kind;document.body.appendChild(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
   function registry() {
-    return '<details class="review-registry"><summary>复习任务（'+state().series.length+'）</summary><button class="btn btn-small" data-review-new>＋ 新建复习任务</button>'+state().series.map(s=>{
+    return '<details class="review-registry"><summary>复习任务（'+state().series.length+'）</summary><div class="review-registry-actions"><button class="btn btn-small" data-review-new>＋ 新建复习任务</button><button class="btn btn-small" data-review-export="json">导出复习JSON</button><button class="btn btn-small" data-review-export="csv">导出轮次CSV</button></div><p class="hint">独立导出用于审计；恢复完整数据请使用设置中的完整备份。</p>'+state().series.map(s=>{
       const rs=rounds(s.id),next=rs.filter(r=>r.status==='pending').sort((a,b)=>a.due-b.due)[0];
       return '<div class="review-series"><strong>'+E(s.text)+'</strong><small>已完成'+rs.filter(r=>r.status==='done').length+'轮 · '+(s.stoppedAt?'已停止':s.paused?'已暂停':next?'下次 '+E(clock(next.due)):'暂无下次安排')+'</small><button class="btn btn-small" data-review-series="'+s.id+'">历史与安排</button></div>';
     }).join('')+'</details>';
@@ -225,9 +250,9 @@
   }
   async function openRound(id){const r=round(id);let f=taskOf(r);if(!f)return A.ui.toast('原执行任务已删除，历史仍保留');if(r.status==='cancelled'||series(r.seriesId)?.paused||series(r.seriesId)?.stoppedAt)return manage(r.seriesId);if(f.ref.kind==='task'&&f.ref.day<M().userDay()){try{if(!await A.memoActions.commit(()=>{A.memoFlow.moveCore(f.ref,M().userDay(),f.ref.list);r.taskRef=clone(P().canonical(f.ref));}))return;f=taskOf(r);refresh();}catch(e){A.ui.toast(e.message);manage(r.seriesId);return;}}A.ui.closeModal();if(f.ref.kind==='queue')A.memoActions.queue(f.ref.id);else A.memoActions.task(f.ref.list,f.ref.id,f.ref.day);}
   function init(){
-    document.addEventListener('click',e=>{const b=e.target.closest('[data-review-new],[data-review-series],[data-review-open]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();if(A.memoActions.busy())return A.ui.toast('请先重试保存');if(b.hasAttribute('data-review-new'))newEditor();else if(b.dataset.reviewOpen)openRound(b.dataset.reviewOpen);else manage(b.dataset.reviewSeries);},true);
+    document.addEventListener('click',e=>{const b=e.target.closest('[data-review-new],[data-review-series],[data-review-open],[data-review-export]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();if(A.memoActions.busy())return A.ui.toast('请先重试保存');if(b.dataset.reviewExport){download(b.dataset.reviewExport);return;}if(b.hasAttribute('data-review-new'))newEditor();else if(b.dataset.reviewOpen)openRound(b.dataset.reviewOpen);else manage(b.dataset.reviewSeries);},true);
     let last='';const check=()=>{const key=state().rounds.filter(r=>r.status==='pending'&&r.due<=Date.now()&&!series(r.seriesId)?.paused&&!series(r.seriesId)?.stoppedAt).map(r=>r.id).join('|');if(key!==last&&!document.querySelector('.modal-mask')&&!A.memoActions.busy()){last=key;refresh();}};
     setInterval(check,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)check();});
   }
-  A.memoReview={intervals,suggestion,state,series,round,rounds,locate,taskOf,newSeriesCore,scheduleCore,rescheduleCore,carryCore,skipCarry,stopSeriesCore,cancelCore,pauseCore,assertExecutable,onComplete,onUndo,onDelete,restoreTask,hidden,label,summary,registry,newEditor,scheduleEditor,manage,importCore,completionFields,point,init};
+  A.memoReview={intervals,suggestion,state,series,round,rounds,locate,taskOf,exportData,exportCSV,download,newSeriesCore,scheduleCore,rescheduleCore,carryCore,skipCarry,stopSeriesCore,cancelCore,pauseCore,assertExecutable,onComplete,onUndo,onDelete,restoreTask,hidden,label,summary,registry,newEditor,scheduleEditor,manage,importCore,completionFields,point,init};
 })();
