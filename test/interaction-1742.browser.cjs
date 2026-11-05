@@ -34,6 +34,7 @@ async function run(){
   await page.locator('.task-action-modal').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>App.memoSchedule.state().sessions.filter(s=>s.ref.id==='timer1742').length),1);
   assert.equal(await page.evaluate(()=>App.memoSchedule.state().sessions.find(s=>s.ref.id==='timer1742').chunks.length),2);
+  await page.locator('#mw-live [data-float-toggle]').click();
   await page.locator('#mw-live-controls [data-schedule-command="end"]').click();
   await page.locator('.modal').waitFor({state:'visible'});
   assert.match(await page.locator('.modal').innerText(),/任务仍未完成/);
