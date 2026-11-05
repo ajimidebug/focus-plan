@@ -27,7 +27,7 @@ function validate(task,from,to,dependencies=[]){
 }
 function editor(modal,task,kind,selectedList){
  const field=document.createElement('fieldset');field.id='memo-gantt-fields';
- field.innerHTML='<legend>长期计划（可选）</legend><div class="memo-gantt-dates"><label>开始日期<input type="date" id="memo-gantt-start" value="'+E(task?.memoGanttStart||'')+'"></label><label>截止日期<input type="date" id="memo-gantt-end" value="'+E(task?.memoGanttEnd||'')+'"></label></div><label>依赖项目（可多选）<select multiple size="3" id="memo-gantt-dependencies">'+projects().filter(x=>x.id!==task?.id&&!x.archived).map(x=>'<option value="'+E(x.id)+'"'+((task?.memoGanttDependencies||[]).includes(x.id)?' selected':'')+'>'+E(x.text)+'</option>').join('')+'</select></label><p class="hint">时间条表示计划期间已经经过的比例；实际完成记录单独统计。依赖仅作提示，不自动改变任务日程。</p>';
+ field.innerHTML='<legend>长期计划（可选）</legend><div class="memo-gantt-dates"><label>开始日期<input type="date" id="memo-gantt-start" value="'+E(task?.memoGanttStart||'')+'"></label><label>截止日期<input type="date" id="memo-gantt-end" value="'+E(task?.memoGanttEnd||'')+'"></label></div><label>依赖项目（可多选）<select multiple size="3" id="memo-gantt-dependencies">'+projects().filter(x=>x.id!==task?.id&&(!x.archived||(task?.memoGanttDependencies||[]).includes(x.id))).map(x=>'<option value="'+E(x.id)+'"'+((task?.memoGanttDependencies||[]).includes(x.id)?' selected':'')+'>'+E(x.text)+(x.archived?'（已停用）':'')+'</option>').join('')+'</select></label><p class="hint">时间条表示计划期间已经经过的比例；实际完成记录单独统计。依赖仅作提示，不自动改变任务日程。</p>';
  modal.querySelector('#mw-form-error').before(field);
  const update=()=>{
   const list=modal.querySelector('#mw-list')?.value||selectedList;
