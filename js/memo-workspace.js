@@ -137,7 +137,7 @@
       '<button class="btn" data-act="cancel">取消</button>' + (existing ? '<button class="btn btn-danger" data-act="delete">' + (kind === 'project' || kind === 'daily' ? '停用' : '删除') + '</button>' + (kind === 'task' && ref.list === 'extra' && !reviewLink ? '<button class="btn" data-act="convert">转为每日推进</button>' : '') : '') + '<button class="btn mw-save-start" data-act="save-start">保存并立即开始</button><button class="btn btn-primary" data-act="save">保存</button>', { lock: true, cancelOnBackdrop: true });
     m.classList.add('mw-task-editor');
     const q = s => m.querySelector(s); q('#mw-title').value = existing?.text || ''; q('#mw-note-edit').value = existing?.note || ''; if (q('#mw-points')) q('#mw-points').value = existing?.points ?? (kind === 'queue' ? S().settings().queuePoints ?? 5 : list === 'ideal' || ref?.list === 'ideal' ? S().settings().idealPoints ?? 1 : S().settings().extPoints ?? 5);
-    q('#mw-estimate').value = existing?.estimatedMinutes || ''; q('#mw-priority').value=String(priorityWeight(existing));
+    q('#mw-estimate').value = existing?.estimatedMinutes || ''; if(q('#mw-priority')) q('#mw-priority').value=String(priorityWeight(existing));
     A.memoOrganize?.editor(m,existing,list||ref?.list,ref);const selectList = q('#mw-list');
     if (selectList) { let pointsEdited = false; q('#mw-points').addEventListener('input', () => { pointsEdited = true; }); const update = () => { if (!pointsEdited) q('#mw-points').value = selectList.value === 'ideal' ? S().settings().idealPoints ?? 1 : S().settings().extPoints ?? 5; q('#mw-repeat-wrap').hidden = false;q('[name="mw-repeat"][value="daily"]').closest('label').hidden=selectList.value!=='extra'; q('#mw-points-field').hidden = selectList.value === 'required';q('#mw-priority-field').hidden=selectList.value!=='required'; }; selectList.onchange = update; update(); }
     m.querySelectorAll('[name="mw-repeat"]').forEach(r=>r.addEventListener('change',()=>{if(r.checked&&['review','cycle'].includes(r.value)&&!A.memoActions.busy()){const draft={text:q('#mw-title').value,note:q('#mw-note-edit').value};A.ui.closeModal();if(r.value==='review')A.memoReview.newEditor(null,draft);else A.memoRecurrence.newEditor({...draft,list:q('#mw-list')?.value||list,points:Number(q('#mw-points')?.value)||0,estimatedMinutes:Number(q('#mw-estimate').value)||0});}}));
@@ -173,7 +173,7 @@
         }
         t.estimatedMinutes = Math.min(1440, Math.max(0, Number(q('#mw-estimate').value) || 0)); t.dateBasis = 'user';
         t.text = text; t.note = q('#mw-note-edit').value; if (q('#mw-points')) t.points = Math.max(0, Number(q('#mw-points').value) || 0);
-        if(selectedList==='required'||(!q('#mw-list')&&ref?.list==='required')||(kind==='queue'&&t.assignment?.list==='required')){
+        if(q('#mw-priority')&&(selectedList==='required'||(!q('#mw-list')&&ref?.list==='required')||(kind==='queue'&&t.assignment?.list==='required'))){
           const weight=Number(q('#mw-priority').value);
           if(!Number.isInteger(weight)||weight<1||weight>5)throw Error('必做优先级必须为1—5');
           t.priorityWeight=weight;
