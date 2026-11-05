@@ -63,7 +63,11 @@ async function run(){
   });
   await page.waitForFunction(()=>document.querySelector('#mw-live')?.dataset.meterState==='window');
   assert.equal(await page.locator('#float-meter .float-range-end').innerText(),'13:00');
-  assert.match(await page.locator('#float-meter .float-meter-text').innerText(),/距截止 1:00:00/);
+  const detail=await page.locator('#float-meter .float-meter-text').innerText();
+  const match=detail.match(/距截止 (\\d+):(\\d{2}):(\\d{2})/);
+  assert(match,'remaining time appears in deadline progress');
+  const seconds=Number(match[1])*3600+Number(match[2])*60+Number(match[3]);
+  assert(seconds>=3590&&seconds<=3600,'remaining time is within rendering delay of one hour');
   assert.match(await page.locator('#float-meter .float-meter-track').getAttribute('aria-label'),/截止时刻/);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),true);
   await page.reload();await page.waitForFunction(()=>App?.app?.ready);
