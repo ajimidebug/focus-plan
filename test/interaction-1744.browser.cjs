@@ -24,7 +24,7 @@ const server=http.createServer((req,res)=>{
     const series=A.memoReview.newSeriesCore({text:'测试复习',note:'初始备注',points:1,list:'ideal',due:Date.now()+3600000});
     const round=A.memoReview.rounds(series.id)[0],event={id:'mock-event',at:new Date().toISOString()};
     A.memoReview.onComplete(event,{...round.taskRef,review:{result:'partial',mode:'relative',minutes:30,memoThis:'本次识别错误',memoNext:'下次集中测试'}});
-    d.memoEvents.push({...event,active:true,kind:'task',sourceId:round.taskRef.id,sourceDay:round.taskRef.day});
+    (d.memoEvents||(d.memoEvents=[])).push({...event,active:true,kind:'task',sourceId:round.taskRef.id,sourceDay:round.taskRef.day});
     const follow=A.memoReview.round(event.review.nextRoundId);
     await S.save();A.memoWorkspace.render();A.memoWishes.render();
     let cycle=false;try{A.memoGantt.validate({id:'gantt-a'},'2026-11-02','2026-11-12',['gantt-b'])}catch(e){cycle=/循环/.test(e.message)}
