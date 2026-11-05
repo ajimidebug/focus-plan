@@ -10,7 +10,11 @@ function place() {
  const root = document.getElementById('mw-live'); if (!root) return;
  const viewport = window.visualViewport, height = viewport?.height || window.innerHeight, offset = viewport?.offsetTop || 0;
  const bottom = height < 500 ? 64 : 88;
- const target = height < 500 ? Math.min(64, height * .18) : Math.max(144, Math.min(260, height * .24));
+ const taskDetails = document.body.dataset.view === 'tasks' && ['mw-details','mw-queue','mw-reviews','mw-history','mw-legacy'].some(id => { const el=document.getElementById(id); return el && !el.hidden; });
+ const baseTop = height < 500 ? Math.min(64, height * .18) : Math.max(144, Math.min(260, height * .24));
+ // More-page forms need their heading controls unobstructed while the timer remains reachable.
+ // Clamp against the visual viewport, including virtual keyboard and offsetTop.
+ const target = taskDetails ? Math.max(baseTop, height * (height < 500 ? .5 : .46)) : baseTop;
  const top = Math.max(12, Math.min(target, height - bottom - 112));
  const placement = (offset + top).toFixed(1) + ':' + Math.max(44, height - top - bottom).toFixed(1);
  if (placement === lastPlacement) return;
@@ -112,5 +116,5 @@ document.addEventListener('click', e => {
  if (found.ref.kind === 'checkin') A.memoActions.checkin(found.ref.id, found.ref.day);
  else A.memoWorkspace.complete(found.ref);
 }, true);
-A.memoFloat = { update };
+A.memoFloat = { update, place };
 })();
