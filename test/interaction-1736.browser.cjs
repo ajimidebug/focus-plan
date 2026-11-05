@@ -113,7 +113,6 @@ async function run(){
     await page.setViewportSize({width,height:340});await page.evaluate(()=>window.dispatchEvent(new Event('resize')));const small=await float.boundingBox();check(small.y>=0&&small.y+small.height<=300,'keyboard-height viewport keeps float reachable');
     await page.setViewportSize({width,height});await page.evaluate(()=>window.dispatchEvent(new Event('resize')));
     await page.evaluate(()=>{Object.defineProperty(window,'visualViewport',{configurable:true,value:{height:360,offsetTop:80}});window.dispatchEvent(new Event('resize'));});
-    console.log('viewport-diagnostic',width,JSON.stringify(await page.evaluate(()=>{const e=document.querySelector('#mw-live'),r=e.getBoundingClientRect(),cs=getComputedStyle(e);return {viewport:window.visualViewport,innerHeight:innerHeight,rect:{top:r.top,bottom:r.bottom,height:r.height},styles:{top:cs.top,maxHeight:cs.maxHeight,position:cs.position},customTop:e.style.getPropertyValue('--float-top'),customRoom:e.style.getPropertyValue('--float-room')};})));
     await page.waitForFunction(()=>{const r=document.querySelector('#mw-live')?.getBoundingClientRect();return !!r&&r.top>=80&&r.bottom<=440;},null,{timeout:5000});
     const offset=await float.boundingBox();check(offset.y>=80&&offset.y+offset.height<=440,'visual viewport offset bounds are respected');
     await page.evaluate(()=>{delete window.visualViewport;window.dispatchEvent(new Event('resize'));});
