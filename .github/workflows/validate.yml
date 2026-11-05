@@ -23,7 +23,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: node scripts/prepare-release.mjs 174.0.0
+      - run: node scripts/prepare-release.mjs "$(node -p \"require('./package.json').version\")"
       - run: npm run check
       - run: npm run build
       - run: npm run typecheck
@@ -63,3 +63,34 @@ jobs:
           name: browser-${{ matrix.script }}
           path: test-results/
           if-no-files-found: ignore
+
+  stage-pages:
+    # Build a candidate only after every browser check has passed. Publishing is a separate, reviewed PR.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, browser]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-spa
+          path: dist/spa
+      - name: Stage verified site against current gh-pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          test -f dist/spa/version.json
+          test "$(node -p "require('./dist/spa/version.json').id")" = "$(node -p "require('./package.json').version")"
+          git fetch origin gh-pages
+          git worktree add --detach "$RUNNER_TEMP/focus-pages" origin/gh-pages
+          cd "$RUNNER_TEMP/focus-pages"
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "$GITHUB_WORKSPACE/dist/spa/." .
+          git add -A
+          git -c user.name="focus-plan release bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "release: 174.1.0 verified SPA"
+          git push origin HEAD:refs/heads/release/174.1.0-built
