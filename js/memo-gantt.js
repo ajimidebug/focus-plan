@@ -24,7 +24,7 @@ function validate(task,from,to,dependencies=[]){
    if(seen.has(id))return;seen.add(id);
    const p=projects().find(x=>x.id===id);
    if(!p)throw Error('依赖项目不存在，请重新选择');
-   if(!Array.isArray(p.memoGanttDependencies))throw Error('前置项目依赖格式异常');
+   if(p.memoGanttDependencies!=null&&!Array.isArray(p.memoGanttDependencies))throw Error('前置项目依赖格式异常');
    p.memoGanttDependencies.forEach(visit);
  }
  deps.forEach(visit);
