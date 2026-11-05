@@ -8,6 +8,13 @@ body.framework-layout { margin:0; padding:0; background:var(--bg); color:var(--i
 .shell-brand { font-size:20px; font-weight:750; letter-spacing:.03em; }
 .shell-location { margin-left:10px; padding-left:10px; border-left:1px solid #ffffff52; color:#ffffffe0; font-size:13px; }
 .shell-stats { max-width:1160px; margin:auto; }
+body[data-view='tasks'] .shell-stats { display:none!important; }
+.framework-overview .overview-heading { gap:8px;flex-wrap:wrap; }
+.framework-overview .mw-date-header { margin:0;display:flex;gap:6px;align-items:center;flex:1 1 200px;justify-content:flex-end;min-width:0; }
+.framework-overview .mw-date-header #mw-day { flex:0 1 130px;min-width:0; }
+.framework-overview .mw-date-header .mw-day-shortcuts { order:initial;flex:0 1 194px;width:auto;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px; }
+.framework-overview .mw-day-shortcuts>.btn { min-height:38px;padding:4px 2px; }
+@media(max-width:420px){.framework-overview .mw-date-header{flex:1 1 100%;justify-content:space-between;}.framework-overview .mw-date-header #mw-day{flex:0 1 130px;}.framework-overview .mw-date-header .mw-day-shortcuts{flex:1 1 180px;}}
 .shell-stats #stat-bar { position:static!important; display:flex!important; flex-wrap:wrap!important; justify-content:space-between; gap:6px 14px!important; width:100%; padding:5px 14px 8px!important; overflow:visible; background:transparent!important; color:inherit; }
 .shell-stats #stat-bar .stat-item { flex:1 1 72px; min-width:0; display:flex!important; flex-direction:column; align-items:flex-start; gap:0; padding:0!important; }
 .shell-stats .stat-label { font-size:11.5px; color:#ffffffcc; opacity:1; }
@@ -164,3 +171,22 @@ body.framework-layout .mw-detail-disclosure:not([open]) .mw-full-list { display:
 body.framework-layout .shell-toolbar { min-height:40px; }
 body.framework-layout .shell-stats #stat-bar { row-gap:3px!important; }
 body.framework-layout .shell-save-status { font-size:10px; line-height:1.2; padding:2px 10px; }
+
+/* 174.8 modular transfer: scroll the module picker locally, never widen the page. */
+.q-dialog .legacy-host .mx-tabs{display:flex;gap:6px;margin-bottom:8px}
+.q-dialog .legacy-host .mx-tabs>.btn{flex:1;min-height:40px}
+.q-dialog .legacy-host .mx-tabs [aria-pressed="true"]{background:var(--primary);color:#fff}
+.q-dialog .legacy-host .mx-select-actions{display:flex;gap:6px;margin:8px 0}
+.q-dialog .legacy-host .mx-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;min-width:0;max-height:40vh;overflow:auto;padding:3px}
+.q-dialog .legacy-host .mx-option{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;line-height:1.35;padding:6px;border:1px solid var(--line);border-radius:6px}
+.q-dialog .legacy-host .mx-option input{flex:none}
+.q-dialog .legacy-host .mx-option span{overflow-wrap:anywhere}
+@media(max-width:360px){.q-dialog .legacy-host .mx-grid{grid-template-columns:1fr}}
+
+/* Keep memo-float.js as the single viewport-positioning authority across
+   three-column tasks and More pages, including keyboard visual viewport offsets. */
+
+/* Floating timer's passive surface must not block task buttons behind it.
+   Its actual controls remain interactive. */
+body.framework-layout #mw-live{pointer-events:none;}
+body.framework-layout #mw-live button{pointer-events:auto;}

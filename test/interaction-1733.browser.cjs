@@ -31,11 +31,13 @@ async function run(){
     d.ledger=[{id:'income',date:old,at:day+'T08:00:00+08:00',type:'earn-task',points:120,note:'补记收入'},{id:'cost',date:day,at:day+'T09:00:00+08:00',type:'redeem',points:-50,note:'今日消费'},{id:'legacy',date:old,type:'earn-task',points:1000,note:'旧积分'}];
     await S.save();App.app.refreshStats();App.app.switchView('tasks');App.memoWorkspace.enter('today',day);return {day,old};
    });
+   await page.evaluate(()=>App.app.switchView('checkin'));
    check((await page.locator('#stat-points-today').innerText())==='今日 +120 / −50','header signed flow '+width);
-   check((await page.locator('#mw-today [data-overview-list="required"] .mw-column-count').innerText())==='2/4','column denominator excludes bad habit '+width);
+   await page.evaluate(()=>App.app.switchView('tasks'));
+   check((await page.locator('#mw-today [data-overview-list="required"] .mw-column-count').innerText())==='1/3','task-only denominator excludes point habits '+width);
    check(await page.locator('#mw-today .mw-column-meter').count()===3,'one slim meter per column '+width);
-   check(/监督 1项/.test(await page.locator('#mw-today [data-overview-list="required"]').innerText()),'supervision separately labelled '+width);
-   await page.locator('#stat-points-today').click();
+   check(!/监督 1项/.test(await page.locator('#mw-today [data-overview-list="required"]').innerText()),'habits are not shown in the task columns '+width);
+   await page.evaluate(()=>App.app.switchView('checkin'));await page.locator('#stat-points-today').click();
    check(/收入 \+120.*支出 −50/.test(await page.locator('.modal-body').innerText()),'daily breakdown '+width);
    check((await page.locator('.modal-body').innerText()).includes('行为日 '+old),'backfill behavior day retained '+width);
    check(/1条旧流水/.test(await page.locator('.modal-body').innerText()),'missing timestamp explained '+width);

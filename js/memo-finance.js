@@ -127,10 +127,10 @@ function deferredTarget(task,ref,day){
  if(origin&&M().validDate(task.backfillDay))return task.backfillDay>origin;
  return !!A.memoFlow?.isCarried(task)||!!(origin&&origin<day);
 }
-function column(day,list){
+function column(day,list,includeHabits=true){
  const tasks=A.memoSchedule.columnItems(day,list).map(x=>({id:A.memoSchedule.key(x.ref),title:x.task.text,done:x.done,target:true,kind:x.ref.kind,deferred:deferredTarget(x.task,x.ref,day),backfillDay:x.task.backfillDay||'',originalDay:x.task.originalDay||''}));
  (A.memoFlow?.deferred?.(day,list)||[]).forEach(x=>tasks.push({id:'deferred:'+x.ref.kind+':'+day+':'+x.ref.id,title:x.task.text,done:false,target:!x.closed,kind:x.ref.kind,deferredTo:x.toDay,deferredClosed:x.closed,deferred:true,backfillDay:'',originalDay:x.task.originalDay||''}));
- const habits=plans(day).filter(x=>!x.r.hidden&&x.r.list===list).map(x=>{const mode=A.memoPenalty?.policy(x.it,day).mode||'reward';return {id:'habit:'+x.it.id,title:x.it.text,kind:'checkin',mode,count:x.n,goal:x.r.target,target:mode!=='punch'&&x.r.target>0,done:mode!=='punch'&&x.r.target>0&&x.n>=x.r.target};});
+ const habits=(includeHabits?plans(day):[]).filter(x=>!x.r.hidden&&x.r.list===list).map(x=>{const mode=A.memoPenalty?.policy(x.it,day).mode||'reward';return {id:'habit:'+x.it.id,title:x.it.text,kind:'checkin',mode,count:x.n,goal:x.r.target,target:mode!=='punch'&&x.r.target>0,done:mode!=='punch'&&x.r.target>0&&x.n>=x.r.target};});
  const items=tasks.concat(habits),targets=items.filter(x=>x.target),done=targets.filter(x=>x.done).length,total=targets.length,supervision=habits.filter(x=>x.mode==='punch').length;
  const deferred=targets.filter(x=>!x.done&&x.deferred).length,lateDone=targets.filter(x=>x.done&&x.deferred).length;
  const segments=[{state:'late-done',label:'延期完成',count:lateDone},{state:'done',label:'当日完成',count:done-lateDone},{state:'pending',label:'普通未完成',count:total-done-deferred},{state:'deferred',label:'延期未完成',count:deferred}].map(x=>({...x,percent:total?x.count/total*100:0}));

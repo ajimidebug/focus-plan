@@ -20,7 +20,8 @@ function navigate(view:string) {
 }
 function extra(kind:string) {
   screen.more=false
-  if(kind==='history'){window.App.app.switchView('tasks');window.App.memoWorkspace.showPane('history')}
+  if(['history','queue','reviews','legacy','details'].includes(kind)){window.App.app.switchView('tasks');window.App.memoWorkspace.showPane(kind)}
+  if(kind==='transfer')window.App.memoTransfer?.open()
   if(kind==='trash')window.App.memoActions.trash()
   if(kind==='ddl')window.App.ms.open()
 }
@@ -64,7 +65,7 @@ onMounted(async()=>{
     </q-footer>
     <q-dialog v-model="screen.more" position="bottom" aria-label="更多页面">
       <q-card id="more-pages" class="more-sheet"><q-card-section class="more-title"><h2>更多</h2><q-btn flat dense label="收起" v-close-popup /></q-card-section><q-separator />
-        <q-card-section class="more-grid"><q-btn v-for="item in more" :key="item.view" outline no-caps :label="item.name" @click="navigate(item.view)" /><q-btn outline no-caps label="任务历史" @click="extra('history')" /><q-btn outline no-caps label="删除记录" @click="extra('trash')" /><q-btn outline no-caps label="截止日期" @click="extra('ddl')" /></q-card-section>
+        <q-card-section class="more-grid"><q-btn v-for="item in more" :key="item.view" outline no-caps :label="item.name" @click="navigate(item.view)" /><q-btn outline no-caps label="待安排任务" @click="extra('queue')" /><q-btn outline no-caps label="复习与周期管理" @click="extra('reviews')" /><q-btn outline no-caps label="基础任务与归档" @click="extra('legacy')" /><q-btn outline no-caps label="详细任务管理" @click="extra('details')" /><q-btn outline no-caps label="批量导入导出" @click="extra('transfer')" /><q-btn outline no-caps label="任务历史" @click="extra('history')" /><q-btn outline no-caps label="删除记录" @click="extra('trash')" /><q-btn outline no-caps label="截止日期" @click="extra('ddl')" /></q-card-section>
         <q-card-section class="more-foot">版本 {{windowRelease}} · 数据保存在当前浏览器</q-card-section>
       </q-card>
     </q-dialog>

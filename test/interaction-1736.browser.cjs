@@ -19,7 +19,7 @@ async function run(){
    const context=await browser.newContext({viewport:{width,height},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
    page.on('pageerror',e=>errors.push(e.message));await page.clock.install({time:new Date('2026-10-30T12:30:00+08:00')});
    await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>App?.app?.ready);
-   await page.addStyleTag({content:'#toast-root{visibility:hidden!important}'});
+   await page.addStyleTag({content:'#toast-root{visibility:hidden!important}#q-notify,#q-notify *{pointer-events:none!important}'});
    if(process.env.FOCUS_TEST_FONT_DIR){await page.addStyleTag({content:'@import url("/__fonts/400.css");body,button,input,textarea,select{font-family:"Noto Sans SC",sans-serif!important}'});await page.evaluate(()=>document.fonts.ready);}
    const day=await page.evaluate(async()=>{
     const S=App.store,M=App.memoCore,P=App.memoSchedule,d=S.data(),day=M.userDay(),at=t=>Date.parse(day+'T'+t+':00+08:00');
@@ -75,7 +75,7 @@ async function run(){
    await group.click();check((await page.locator('.modal-body').innerText()).includes('密集打卡 5'),'dense popup retains every source '+width);
    await page.locator('[data-density-open]').last().click();check(await page.locator('[data-schedule-checkins]').getAttribute('open')!==null,'group links to exact checkin card '+width);
    // Entry points share a form; points must be above notes, including grouped extras.
-   await page.evaluate(day=>{App.app.switchView('tasks');App.memoWorkspace.enter('today',day);},day);await page.locator('.mw-detail-disclosure > summary').click();
+   await page.evaluate(day=>{App.app.switchView('tasks');App.memoWorkspace.enter('today',day);},day);await page.evaluate(()=>App.memoWorkspace.showPane('details'));
    for(const list of ['required','ideal','extra']){
     await page.locator('#mw-column-'+list+' [data-mw="add-'+list+'"]').click();
     await page.locator('.modal').waitFor({state:'visible'});await page.locator('.modal').evaluate(e=>e.getAnimations().forEach(a=>a.finish()));
@@ -113,6 +113,7 @@ async function run(){
     await page.setViewportSize({width,height:340});await page.evaluate(()=>window.dispatchEvent(new Event('resize')));const small=await float.boundingBox();check(small.y>=0&&small.y+small.height<=300,'keyboard-height viewport keeps float reachable');
     await page.setViewportSize({width,height});await page.evaluate(()=>window.dispatchEvent(new Event('resize')));
     await page.evaluate(()=>{Object.defineProperty(window,'visualViewport',{configurable:true,value:{height:360,offsetTop:80}});window.dispatchEvent(new Event('resize'));});
+    await page.waitForFunction(()=>{const r=document.querySelector('#mw-live')?.getBoundingClientRect();return !!r&&r.top>=80&&r.bottom<=440;},null,{timeout:5000});
     const offset=await float.boundingBox();check(offset.y>=80&&offset.y+offset.height<=440,'visual viewport offset bounds are respected');
     await page.evaluate(()=>{delete window.visualViewport;window.dispatchEvent(new Event('resize'));});
    }

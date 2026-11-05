@@ -74,16 +74,41 @@
   }
   function categoryBody(items,day,list){const open=items.filter(x=>x.deferred||!doneFor(x.task,x.ref)),done=items.filter(x=>!x.deferred&&doneFor(x.task,x.ref)),renderItem=x=>x.deferred?deferredHTML(x):card(x.task,x.ref);return (list==='extra'&&A.memoOrganize?A.memoOrganize.grouped(open,rows=>rows.map(renderItem).join('')):open.map(renderItem).join(''))+(A.memoFinance?.planned(day,list,false)||'')+(A.memoOrganize?.fold('full:'+day+':'+list,done.map(x=>'<small>'+esc((S().data().memoTaskGroups||[]).find(g=>g.id===x.task.memoGroup)?.name||'')+'</small>'+card(x.task,x.ref)).join(''),done.length)||'');}
   function renderTasks() {
-    taskDay = taskDay || M().userDay();if(A.memoRecurrence?.needsDay(taskDay)&&!A.memoActions.busy()){const requestedDay=taskDay;commit(()=>A.memoRecurrence.ensureCore(requestedDay));return;} const day = S().getDay(taskDay), occurrenceDay = taskDay === M().userDay() ? M().userDay() : taskDay;
-    const root = $('mw-today');
-    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + '<div class="mw-day-shortcuts" role="group" aria-label="快捷日期">'+button('yesterday','昨天')+button('today','今天')+button('tomorrow','明天')+'</div>' + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + button('ddl', '截止日期', 'id="mw-ddl"') + '</div>' + (A.memoReview?.summary(taskDay)||'') + (A.framework ? '<div data-framework-overview></div>' : overviewHTML(taskDay)) + (A.memoFinance?.panel(taskDay)||'') + '<details class="mw-detail-disclosure"><summary>详细任务与其他管理</summary><div class="mw-full-list">' + ['required', 'ideal', 'extra'].map(list => {
+    taskDay = taskDay || M().userDay();
+    if(A.memoRecurrence?.needsDay(taskDay)&&!A.memoActions.busy()){
+      const requestedDay=taskDay;commit(()=>A.memoRecurrence.ensureCore(requestedDay));return;
+    }
+    const root=$('mw-today');
+    // Daily hub: one three-column board and one long-term Gantt. Secondary
+    // management views are created only when explicitly opened from More.
+    root.innerHTML=(A.framework?'<div data-framework-overview></div>':overviewHTML(taskDay))+(A.memoGantt?.html()||'');
+    if(A.framework)A.framework.overview(root.querySelector('[data-framework-overview]'),taskDay);
+    A.ms?.refresh();
+  }
+  function setDay(day) {
+    if(!M().validDate(day))return;
+    taskDay=day;positions.today=0;pane='today';render();
+  }
+  function renderDetails() {
+    const root=$('mw-details');if(!root)return;
+    root.innerHTML='<h2>详细任务管理 · '+esc(taskDay)+'</h2><div class="mw-full-list">' + ['required', 'ideal', 'extra'].map(list => {
       const items = taskItems(taskDay,list);
       return '<section class="mw-group" id="mw-column-'+list+'"><div class="mw-group-head"><h2>' + names[list] + '<small> · 待做 ' + (items.filter(x => !x.deferred&&!doneFor(x.task, x.ref)).length+(A.memoFinance?.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode!=='punch'&&x.n<x.r.target).length||0)) + ((A.memoFinance?.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode==='punch').length||0)?' · 监督 '+A.memoFinance.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode==='punch').length:'') + '</small></h2>' + button('add-' + list, '＋ 添加', 'aria-label="添加' + names[list] + '"') + '</div>' + categoryBody(items,taskDay,list) + (list==='required'?(A.memoGoals?.html(taskDay,false)||''):'') + (list === 'extra' ? (A.memoRecurrence?.registry()||'')+(A.memoReview?.registry()||'')+'<details class="mw-project-help"><summary>项目说明与已停用项目</summary><p class="hint">长期拓展是三栏分类；长期项目是持续任务实体；积分习惯仅为安排引用，不会生成第二条积分任务。一次性任务保留日期，每日推进项目可以停用。</p>' + (S().data().daily || []).filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-daily', '恢复基础任务', refAttrs({ kind: 'daily', id: p.id })) + '</p>').join('') + projects().filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-project', '恢复项目', refAttrs({ kind: 'project', id: p.id })) + '</p>').join('') + '</details>' : '') + '</section>';
-    }).join('') + '</div></details>' + (A.memoGantt?.html()||'') + backlog() + ((S().data().daily || []).some(t => !t.archived) ? '<section class="mw-group"><h2>原有基础任务</h2>' + taskSection(S().data().daily.filter(t => !t.archived&&!t.memoCategoryDays?.[occurrenceDay]).map(task => ({ task, ref: { kind: 'daily', id: task.id, day: occurrenceDay } }))) + '</section>' : '');
-    ['yesterday','today','tomorrow'].forEach((k,i)=>{const b=root.querySelector('[data-mw="'+k+'"]');b?.setAttribute('aria-pressed',String(taskDay===M().shiftDay(M().userDay(),i-1)));});
-    if (A.framework) A.framework.overview(root.querySelector('[data-framework-overview]'), taskDay);
-    A.ms?.refresh();
-    $('mw-day').onchange = e => { if (M().validDate(e.target.value)) { taskDay = e.target.value; renderTasks(); } };
+    }).join('') + '</div>';
+  }
+  function renderLegacy() {
+    const root=$('mw-legacy');if(!root)return;
+    const day=taskDay||M().userDay();
+    const old=(S().data().daily||[]).filter(t=>!t.archived&&!t.memoCategoryDays?.[day]);
+    const archivedDaily=(S().data().daily||[]).filter(t=>t.archived);
+    const archivedProjects=projects().filter(t=>t.archived);
+    root.innerHTML='<h2>基础任务与归档</h2>'+
+      '<p class="hint">旧基础任务未删除；可在这里管理，已安排到三栏的任务继续在三栏操作。</p>'+
+      (old.length?taskSection(old.map(task=>({task,ref:{kind:"daily",id:task.id,day}}))):'<p class="hint">暂无未分类基础任务</p>')+
+      '<details><summary>已停用基础任务（'+archivedDaily.length+'）</summary>'+
+      archivedDaily.map(t=>'<p>'+esc(t.text)+button('restore-daily','恢复基础任务',refAttrs({kind:'daily',id:t.id}))+'</p>').join('')+
+      '</details><details><summary>已停用长期项目（'+archivedProjects.length+'）</summary>'+
+      archivedProjects.map(t=>'<p>'+esc(t.text)+button('restore-project','恢复项目',refAttrs({kind:'project',id:t.id}))+'</p>').join('')+'</details>';
   }
   function renderQueue() {
     const all = sortedQueue().filter(t=>!t.memoDismissed&&!A.memoReview?.hidden(t,t.assignment?.list)), q = all.filter(t => !t.assignment), assigned = all.filter(t => t.assignment), done = S().data().queueDone || [];
@@ -98,20 +123,21 @@
     root?.querySelectorAll('details').forEach(el => { if (disclosures.has(detailKey(el))) el.open = true; });
     if (ref && document.body.dataset.view === 'tasks' && pane !== 'timeline') requestAnimationFrame(() => { const next = [...root.querySelectorAll('[data-mw-card],.mw-history-row[data-ref]')].find(el => el.dataset.ref === ref); if (next) window.scrollBy(0, next.getBoundingClientRect().top - offset); });
   }
-  function renderReviews() { $('mw-reviews').innerHTML = (A.memoReview?.registry()||'') + (A.memoRecurrence?.registry()||''); }
-  function render() { if (!ready) return; preserve(() => { renderTasks(); if(pane==='queue')renderQueue(); if(pane==='history')renderHistory(); if(pane==='reviews')renderReviews(); renderPending(); applyPane(); }); A.memoSchedule.tick?.(); A.app?.refreshStats();
+  function renderReviews() { $('mw-reviews').innerHTML = (A.memoReview?.summary(M().userDay())||'') + (A.memoReview?.registry()||'') + (A.memoRecurrence?.registry()||''); }
+  function render() { if (!ready) return; preserve(() => { renderTasks(); if(pane==='queue')renderQueue(); if(pane==='history')renderHistory(); if(pane==='reviews')renderReviews(); if(pane==='legacy')renderLegacy(); if(pane==='details')renderDetails(); renderPending(); applyPane(); }); A.memoSchedule.tick?.(); A.app?.refreshStats();
     if (completionFocus) { const ref = completionFocus.ref, t = A.memoSchedule.find(ref); if (t && doneFor(t, ref) !== completionFocus.before) { const cardEl = [...document.querySelectorAll('[data-mw-card]')].find(el => el.dataset.ref === JSON.stringify(ref)); const folded = cardEl?.closest('.mw-completed:not([open])'); (folded?.querySelector('summary') || cardEl?.querySelector('[data-mw="complete"]'))?.focus({ preventScroll: true }); completionFocus = null; } }
   }
-  function applyPane() { ['today', 'queue', 'reviews', 'history', 'pending'].forEach(p => { const el = $('mw-' + p); el.hidden = p !== pane; document.querySelector('[data-mw-pane="' + p + '"]')?.setAttribute('aria-pressed', String(p === pane)); });
+  function applyPane() { ['today', 'queue', 'reviews', 'history', 'legacy', 'details', 'pending'].forEach(p => { const el = $('mw-' + p); el.hidden = p !== pane; document.querySelector('[data-mw-pane="' + p + '"]')?.setAttribute('aria-pressed', String(p === pane)); });
     const sessions = A.memoSchedule.state().sessions, shown = sessions.find(s => s.status === 'running') || sessions.find(s => s.status === 'paused');
     const container = pane === 'timeline' ? null : $(pane === 'queue' ? 'mw-queue' : 'mw-today');
     $('mw-live')?.classList.toggle('mw-local-timer', !!shown && [...(container?.querySelectorAll('[data-mw-card]') || [])].some(el => A.memoSchedule.key(JSON.parse(el.dataset.ref)) === A.memoSchedule.key(shown.ref)));
+    A.memoFloat?.place?.();
   }
   function showPane(next, save = true, options = {}) {
     if(next==='pending')next='queue';
     if (next === 'timeline') { A.app.switchView('timeline'); return A.memoSchedule.open(Object.assign({}, options, { workspace: true })); }
     if (save) positions[pane] = window.scrollY;
-    pane = next; if(next==='queue')renderQueue();else if(next==='history')renderHistory();else if(next==='reviews')renderReviews();applyPane(); if (next === 'timeline') A.memoSchedule.open(Object.assign({}, options, { workspace: true }));
+    pane = next; if(next==='queue')renderQueue();else if(next==='history')renderHistory();else if(next==='reviews')renderReviews();else if(next==='legacy')renderLegacy();else if(next==='details')renderDetails();applyPane(); if (next === 'timeline') A.memoSchedule.open(Object.assign({}, options, { workspace: true }));
     requestAnimationFrame(() => { if (options.focusCard) $('schedule-card-' + options.focusCard)?.scrollIntoView({ block: 'center' }); else window.scrollTo({ top: positions[next] || 0 }); });
   }
   function enter(next, day) { if(day && M().validDate(day)){taskDay=day;render();}  if (next) showPane(next, false); else { applyPane(); requestAnimationFrame(() => window.scrollTo({ top: positions[pane] || 0 })); } }
@@ -255,7 +281,7 @@
     const root = $('view-tasks');
     const axis = document.createElement('section'); axis.id = 'view-memo-timeaxis'; axis.className = 'view'; document.querySelector('main').appendChild(axis); axis.appendChild($('memo-schedule-panel'));
     const error = document.createElement('button'); error.id = 'flow-save-error'; error.className = 'btn btn-danger'; error.hidden = true; document.querySelector('main').before(error);
-    root.insertAdjacentHTML('afterbegin', '<div class="mw-tabs" role="group" aria-label="任务子页面">' + [['today','三栏任务'],['queue','待安排'],['reviews','复习管理']].map(([id, label]) => '<button class="btn" data-mw-pane="' + id + '">' + label + '</button>').join('') + '</div><p id="mw-error" role="alert"></p><div id="mw-today"></div><div id="mw-queue" hidden></div><div id="mw-reviews" hidden></div><div id="mw-history" hidden></div><div id="mw-pending" hidden></div>');
+    root.insertAdjacentHTML('afterbegin', '<p id="mw-error" role="alert"></p><div id="mw-today"></div><div id="mw-queue" hidden></div><div id="mw-reviews" hidden></div><div id="mw-history" hidden></div><div id="mw-legacy" hidden></div><div id="mw-details" hidden></div><div id="mw-pending" hidden></div>');
     // Keep legacy review content reachable, with mutation entries retired in memo mode.
     const review = document.createElement('section'); review.id = 'view-memo-review'; review.className = 'view'; review.innerHTML = '<h2>今日复盘</h2><p class="hint">完成和补记请在任务中操作，统一关联笔记、积分与时间轴。</p>'; $('review-card').parentNode.removeChild($('review-card')); review.appendChild(document.createElement('div')).id = 'review-card'; document.querySelector('main').appendChild(review);
     document.querySelectorAll('.mn-grid, header nav').forEach(el => el.insertAdjacentHTML('beforeend', '<button class="nav-btn btn" data-view="memo-review">今日复盘</button>'));
@@ -263,7 +289,6 @@
     document.querySelectorAll('[data-view="memo-review"]').forEach(b => b.onclick = () => { A.app.switchView('memo-review'); const d = S().getDay(M().userDay()); renderReview(d); });
     $('schedule-active').before($('schedule-live')); const live = document.createElement('div'); live.id = 'mw-live'; live.append($('schedule-live'), $('schedule-active')); const controls = document.createElement('span'); controls.id = 'mw-live-controls'; live.appendChild(controls); document.querySelector('main').before(live);
     document.querySelector('.mn-grid').insertAdjacentHTML('beforeend','<button class="btn" id="mw-open-history">任务历史</button>');$('mw-open-history').onclick=()=>{$('mn-sheet')?.classList.add('hidden');A.app.switchView('tasks');showPane('history');};
-    root.querySelectorAll('[data-mw-pane]').forEach(b => b.onclick = () => showPane(b.dataset.mwPane));
     root.addEventListener('click', e => {
       const gantt=e.target.closest('[data-gantt-edit]');if(gantt){e.preventDefault();e.stopImmediatePropagation();return editor({kind:'project',id:gantt.dataset.ganttEdit,day:taskDay},'extra');}
       const deferred=e.target.closest('[data-deferred-open],[data-deferred-backfill],[data-deferred-assign]');if(deferred){e.preventDefault();e.stopImmediatePropagation();if(deferred.hasAttribute('data-deferred-assign'))return assignmentEditor(JSON.parse(deferred.dataset.deferredAssign));return deferred.hasAttribute('data-deferred-open')?openDeferred(JSON.parse(deferred.dataset.deferredOpen)):A.memoFlow.backfill(JSON.parse(deferred.dataset.deferredBackfill),deferred.dataset.deferredDay);}
@@ -298,5 +323,5 @@
     A.memoReview?.init();A.memoRecurrence?.init();
     render();
   }
-  A.memoWorkspace = { assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
+  A.memoWorkspace = { setDay, assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
 })();
