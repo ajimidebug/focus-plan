@@ -2667,7 +2667,7 @@ body[data-theme="dark"] [data-bounty-tier="high"],body[data-theme="purple"] [dat
   color:var(--req);background:var(--card);border-color:var(--req);font-weight:650;
 }
 #mw-live .float-complete{border:1px solid var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--card));color:var(--ink);font-weight:650;}
-#mw-live.float-collapsed .float-complete{display:block;min-height:34px;padding:5px 8px;margin-bottom:3px;}
+#mw-live.float-collapsed .float-complete{display:none;}
 #mw-live .float-hour-note{grid-column:1/-1;font-size:11px;color:var(--muted);line-height:1.4;overflow-wrap:anywhere;}
 #mw-live .float-hour-note[hidden]{display:none!important;}
 #mw-live.float-collapsed .float-hour-note{display:none;}
@@ -2679,5 +2679,3 @@ body[data-theme="dark"] [data-bounty-tier="high"],body[data-theme="purple"] [dat
   #mw-live #mw-live-controls .btn{padding:4px 6px;font-size:11px;}
 }
 
-/* Time-axis markers must remain clickable under the compact running timer. */
-body[data-view="memo-timeaxis"] #mw-live.float-collapsed .float-complete{display:none;}
