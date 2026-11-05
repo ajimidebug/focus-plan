@@ -134,7 +134,9 @@
       if(!Number.isFinite(due)||due<=Date.parse(event.at))throw Error('下一轮应晚于本轮完成时刻');
       const pending=rounds(s.id).find(x=>x.id!==r.id&&x.status==='pending'&&x.parentEventId===event.id);
       const next=pending||scheduleCore(s.id,due,{parentEventId:event.id,templateStep:(r.templateStep||0)+1});event.review.nextRoundId=next.id;
-      if(r.memoNext&&!next.prepNote){next.prepNote=r.memoNext;const f=taskOf(next);if(f)f.task.note=[s.note,'下轮目标：'+r.memoNext].filter(Boolean).join('\n');}
+      if(r.memoNext&&!next.prepNote){next.prepNote=r.memoNext;const f=taskOf(next);
+        // Independent next rounds keep their manually edited task notes intact.
+        if(f&&!pending)f.task.note=[f.task.note||s.note,'下轮目标：'+r.memoNext].filter(Boolean).join('\n');}
     }
     return '\n复习：'+(r.title||s.text)+' · 第'+r.n+'轮\n原定：'+clock(r.due)+(event.backfillDay?'；补记完成日：'+event.backfillDay+'；录入：':'；实际：')+clock(Date.parse(event.at))+'\n结果：'+results[r.result]+(event.review.gapMs!=null?'；距上次实际完成 '+gapText(event.review.gapMs):'')+(event.review.nextRoundId?'\n下次：'+clock(round(event.review.nextRoundId).due):'');
   }
