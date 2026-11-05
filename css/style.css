@@ -2678,3 +2678,6 @@ body[data-theme="dark"] [data-bounty-tier="high"],body[data-theme="purple"] [dat
   #mw-live{max-width:calc(100vw - 18px);}
   #mw-live #mw-live-controls .btn{padding:4px 6px;font-size:11px;}
 }
+
+/* Time-axis markers must remain clickable under the compact running timer. */
+body[data-view="memo-timeaxis"] #mw-live.float-collapsed .float-complete{display:none;}
