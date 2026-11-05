@@ -83,7 +83,7 @@ try {
       await page.evaluate(id=>App.memoFinance.arrange(id),id);
       await page.locator('.modal [data-mode="daily"]').click();
       await page.locator('.modal [data-act="save"][data-list="required"]').click();
-      await page.waitForFunction(id=>App.memoFinance.plans(App.memoCore.userDay()).some(x=>x.it.id===id && x.r.list==='required'),id);
+      await page.waitForFunction(id=>App.memoFinance.plans(App.memoCore.userDay()).some(x=>x.it.id===id && x.r.list==='required') && !App.memoActions.busy() && !document.querySelector('.modal'),id);
       await page.evaluate(()=>{App.app.switchView('tasks');App.memoWorkspace.showPane('today');});
        assert.equal(await page.locator('.mw-overview .habit-plan-row').count(),0,'no duplicated points habits in task columns');
       await page.evaluate(()=>App.app.switchView('checkin'));
