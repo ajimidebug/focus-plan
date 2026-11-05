@@ -183,14 +183,14 @@ body.framework-layout .shell-save-status { font-size:10px; line-height:1.2; padd
 .q-dialog .legacy-host .mx-option span{overflow-wrap:anywhere}
 @media(max-width:360px){.q-dialog .legacy-host .mx-grid{grid-template-columns:1fr}}
 
-/* Keep secondary task-management actions touchable while an ongoing timer floats.
-   The task homepage retains its regular top timer position; only More panes
-   anchor the compact timer just above the fixed bottom navigation. */
-body[data-view='tasks']:has(#view-tasks > #mw-details:not([hidden])) #mw-live.float-collapsed,
-body[data-view='tasks']:has(#view-tasks > #mw-queue:not([hidden])) #mw-live.float-collapsed,
-body[data-view='tasks']:has(#view-tasks > #mw-reviews:not([hidden])) #mw-live.float-collapsed,
-body[data-view='tasks']:has(#view-tasks > #mw-history:not([hidden])) #mw-live.float-collapsed,
-body[data-view='tasks']:has(#view-tasks > #mw-legacy:not([hidden])) #mw-live.float-collapsed {
-  top:auto!important;
-  bottom:calc(76px + env(safe-area-inset-bottom));
+/* Keep More-page controls available without moving the timer during expand/collapse.
+   Both states share a fixed visual anchor, with the timer scrolling internally if needed. */
+body[data-view='tasks']:has(#view-tasks > #mw-details:not([hidden])) #mw-live,
+body[data-view='tasks']:has(#view-tasks > #mw-queue:not([hidden])) #mw-live,
+body[data-view='tasks']:has(#view-tasks > #mw-reviews:not([hidden])) #mw-live,
+body[data-view='tasks']:has(#view-tasks > #mw-history:not([hidden])) #mw-live,
+body[data-view='tasks']:has(#view-tasks > #mw-legacy:not([hidden])) #mw-live {
+  top:clamp(180px,46dvh,400px)!important;
+  bottom:auto!important;
+  max-height:max(44px,calc(100dvh - clamp(180px,46dvh,400px) - 85px))!important;
 }
