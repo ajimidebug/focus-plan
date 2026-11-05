@@ -41,7 +41,7 @@ async function run(){
    check(await page.locator('#mw-today .mw-overview [data-overview-list="ideal"] .mw-column-count').innerText()==='0/1','historical daily denominator retained '+width);
    await history.locator('[data-deferred-open]').click();check(await page.locator('#mw-day').inputValue()===days.day,'history navigates to active continuation '+width);
    check((await page.locator('#mw-today .mw-overview').innerText()).includes('目标日期修改后的名称'),'current copy has edited title '+width);
-   await page.locator('#mw-column-ideal [data-mw="add-ideal"]').click();check(await page.locator('#mw-points').inputValue()==='1','new ideal form uses one '+width);
+   await page.locator('.mw-detail-disclosure > summary').click();await page.locator('#mw-column-ideal [data-mw="add-ideal"]').click();check(await page.locator('#mw-points').inputValue()==='1','new ideal form uses one '+width);
    await page.locator('#mw-title').fill('新建一分任务');await page.locator('.modal [data-act="save"]').click();await page.waitForFunction(()=>!document.querySelector('.modal'));
    check(await page.evaluate(day=>App.store.getDay(day).tasks.ideal.find(t=>t.text==='新建一分任务').points,days.day)===1,'new task saves explicit one '+width);
    const session=await page.evaluate(async()=>{const s=App.memoSchedule.startRef({kind:'queue',id:'meter'},Date.now()-59000);await App.store.save();App.memoSchedule.tick();return s.id;});
