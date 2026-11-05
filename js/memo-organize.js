@@ -75,12 +75,17 @@ function manage(id){
   up:save(move(-1)),down:save(move(1)),
   remove:()=>{
    const target=m.querySelector('#family-target')?.value||'',count=allTasks().filter(t=>t.memoGroup===id).length;
-   A.ui.confirm('删除分组“'+g.name+'”？'+count+'条任务将移入'+(groups().find(x=>x.id===target)?.name||'未分组')+'，任务、积分、计时和依赖保留。','删除分组',()=>save(()=>{
-    if(!groups().some(x=>x.id===id))throw Error('分组已不存在');
-    if(target&&!groups().some(x=>x.id===target))throw Error('目标分组已不存在');
-    for(const task of allTasks())if(task.memoGroup===id){if(target)task.memoGroup=target;else delete task.memoGroup;}
-    S().data().memoTaskGroups=groups().filter(x=>x.id!==id);
-   })());
+   A.ui.confirm('删除分组“'+g.name+'”？'+count+'条任务将移入'+(groups().find(x=>x.id===target)?.name||'未分组')+'，任务、积分、计时和依赖保留。','删除分组',async()=>{
+    try{
+     const ok=await A.memoActions.commit(()=>{
+      if(!groups().some(x=>x.id===id))throw Error('分组已不存在');
+      if(target&&!groups().some(x=>x.id===target))throw Error('目标分组已不存在');
+      for(const task of allTasks())if(task.memoGroup===id){if(target)task.memoGroup=target;else delete task.memoGroup;}
+      S().data().memoTaskGroups=groups().filter(x=>x.id!==id);
+     });
+     if(ok){A.memoWorkspace.render();A.ui.toast('分组已删除，原任务保留');}
+    }catch(e){A.ui.toast('分组删除失败：'+e.message);}
+   });
   }
  });
 }
