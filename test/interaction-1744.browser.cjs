@@ -40,6 +40,9 @@ const server=http.createServer((req,res)=>{
    assert(result.csv.includes('本次识别错误')&&result.csv.includes('下次集中测试'));
    assert.equal(result.model.rows.length,2);
    assert.equal(await page.locator('.memo-gantt').evaluate(el=>el.open),true,'Gantt opens by default');
+   const ungrouped=page.locator('.memo-gantt .gantt-group[data-gantt-group=""]');
+   assert.equal(await ungrouped.evaluate(el=>el.open),false,'ungrouped tasks default collapsed');
+   await ungrouped.locator('summary').first().click();
    assert((await page.locator('.memo-gantt').innerText()).includes('长期项目一'));
    const bar=page.locator('.memo-gantt-bar').first();
    assert((await bar.getAttribute('aria-label')).includes('2026-11-02 — 2026-11-12'));
