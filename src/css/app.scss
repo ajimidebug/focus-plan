@@ -194,3 +194,8 @@ body[data-view='tasks']:has(#view-tasks > #mw-legacy:not([hidden])) #mw-live {
   bottom:auto!important;
   max-height:max(44px,calc(100dvh - clamp(180px,46dvh,400px) - 85px))!important;
 }
+
+/* Floating timer's passive surface must not block task buttons behind it.
+   Its actual controls remain interactive. */
+body.framework-layout #mw-live{pointer-events:none;}
+body.framework-layout #mw-live button{pointer-events:auto;}
