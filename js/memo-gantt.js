@@ -225,7 +225,7 @@ function quick(key){
 /* Pointer interactions only on mouse/pen; touch uses the accessible date editor. */
 let drag=null;
 function proposeDates(id,start,end,operation){
- const task=projects().find(x=>x.id===id);if(!task)return;
+ const task=locate(id)?.task;if(!task)return;
  try{validate(task,start,end,task.memoGanttDependencies||[])}catch(e){return A.ui.toast(e.message)}
  const modal=A.ui.openModal('确认调整长期项目',
   '<p><strong>'+E(task.text)+'</strong></p><p>操作：'+E(operation)+'</p><p>开始：'+E(task.memoGanttStart||'未设置')+' → '+E(start)+'</p><p>截止：'+E(task.memoGanttEnd||'未设置')+' → '+E(end)+'</p><p class="hint">仅修改项目计划日期；不会移动每日打卡、历史记录或其他依赖项目。</p><p id="gantt-drag-error" role="alert"></p>',
@@ -234,7 +234,7 @@ function proposeDates(id,start,end,operation){
  A.ui.bindActions({cancel:()=>{if(!saving&&!A.memoActions.busy())A.ui.closeModal();},save:async()=>{
   if(saving)return;saving=true;
   try{const ok=await A.memoActions.commit(()=>{
-   const t=projects().find(x=>x.id===id);if(!t)throw Error('项目已不存在');
+   const t=locate(id)?.task;if(!t)throw Error('项目已不存在');
    const checked=validate(t,start,end,t.memoGanttDependencies||[]);
    t.memoGanttStart=checked.start;t.memoGanttEnd=checked.end;
   });if(ok){A.ui.closeModal();A.memoWorkspace.render();}}
@@ -251,7 +251,7 @@ document.addEventListener('pointerdown',e=>{
  if(!lane||box.width<8)return;
  const near=box.width<25?0:12;
  const mode=near&&e.clientX-box.left<near?'start':near&&box.right-e.clientX<near?'end':'move';
- drag={id:task.id,mode,startX:e.clientX,bar,lane,range:model()};
+ drag={id:row.dataset.ganttRow,mode,startX:e.clientX,bar,lane,range:model()};
 });
 document.addEventListener('pointermove',e=>{
  if(!drag)return;
