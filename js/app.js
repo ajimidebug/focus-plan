@@ -397,8 +397,9 @@
     if (v === 'tasks' && window.__MEMO_MODE) {
 
       App.tasks.renderAll();
-      if (App.memoSchedule) { App.memoSchedule.render(); if (unifiedTimeline) App.memoSchedule.open({ legacy: true }); }
-      if (App.queue) App.queue.render();
+      // The task hub renders its own visible content; timeline is rendered on demand.
+      if (App.memoSchedule && !window.__MEMO_MODE) App.memoSchedule.render();
+      if (App.queue && !window.__MEMO_MODE) App.queue.render();
       App.memoWorkspace?.enter(unifiedTimeline ? 'timeline' : unifiedQueue ? 'queue' : null);
     } else if (v === 'queue' && App.queue) App.queue.render();
     if (v === 'cards' && App.memcards) App.memcards.renderPage();   // 🃏 v93：卡片页
