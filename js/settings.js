@@ -66,6 +66,7 @@
     }
 
     box.innerHTML =
+      '<div class="set-group"><h4>模块化 JSON</h4><button type="button" class="btn" data-partial-open>选择模块</button></div>' +
       '<div class="set-group"><h4>📦 当前版本</h4>' +
       '<p class="hint">页面版本 <b>v' + (window.__RELEASE || window.__BUILD || '?') + '</b>。' +
       '更新完成后请核对这里的版本；' +
