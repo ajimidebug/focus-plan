@@ -76,7 +76,7 @@
   function renderTasks() {
     taskDay = taskDay || M().userDay();if(A.memoRecurrence?.needsDay(taskDay)&&!A.memoActions.busy()){const requestedDay=taskDay;commit(()=>A.memoRecurrence.ensureCore(requestedDay));return;} const day = S().getDay(taskDay), occurrenceDay = taskDay === M().userDay() ? M().userDay() : taskDay;
     const root = $('mw-today');
-    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + '<div class="mw-day-shortcuts" role="group" aria-label="快捷日期">'+button('yesterday','昨天')+button('today','今天')+button('tomorrow','明天')+'</div>' + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + button('ddl', '截止日期', 'id="mw-ddl"') + '</div>' + (A.memoReview?.summary(taskDay)||'') + (A.framework ? '<div data-framework-overview></div>' : overviewHTML(taskDay)) + (A.memoFinance?.panel(taskDay)||'') + '<details class="mw-detail-disclosure"><summary>详细任务与其他管理</summary><div class="mw-full-list">' + ['required', 'ideal', 'extra'].map(list => {
+    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + '<div class="mw-day-shortcuts" role="group" aria-label="快捷日期">'+button('yesterday','昨天')+button('today','今天')+button('tomorrow','明天')+'</div>' + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + button('ddl', '截止日期', 'id="mw-ddl"') + button('batch','批量管理') + '</div>' + (A.memoReview?.summary(taskDay)||'') + (A.framework ? '<div data-framework-overview></div>' : overviewHTML(taskDay)) + (A.memoFinance?.panel(taskDay)||'') + '<details class="mw-detail-disclosure"><summary>详细任务与其他管理</summary><div class="mw-full-list">' + ['required', 'ideal', 'extra'].map(list => {
       const items = taskItems(taskDay,list);
       return '<section class="mw-group" id="mw-column-'+list+'"><div class="mw-group-head"><h2>' + names[list] + '<small> · 待做 ' + (items.filter(x => !x.deferred&&!doneFor(x.task, x.ref)).length+(A.memoFinance?.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode!=='punch'&&x.n<x.r.target).length||0)) + ((A.memoFinance?.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode==='punch').length||0)?' · 监督 '+A.memoFinance.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode==='punch').length:'') + '</small></h2>' + button('add-' + list, '＋ 添加', 'aria-label="添加' + names[list] + '"') + '</div>' + categoryBody(items,taskDay,list) + (list==='required'?(A.memoGoals?.html(taskDay,false)||''):'') + (list === 'extra' ? (A.memoRecurrence?.registry()||'')+(A.memoReview?.registry()||'')+'<details class="mw-project-help"><summary>项目说明与已停用项目</summary><p class="hint">长期拓展是三栏分类；长期项目是持续任务实体；积分习惯仅为安排引用，不会生成第二条积分任务。一次性任务保留日期，每日推进项目可以停用。</p>' + (S().data().daily || []).filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-daily', '恢复基础任务', refAttrs({ kind: 'daily', id: p.id })) + '</p>').join('') + projects().filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-project', '恢复项目', refAttrs({ kind: 'project', id: p.id })) + '</p>').join('') + '</details>' : '') + '</section>';
     }).join('') + '</div></details>' + (A.memoGantt?.html()||'') + backlog() + ((S().data().daily || []).some(t => !t.archived) ? '<section class="mw-group"><h2>原有基础任务</h2>' + taskSection(S().data().daily.filter(t => !t.archived&&!t.memoCategoryDays?.[occurrenceDay]).map(task => ({ task, ref: { kind: 'daily', id: task.id, day: occurrenceDay } }))) + '</section>' : '');
@@ -275,6 +275,7 @@
         if(act==='goal-add')return A.memoGoals.editor();
         if(act==='goal-edit')return A.memoGoals.editor(b.dataset.id);
         if(act==='ddl')return A.ms.open();
+        if(act==='batch')return A.memoPartial?.open();
         if(act==='column'){const col=$('mw-column-'+b.dataset.column);$('mw-today').querySelector('.mw-board').scrollTo({left:col.offsetLeft-col.parentElement.offsetLeft,behavior:'smooth'});return;}
         if (act.startsWith('add-')) return editor(null, act.slice(4));
         if (act === 'edit') return editor(ref);
@@ -295,7 +296,7 @@
     A.tasks.renderAll = render; A.queue.render = () => preserve(renderQueue);
     function refreshDates(){const now=M().userDay(),civil=M().naturalDay();if(now!==lastDay){if(taskDay===lastDay)taskDay=now;lastDay=now;render();}else if(civil!==lastCivilDay)A.memoGoals?.refresh();lastCivilDay=civil;}
     setInterval(refreshDates,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshDates();});window.addEventListener('focus',refreshDates);
-    A.memoReview?.init();A.memoRecurrence?.init();
+    A.memoReview?.init();A.memoRecurrence?.init();A.memoPartial?.init();
     render();
   }
   A.memoWorkspace = { assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
