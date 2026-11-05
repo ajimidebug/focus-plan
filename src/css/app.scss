@@ -190,3 +190,60 @@ body.framework-layout .shell-save-status { font-size:10px; line-height:1.2; padd
    Its actual controls remain interactive. */
 body.framework-layout #mw-live{pointer-events:none;}
 body.framework-layout #mw-live button{pointer-events:auto;}
+
+
+/* 175.0 task hub: keep goal-complete habits visible if they can still be recorded. */
+.framework-overview .overview-habit {
+  display:block; width:100%; min-width:0; margin:3px 0; padding:7px 4px;
+  border:1px solid var(--line); border-radius:7px; text-align:left; font-size:12px;
+}
+.framework-overview .overview-habit .q-btn__content {
+  display:flex; flex-wrap:wrap; justify-content:space-between; gap:3px 5px;
+  text-align:left; min-width:0; white-space:normal;
+}
+.framework-overview .overview-habit .habit-plan-title {
+  min-width:0; overflow-wrap:anywhere; display:flex; flex-wrap:wrap; gap:4px;
+}
+.framework-overview .overview-habit .habit-plan-meta {
+  display:flex; flex-wrap:wrap; align-items:center; gap:4px; font-size:11px;
+}
+.framework-overview .mw-late-section,
+.framework-overview .mw-history-section {
+  border:1px solid var(--line); border-radius:8px; padding:3px 5px;
+  margin-top:6px; min-width:0;
+}
+.framework-overview .mw-late-section>summary,
+.framework-overview .mw-history-section>summary {
+  font-size:11.5px; line-height:1.35; font-weight:600;
+  cursor:pointer; min-height:36px; padding:7px 2px;
+}
+.framework-overview .mw-history-section .mw-deferred { opacity:.82; }
+.framework-overview .mw-completed { min-width:0; }
+.framework-overview .mw-late-section>.overview-task,
+.framework-overview .mw-history-section>.overview-task { max-width:100%; }
+.framework-overview .mw-deferred { white-space:normal; overflow-wrap:anywhere; }
+
+/* 175.0 categorized Gantt: controls are independent of the page's horizontal scroll. */
+.memo-gantt { min-width:0; max-width:100%; }
+.memo-gantt .gantt-controls { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.memo-gantt .gantt-filters,
+.memo-gantt .gantt-timeline-controls { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+.memo-gantt .gantt-filters { max-width:100%; }
+.memo-gantt .gantt-controls .btn { min-height:34px; padding:5px 9px; font-size:12px; }
+.memo-gantt .gantt-controls select { background:var(--card); color:var(--ink); max-width:130px; border:1px solid var(--line); padding:6px; border-radius:6px; }
+.memo-gantt .gantt-group { border:1px solid var(--line); border-radius:8px; margin:8px 0; padding:5px; min-width:0; }
+.memo-gantt .gantt-group>summary { padding:9px 4px; cursor:pointer; font-weight:600; font-size:13px; min-height:36px; }
+.memo-gantt .gantt-group-body { min-width:0; }
+.memo-gantt .gantt-row-actions { display:flex; gap:4px; flex-wrap:wrap; }
+.memo-gantt .gantt-row-actions .btn { min-height:32px; font-size:11px; }
+.memo-gantt .gantt-expand { min-height:40px; margin:8px; }
+.memo-gantt .memo-gantt-item { position:relative; z-index:2; }
+.memo-gantt .memo-gantt-bar { z-index:2; }
+.memo-gantt .memo-gantt-edges { pointer-events:none; }
+.memo-gantt .memo-gantt-scroller { overscroll-behavior-x:contain; max-width:100%; }
+@media(max-width:480px) {
+  .memo-gantt .memo-gantt-name { max-width:calc(100vw - 32px); align-items:flex-start; flex-wrap:wrap; }
+  .memo-gantt .memo-gantt-name strong { max-width:100%; }
+  .memo-gantt .gantt-controls .btn { padding:5px 7px; }
+  .framework-overview .overview-habit { padding:6px 3px; }
+}
