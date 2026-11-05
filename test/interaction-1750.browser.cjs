@@ -39,7 +39,8 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   await page.locator('#gq-achieved').check();
   await page.locator('#gq-group').selectOption('g-life');
   await page.locator('[data-act="save"]').last().click();
-  await page.waitForFunction(()=>App.store.data().memoProjects.find(x=>x.id==='p-two')?.memoGanttEnd==='2026-12-05');
+  const editState=await page.evaluate(()=>({end:App.store.data().memoProjects.find(x=>x.id==='p-two')?.memoGanttEnd,error:document.querySelector('#gq-error')?.textContent||'',modal:document.querySelector('.modal')?.innerText?.slice(-500)||'',busy:App.memoActions.busy()}));
+  assert.equal(editState.end,'2026-12-05','quick Gantt edit saved: '+JSON.stringify(editState));
   assert.equal(await page.evaluate(()=>App.store.data().memoProjects.find(x=>x.id==='p-two').memoGroup),'g-life');
   await page.evaluate(()=>App.memoWorkspace.setDay('2026-11-03'));
   assert.equal(await page.locator('.framework-overview .mw-history-section').count(),1,'original day historical copy is folded');
