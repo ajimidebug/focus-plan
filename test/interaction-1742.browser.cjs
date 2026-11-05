@@ -26,7 +26,7 @@ async function run(){
   await page.locator('.task-action-modal').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>App.memoSchedule.state().sessions.filter(s=>s.status==='running').length),1,'starting a timer closes completion dialog');
   await page.locator('#mw-live-controls [data-schedule-command="pause"]').click();
-  await page.waitForFunction(()=>App.memoSchedule.state().sessions.some(s=>s.status==='paused'));
+  await page.waitForFunction(()=>App.memoSchedule.state().sessions.some(s=>s.status==='paused')&&!App.memoActions.busy());
   await page.evaluate(()=>App.memoActions.queue('timer1742'));
   await page.locator('.task-action-modal').waitFor({state:'visible'});
   assert.match(await page.locator('#ma-timer').innerText(),/继续计时/);
