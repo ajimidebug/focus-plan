@@ -2656,7 +2656,7 @@ body[data-theme="dark"] [data-bounty-tier="high"],body[data-theme="purple"] [dat
   background-color:color-mix(in srgb,#cc9a4e 14%,var(--card));
   background-image:repeating-linear-gradient(135deg,transparent 0 11px,#efc47f33 11px 12px),repeating-linear-gradient(45deg,transparent 0 22px,#efc47f1a 22px 23px);
 }
-:is(.mw-done,.cal-task.done,.overview-task.done,.habit-plan-row.habit-plan-goal-done)[data-bounty-tier="high"]{background-image:none!important;}
+:is(.mw-done,.cal-task.done,.overview-task.done,.habit-plan-row.habit-plan-goal-done)[data-bounty-tier="high"]{background-image:none!important;background-color:color-mix(in srgb,#23966c 14%,var(--card))!important;border-color:color-mix(in srgb,#23966c 58%,var(--line))!important;}
 /* Four progress states already derive from the financial projection. Strengthen the ruler only. */
 .mw-column-meter{min-height:6px;}
 /* Floating timer: one obvious primary action, guarded destructive action and visible task entry. */
