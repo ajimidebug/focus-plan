@@ -2629,3 +2629,52 @@ body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:clip;overscrol
 .task-action-modal .ma-secondary{display:grid;grid-template-columns:repeat(var(--ma-secondary-count,4),minmax(0,1fr));gap:5px;min-width:0;}
 .task-action-modal .ma-secondary .btn{width:100%;min-width:0;min-height:44px;height:auto;max-height:none;font-size:12px;padding:8px 3px;line-height:1.3;}
 .task-action-modal .ma-secondary>[data-act="cancel"]{border:1px solid var(--req);border-color:var(--req)!important;color:var(--req)!important;background:var(--card);}
+
+
+/* 174.3: required priorities only affect order and category rails, not points. */
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-category="required"][data-priority="1"]{--task-rail:#94a3b8;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-category="required"][data-priority="2"]{--task-rail:#0f766e;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-category="required"][data-priority="3"]{--task-rail:#3274b5;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-category="required"][data-priority="4"]{--task-rail:#c2410c;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-category="required"][data-priority="5"]{--task-rail:#be123c;}
+body[data-theme="dark"] [data-category="required"][data-priority="1"],body[data-theme="purple"] [data-category="required"][data-priority="1"]{--task-rail:#94a3b8;}
+body[data-theme="dark"] [data-category="required"][data-priority="2"],body[data-theme="purple"] [data-category="required"][data-priority="2"]{--task-rail:#5eead4;}
+body[data-theme="dark"] [data-category="required"][data-priority="3"],body[data-theme="purple"] [data-category="required"][data-priority="3"]{--task-rail:#93c5fd;}
+body[data-theme="dark"] [data-category="required"][data-priority="4"],body[data-theme="purple"] [data-category="required"][data-priority="4"]{--task-rail:#fdba74;}
+body[data-theme="dark"] [data-category="required"][data-priority="5"],body[data-theme="purple"] [data-category="required"][data-priority="5"]{--task-rail:#fda4af;}
+[data-category="required"][data-priority]:is(.cal-task,.overview-task,.mw-task){border-left:3px solid var(--task-rail,var(--primary))!important;}
+.mw-priority-note{display:inline-block;max-width:100%;margin-top:2px;color:var(--task-rail,var(--muted));font-weight:650;font-size:11px;overflow-wrap:anywhere;}
+#mw-priority-field[hidden]{display:none!important;}
+#mw-priority{width:100%;min-height:40px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;}
+/* Reward textures communicate levels only; no additional badge or reward entry. */
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-bounty-tier="high"]:is(.mw-task,.cal-task,.overview-task,.habit-plan-row,.mw-history-row){
+  background-color:#fff5d9!important;
+  background-image:repeating-linear-gradient(135deg,transparent 0 11px,#ae7c2a36 11px 12px),repeating-linear-gradient(45deg,transparent 0 22px,#ae7c2a17 22px 23px)!important;
+  border-color:#cca253;
+}
+body[data-theme="dark"] [data-bounty-tier="high"],body[data-theme="purple"] [data-bounty-tier="high"]{
+  background-color:color-mix(in srgb,#cc9a4e 14%,var(--card));
+  background-image:repeating-linear-gradient(135deg,transparent 0 11px,#efc47f33 11px 12px),repeating-linear-gradient(45deg,transparent 0 22px,#efc47f1a 22px 23px);
+}
+:is(.mw-done,.cal-task.done,.overview-task.done,.habit-plan-row.habit-plan-goal-done)[data-bounty-tier="high"]{background-image:none!important;}
+/* Four progress states already derive from the financial projection. Strengthen the ruler only. */
+.mw-column-meter{min-height:6px;}
+/* Floating timer: one obvious primary action, guarded destructive action and visible task entry. */
+#mw-live #mw-live-controls [data-schedule-command="pause"],#mw-live #mw-live-controls [data-schedule-command="start"]{
+  color:#fff;background:var(--primary);border-color:var(--primary);font-weight:700;min-width:56px;
+}
+#mw-live #mw-live-controls [data-schedule-command="end"]{
+  color:var(--req);background:var(--card);border-color:var(--req);font-weight:650;
+}
+#mw-live .float-complete{border:1px solid var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--card));color:var(--ink);font-weight:650;}
+#mw-live.float-collapsed .float-complete{display:block;min-height:34px;padding:5px 8px;margin-bottom:3px;}
+#mw-live .float-hour-note{grid-column:1/-1;font-size:11px;color:var(--muted);line-height:1.4;overflow-wrap:anywhere;}
+#mw-live .float-hour-note[hidden]{display:none!important;}
+#mw-live.float-collapsed .float-hour-note{display:none;}
+#mw-live .float-meter-track{min-height:8px;}
+#mw-live.float-collapsed .float-meter-track{min-height:7px!important;height:7px!important;}
+#mw-live.float-collapsed .float-meter-text{display:none;}
+@media(max-width:360px){
+  #mw-live{max-width:calc(100vw - 18px);}
+  #mw-live #mw-live-controls .btn{padding:4px 6px;font-size:11px;}
+}
