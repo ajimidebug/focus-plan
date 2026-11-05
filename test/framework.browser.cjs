@@ -9,7 +9,20 @@ for(const width of [320,390,1280]){
  const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',timezoneId:'Asia/Shanghai'}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.clock.setFixedTime(new Date('2026-11-04T12:00:00+08:00'));await page.goto(base+'/#/tasks');await page.waitForFunction(()=>App?.app?.ready&&document.querySelector('.framework-overview'));
  assert.equal(await page.locator('.bottom-grid button').count(),5);
+ const shell=await page.evaluate(()=>({
+   stats:[...document.querySelectorAll('.shell-stats #stat-bar .stat-item')].filter(el=>getComputedStyle(el).display!=='none').length,
+   navFixed:getComputedStyle(document.querySelector('.app-bottom-nav')).position==='fixed',
+   hasStandaloneLate:!!document.querySelector('.framework-overview .mw-column-deferred-label'),
+   columnDirection:getComputedStyle(document.querySelector('.framework-overview .cal-col-head')).flexDirection
+ }));
+ assert.equal(shell.stats,7,'all original header metrics remain accessible');
+ assert.equal(shell.navFixed,true,'five-item navigation is fixed');
+ assert.equal(shell.columnDirection,'column','restore stacked category title and count');
+ assert.equal(shell.hasStandaloneLate,false,'no redundant late item text under four-segment bar');
  await page.getByRole('region',{name:'三栏任务概览'}).getByRole('button',{name:'概览：添加理想任务',exact:true}).click();await page.getByRole('textbox',{name:'任务名称',exact:true}).fill('成熟框架验收');assert((await page.locator('.modal-date-context').innerText()).includes('2026-11-04'));await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
+ const cardTypography=await page.locator('.framework-overview .ov-task-name').first().evaluate(el=>({font:parseFloat(getComputedStyle(el).fontSize),width:el.getBoundingClientRect().width}));
+ assert(cardTypography.font>=13.4,'task name remains readable at '+width+'px');
+ assert(cardTypography.width>0,'task name is visible');
  await page.getByRole('button',{name:/^打开任务：成熟框架验收/}).click();
  await page.getByRole('button',{name:'取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
  await page.getByRole('button',{name:/^打开任务：成熟框架验收/}).click();await page.keyboard.press('Escape');await page.locator('.modal').waitFor({state:'detached'});
