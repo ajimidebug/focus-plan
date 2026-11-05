@@ -37,7 +37,8 @@ async function run(){
    await page.waitForFunction(()=>{const e=document.querySelector('#memo-editor');return e.scrollHeight-e.clientHeight-e.scrollTop<2;});
    check(await page.evaluate(()=>document.activeElement?.id!=='memo-editor'),'opening memo does not summon keyboard '+width);
    await editor.click({position:{x:20,y:25}});
-   check(await page.evaluate(()=>App.memoEditor.selection().end===App.memoEditor.text().length),'first click selects document end '+width);
+   check(await page.evaluate(()=>{const s=App.memoEditor.selection(),n=App.memoEditor.text().length;return s&&s.end<n;}),'first click on visible text retains its caret instead of forcing document end '+width);
+   await page.evaluate(()=>App.memoEditor.select(App.memoEditor.text().length));
    await page.keyboard.insertText('末尾追加');
    check(await page.evaluate(()=>App.memoEditor.text().endsWith('末尾追加')),'text appends at tail '+width);
    await page.evaluate(()=>App.memoEditor.select(2));await page.keyboard.insertText('编辑');
@@ -64,9 +65,12 @@ async function run(){
    // Reopening returns to the tail; layout changes keep the tail visible without stealing focus.
    await page.evaluate(()=>{window.getSelection().removeAllRanges();App.app.switchView('tasks');App.app.switchView('memo');});
    await page.waitForFunction(()=>{const e=document.querySelector('#memo-editor');return e.scrollHeight-e.clientHeight-e.scrollTop<2;});
-   await editor.click({position:{x:20,y:25}});await page.setViewportSize({width,height:Math.min(height,400)});
-   await page.waitForFunction(()=>{const e=document.querySelector('#memo-editor');return e.scrollHeight-e.clientHeight-e.scrollTop<3;});
+   await editor.click({position:{x:20,y:25}});
+   const caretBeforeResize=await page.evaluate(()=>App.memoEditor.selection()?.end);
+   await page.setViewportSize({width,height:Math.min(height,400)});
+   await page.waitForFunction(()=>{const e=document.querySelector('#memo-editor');return document.activeElement===e&&e.getBoundingClientRect().height>0;});
    check(await page.evaluate(()=>document.activeElement.id==='memo-editor'),'resizing retains editor focus '+width);
+   check(await page.evaluate(()=>App.memoEditor.selection()?.end)===caretBeforeResize,'resizing preserves selected caret instead of forcing tail '+width);
    await page.setViewportSize({width,height});
    await page.evaluate(()=>{document.querySelector('#memo-editor').blur();App.memoSchedule.startRef({kind:'queue',id:'visual-clock'},Date.now()-83*60000);App.memoSchedule.tick();});
    // The float becomes expanded explicitly, independent of previous test state.
@@ -79,7 +83,7 @@ async function run(){
    check(expanded.height<245&&expanded.width<=width-20,'expanded float stays compact '+width);
    if(process.env.FOCUS_SCREENSHOT_DIR){fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR,{recursive:true});await page.screenshot({animations:'disabled',path:path.join(process.env.FOCUS_SCREENSHOT_DIR,'memo-'+width+'.png')});}
    await page.locator('[data-float-toggle]').click();
-   const compact=await page.locator('#mw-live').boundingBox();check(compact.height<110,'collapsed float has two content lines '+width);await shot('compact');
+   const compact=await page.locator('#mw-live').boundingBox();check(compact.height<110,'collapsed float remains compact and does not cover task controls '+width);check(await page.locator('#mw-live .float-complete').isHidden(),'collapsed float defers task shortcut until expansion '+width);await shot('compact');
    check(await page.locator('#mw-live-controls [data-schedule-command="pause"]').isVisible(),'pause accessible while collapsed '+width);
    await page.evaluate(()=>{App.store.data().queue[0].estimatedMinutes=60;App.memoSchedule.tick();});
    check(await page.locator('#mw-live').evaluate(e=>e.classList.contains('float-overtime')),'overtime remains visually distinct '+width);

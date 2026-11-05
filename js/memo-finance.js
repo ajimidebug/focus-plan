@@ -150,7 +150,7 @@ function planned(day,list,completed=null){
    const label=bad?'发生 '+n+'次':n+'/'+r.target+'次'+(done?' ✓已达标':'')+
      (remaining?' · 可奖励 '+remaining+'次':' · 仅记录');
    return '<button type="button" class="habit-plan-row '+(done?'habit-plan-goal-done':'')+
-     '" data-habit-kind="'+mode+'" data-bounty="'+!!A.memoOrganize?.bounty(Number(it.points)||0)+
+     '" data-habit-kind="'+mode+'" data-bounty="'+!!A.memoOrganize?.bounty(Number(it.points)||0)+'" data-bounty-tier="'+(A.memoOrganize?.bountyTier(Number(it.points)||0)||'none')+
      '" data-category="'+list+'" data-habit-punch="'+E(it.id)+'" data-habit-day="'+day+
      '"><span class="habit-plan-title">'+E(it.text)+' <small>'+(bad?'坏习惯':mode==='miss'?'漏打卡':'打卡')+
      '</small>'+(A.memoOrganize?.badge(Number(it.points)||0)||'')+

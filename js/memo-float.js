@@ -27,6 +27,7 @@ function ensure(root) {
  const summary = document.createElement('div'); summary.className = 'float-summary';
  summary.innerHTML = '<span class="float-current"></span><span class="float-clock"></span><span class="float-total"></span>';
  root.append(summary);
+ const hourNote=document.createElement('div');hourNote.className='float-hour-note';hourNote.hidden=true;root.append(hourNote);
  const meter = document.createElement('div'); meter.id = 'float-meter'; meter.className = 'float-meter';
  meter.innerHTML = '<span class="float-meter-text"></span><div class="float-meter-scale"><span>0</span><span class="float-range-end"></span></div><div class="float-meter-track"><span class="float-meter-previous"></span><span class="float-meter-fill"></span><i class="float-expected-mark" aria-hidden="true"></i></div>';
  root.append(meter);
@@ -46,6 +47,7 @@ function update(session, paused = []) {
  const toggle = root.querySelector('[data-float-toggle]');
  toggle.setAttribute('aria-expanded', String(!folded));
  toggle.querySelector('.float-arrow').textContent = folded ? '⌄' : '⌃';
+ toggle.title=folded?'展开计时详情':'收起计时详情';
  if (!session) return;
  const found = A.memoSchedule.resolve(session.ref), task = found?.task, ref = found?.ref || session.ref;
  const title = task?.text || session.title, totals = A.memoSchedule.timing(session.ref);
@@ -61,6 +63,8 @@ function update(session, paused = []) {
  const expected = Number(task?.memoEstimatedDays?.[daily ? nowDay : ref.day] ?? task?.estimatedMinutes);
  const valid = Number.isFinite(expected) && expected > 0, currentMs = projection.currentMs;
  const ms = projection.totalMs;
+ const hourNote=root.querySelector('.float-hour-note');hourNote.hidden=ms<3600000;
+ if(!hourNote.hidden)hourNote.textContent='累计进入第 '+(Math.floor(ms/3600000)+1)+' 小时 · 有效时长 '+clock(ms)+'（暂停不计时）';
  const meter = root.querySelector('#float-meter'), track = meter.querySelector('.float-meter-track');
  const window=A.memoSchedule.planWindow(ref);
  const planned=window&&A.memoSchedule.windowMeter(window,Date.now(),ms);

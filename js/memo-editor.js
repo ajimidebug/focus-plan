@@ -194,6 +194,13 @@
       const p = pointer; pointer = null;
       if (!p?.first || p.moved || Date.now()-p.at>450 || e.detail>1 || composing || root.contentEditable==='false' || e.target.closest('.memo-continue')) return;
       const range = selection(); if (range && range.start !== range.end) return;
+      // Only jump to the end when the first tap lands below the document text.
+      // Tapping a word in the middle must preserve the browser's caret placement.
+      if (textOf(blocks).length) {
+        const contentRange=document.createRange();contentRange.selectNodeContents(root);
+        const bottom=contentRange.getBoundingClientRect().bottom;
+        if (Number.isFinite(bottom) && e.clientY<=bottom+5) return;
+      }
       select(textOf(blocks).length); revealEnd();
     });
     root.addEventListener('scroll', () => { stickBottom = root.scrollHeight-root.clientHeight-root.scrollTop < 8; }, { passive: true });
