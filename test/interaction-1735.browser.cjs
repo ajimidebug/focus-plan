@@ -36,6 +36,7 @@ async function run(){
    });
    check(await page.evaluate(old=>App.store.getDay(old).tasks.ideal[0].points,days.old)===10,'implicit old reward stays ten '+width);
    const history=page.locator('#mw-today .mw-overview .mw-deferred');check(await history.count()===1,'original day retains one copy '+width);
+   await page.locator('#mw-today .mw-overview .mw-history-section > summary').click();
    check((await history.innerText()).includes('原日期任务名称')&&(await history.innerText()).includes(days.day),'source title and destination visible '+width);
    check(await history.locator('[data-mw="complete"],[data-schedule-command]').count()===0,'history is not another executable task '+width);
    check(await page.locator('#mw-today .mw-overview [data-overview-list="ideal"] .mw-column-count').innerText()==='0/1','historical daily denominator retained '+width);
