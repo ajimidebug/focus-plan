@@ -271,7 +271,7 @@ document.addEventListener('pointerup',e=>{
  if(from===null||to===null)return;
  const first=dayString(from+(current.mode==='end'?0:delta));
  const last=dayString(to+(current.mode==='start'?0:delta));
- proposeDates(project.id,first,last,current.mode==='start'?'调整开始日期':current.mode==='end'?'调整截止日期':'整体平移日期');
+ proposeDates(current.id,first,last,current.mode==='start'?'调整开始日期':current.mode==='end'?'调整截止日期':'整体平移日期');
 });
 document.addEventListener('pointercancel',()=>{if(drag){drag.bar.style.outline='';drag=null}});
 
