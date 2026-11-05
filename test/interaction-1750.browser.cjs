@@ -44,6 +44,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   assert.equal(await page.evaluate(()=>App.store.data().memoProjects.find(x=>x.id==='p-two').memoGroup),'g-life');
   await page.evaluate(()=>App.memoWorkspace.setDay('2026-11-03'));
   assert.equal(await page.locator('.framework-overview .mw-history-section').count(),1,'original day historical copy is folded');
+  await page.locator('.framework-overview .mw-history-section > summary').click();
   const hist=await page.locator('.mw-history-section').innerText();
   assert(hist.includes('已改期至'),'changed date must not claim backfill');
   const mapped=await page.evaluate(()=>{
