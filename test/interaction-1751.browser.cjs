@@ -50,6 +50,8 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('#gq-dependency-list input[data-gantt-dep][value="p-life"]').count(),1,'cross-group can be enabled');
   await page.locator('[data-gantt-dep][value="p-math"]').check();
   await page.locator('.gantt-calendar-details > summary').click();
+  const calendarText=await page.locator('[data-gantt-picker="gq"] .q-date').innerText();
+  assert(!/chevron_left|chevron_right|arrow_drop_down|November/i.test(calendarText),'date picker icons/localization render correctly: '+calendarText.slice(0,140));
   await page.locator('[data-range-one]').click();
   assert.equal(await page.locator('#gq-start').inputValue(),await page.locator('#gq-end').inputValue(),'same-day shortcut');
   await page.locator('[data-act="save"]').last().click();
@@ -82,7 +84,7 @@ const server=http.createServer((req,res)=>{
   await page.locator('#family-name').fill('新分组');
   await page.locator('[data-act="save"]').last().click();
   assert(await page.evaluate(()=>App.store.data().memoTaskGroups.some(g=>g.name==='新分组')),'new category saved');
-  await page.locator('.gantt-settings > summary').click();
+  if(!await page.locator('.gantt-settings').evaluate(x=>x.open))await page.locator('.gantt-settings > summary').click();
   await page.locator('[data-gantt-manage]').click();
   await page.locator('[data-group-manage="g-math"]').click();
   await page.locator('#family-target').selectOption('g-life');
