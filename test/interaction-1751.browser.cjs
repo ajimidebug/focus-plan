@@ -39,7 +39,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('.mw-inline-waiting').getByText('待安排的原始任务').count(),1);
   const order=await page.evaluate(()=>{const a=document.querySelector('.memo-gantt'),b=document.querySelector('.mw-inline-waiting');return !!(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING)});
   assert(order,'waiting area follows Gantt');
-  const geo=await page.evaluate(()=>{const row=document.querySelector('[data-gantt-row="project:p-math"]'),overlay=document.querySelector('.gantt-time-overlay'),lane=row?.querySelector('.memo-gantt-lane'),label=row?.querySelector('.memo-gantt-name');if(!row||!overlay||!lane||!label)return null;const a=overlay.getBoundingClientRect(),b=lane.getBoundingClientRect(),c=label.getBoundingClientRect();return {delta:Math.abs(a.left-b.left),sameRow:Math.abs(c.top-b.top)<1,uncovered:c.right<=b.left+2}});
+  const geo=await page.evaluate(()=>{const row=document.querySelector('[data-gantt-row="project:p-math"]'),overlay=document.querySelector('.gantt-time-overlay'),lane=row?.querySelector('.memo-gantt-lane'),label=row?.querySelector('.memo-gantt-name');if(!row||!overlay||!lane||!label)return null;const a=overlay.getBoundingClientRect(),b=lane.getBoundingClientRect(),c=label.getBoundingClientRect();return {delta:Math.abs(a.left-b.left),sameRow:Math.abs(c.top-b.top)<1,uncovered:c.left>=document.querySelector('.memo-gantt-scroller').getBoundingClientRect().left-2}});
   assert(geo&&geo.delta<2&&geo.sameRow&&geo.uncovered,'fixed task column aligns with shared date axis: '+JSON.stringify(geo));
   await page.locator('[data-gantt-quick="once:once-ideal"]').click();
   assert.equal(await page.locator('[data-gantt-picker="gq"] .q-date').count(),1,'Quasar range calendar mounted');

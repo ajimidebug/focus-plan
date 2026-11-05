@@ -128,7 +128,7 @@ function rowHtml(p,m,width){
  const label=p.point?'仅截止：'+dayString(p.end):p.valid?dayString(p.start)+' — '+dayString(p.end):'未排期';
  const state=(p.inferred?'安排日':p.kind==='project'?'每日推进':'一次性')+(p.conflicts.length?' · ⚠ 前置异常':'')+(p.achieved?' · 已达成':'');
  return '<div class="memo-gantt-item" data-gantt-row="'+E(p.key)+'"><button type="button" class="memo-gantt-name gantt-fixed" data-gantt-quick="'+E(p.key)+'" title="'+E(p.title)+'" aria-label="编辑 '+E(p.title)+'"><span class="gantt-task-title">'+E(p.title)+'</span><span class="gantt-task-meta">'+E(state)+'</span></button><div class="memo-gantt-lane" style="width:'+width+'px">'+
-  (visible?'<button type="button" class="memo-gantt-bar'+(p.point?' gantt-milestone':'')+(p.inferred?' gantt-inherited':'')+(p.achieved?' gantt-achieved':'')+'" data-gantt-bar-id="'+E(p.key)+'" data-gantt-quick="'+E(p.key)+'" style="left:'+left+'%;width:'+(p.point?'12px':w+'%')+'" title="'+E(label)+'" aria-label="编辑 '+E(p.title)+' · '+E(label)+'"></button>':'<span class="memo-gantt-unscheduled">'+(p.valid?'不在本期':'未排期')+'</span>')+'</div></div>';
+  (visible?'<button type="button" class="memo-gantt-bar'+(p.point?' gantt-milestone':'')+(p.inferred?' gantt-inherited':'')+(p.achieved?' gantt-achieved':'')+'" data-gantt-bar-id="'+E(p.key)+'" data-gantt-bar-quick="'+E(p.key)+'" style="left:'+left+'%;width:'+(p.point?'12px':w+'%')+'" title="'+E(label)+'" aria-label="编辑 '+E(p.title)+' · '+E(label)+'"></button>':'<span class="memo-gantt-unscheduled">'+(p.valid?'不在本期':'未排期')+'</span>')+'</div></div>';
 }
 function overlay(m,width){
  const total=m.to-m.from+1,x=d=>(d-m.from)/total*width;
@@ -217,7 +217,7 @@ function quick(key){
  }});
 }
 /* Pointer interactions only on mouse/pen; touch uses the accessible date editor. */
-let drag=null;
+let drag=null,lastDragFinish=0;
 function proposeDates(id,start,end,operation){
  const task=locate(id)?.task;if(!task)return;
  try{validate(task,start,end,task.memoGanttDependencies||[])}catch(e){return A.ui.toast(e.message)}
@@ -265,6 +265,7 @@ document.addEventListener('pointerup',e=>{
  if(from===null||to===null)return;
  const first=dayString(from+(current.mode==='end'?0:delta));
  const last=dayString(to+(current.mode==='start'?0:delta));
+ lastDragFinish=Date.now();
  proposeDates(current.id,first,last,current.mode==='start'?'调整开始日期':current.mode==='end'?'调整截止日期':'整体平移日期');
 });
 document.addEventListener('pointercancel',()=>{if(drag){drag.bar.style.outline='';drag=null}});
@@ -273,11 +274,11 @@ function refresh(){A.memoWorkspace.render();requestAnimationFrame(syncEdges);}
 document.addEventListener('click',e=>{
  const rootSummary=e.target.closest?.('.memo-gantt[data-gantt-root] > summary');
  if(rootSummary){const details=rootSummary.closest('[data-gantt-root]');if(details)setPref('root',details.open?'closed':'open');}
- const b=e.target.closest('[data-gantt-create],[data-gantt-manage],[data-gantt-quick],[data-gantt-filter],[data-gantt-navigate],[data-gantt-expand]');if(!b)return;
+ const b=e.target.closest('[data-gantt-create],[data-gantt-manage],[data-gantt-quick],[data-gantt-bar-quick],[data-gantt-filter],[data-gantt-navigate],[data-gantt-expand]');if(!b)return;
  e.preventDefault();e.stopPropagation();
  if(b.hasAttribute('data-gantt-create'))return createProject();
  if(b.hasAttribute('data-gantt-manage'))return A.memoOrganize?.openGroups?.();
- if(b.hasAttribute('data-gantt-quick')){selectedKey=b.dataset.ganttQuick;requestAnimationFrame(syncEdges);return quick(selectedKey)}
+ if(b.hasAttribute('data-gantt-quick')||b.hasAttribute('data-gantt-bar-quick')){if(b.hasAttribute('data-gantt-bar-quick')&&Date.now()-lastDragFinish<750)return;selectedKey=b.dataset.ganttQuick||b.dataset.ganttBarQuick;requestAnimationFrame(syncEdges);return quick(selectedKey)}
  if(b.hasAttribute('data-gantt-filter')){setPref('filter',b.dataset.ganttFilter);return refresh();}
  if(b.hasAttribute('data-gantt-expand')){const id=b.dataset.ganttExpand==='uncategorized'?'':b.dataset.ganttExpand;setPref('all:'+id,pref('all:'+id,'closed')==='open'?'closed':'open');return refresh();}
  if(b.hasAttribute('data-gantt-navigate')){const step=Number(b.dataset.ganttNavigate),m=model(),months=m.zoom==='month'?1:m.zoom==='quarter'?6:m.zoom==='year'?24:6;setPref('focus-compact',step===0?M().naturalDay():dayString(monthDay(m.focus,step*months)));scrollPosition=null;return refresh();}
