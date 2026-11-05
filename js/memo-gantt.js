@@ -155,6 +155,60 @@ function quick(id){
   }catch(e){q('error').textContent=e.message}finally{saving=false}
  }});
 }
+
+/* Pointer interactions only on mouse/pen; touch uses the accessible date editor. */
+let drag=null;
+function proposeDates(id,start,end,operation){
+ const task=projects().find(x=>x.id===id);if(!task)return;
+ try{validate(task,start,end,task.memoGanttDependencies||[])}catch(e){return A.ui.toast(e.message)}
+ const modal=A.ui.openModal('确认调整长期项目',
+  '<p><strong>'+E(task.text)+'</strong></p><p>操作：'+E(operation)+'</p><p>开始：'+E(task.memoGanttStart||'未设置')+' → '+E(start)+'</p><p>截止：'+E(task.memoGanttEnd||'未设置')+' → '+E(end)+'</p><p class="hint">仅修改项目计划日期；不会移动每日打卡、历史记录或其他依赖项目。</p><p id="gantt-drag-error" role="alert"></p>',
+  '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">确认保存</button>',{lock:true});
+ let saving=false;
+ A.ui.bindActions({cancel:()=>{if(!saving&&!A.memoActions.busy())A.ui.closeModal();},save:async()=>{
+  if(saving)return;saving=true;
+  try{const ok=await A.memoActions.commit(()=>{
+   const t=projects().find(x=>x.id===id);if(!t)throw Error('项目已不存在');
+   const checked=validate(t,start,end,t.memoGanttDependencies||[]);
+   t.memoGanttStart=checked.start;t.memoGanttEnd=checked.end;
+  });if(ok){A.ui.closeModal();A.memoWorkspace.render();}}
+  catch(e){modal.querySelector('#gantt-drag-error').textContent=e.message}
+  finally{saving=false}
+ }});
+}
+document.addEventListener('pointerdown',e=>{
+ if(e.button!==0||e.pointerType==='touch')return;
+ const bar=e.target.closest?.('#mw-today .memo-gantt-bar');if(!bar)return;
+ const row=bar.closest('[data-gantt-row]'),task=projects().find(p=>p.id===row?.dataset.ganttRow);
+ if(!task?.memoGanttStart||!task?.memoGanttEnd)return;
+ const box=bar.getBoundingClientRect(),lane=bar.closest('.memo-gantt-lane');
+ if(!lane||box.width<8)return;
+ const near=box.width<25?0:12;
+ const mode=near&&e.clientX-box.left<near?'start':near&&box.right-e.clientX<near?'end':'move';
+ drag={id:task.id,mode,startX:e.clientX,bar,lane,range:model()};
+});
+document.addEventListener('pointermove',e=>{
+ if(!drag)return;
+ const dx=e.clientX-drag.startX;
+ if(Math.abs(dx)>4){drag.bar.style.outline='2px dashed #bc903f';drag.bar.title='松开后确认修改计划日期';}
+});
+document.addEventListener('pointerup',e=>{
+ if(!drag)return;
+ const current=drag;drag=null;current.bar.style.outline='';
+ const dx=e.clientX-current.startX;
+ if(Math.abs(dx)<6)return;
+ const rangeDays=current.range.to-current.range.from+1;
+ const delta=Math.round(dx*rangeDays/Math.max(1,current.lane.getBoundingClientRect().width));
+ if(!delta)return;
+ const project=projects().find(p=>p.id===current.id);if(!project)return;
+ const from=dayNumber(project.memoGanttStart),to=dayNumber(project.memoGanttEnd);
+ if(from===null||to===null)return;
+ const first=dayString(from+(current.mode==='end'?0:delta));
+ const last=dayString(to+(current.mode==='start'?0:delta));
+ proposeDates(project.id,first,last,current.mode==='start'?'调整开始日期':current.mode==='end'?'调整截止日期':'整体平移日期');
+});
+document.addEventListener('pointercancel',()=>{if(drag){drag.bar.style.outline='';drag=null}});
+
 function refresh(){A.memoWorkspace.render();requestAnimationFrame(syncEdges);}
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-gantt-create],[data-gantt-quick],[data-gantt-filter],[data-gantt-navigate],[data-gantt-expand]');if(!b)return;
