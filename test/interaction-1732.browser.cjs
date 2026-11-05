@@ -83,7 +83,7 @@ async function run(){
    check(expanded.height<245&&expanded.width<=width-20,'expanded float stays compact '+width);
    if(process.env.FOCUS_SCREENSHOT_DIR){fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR,{recursive:true});await page.screenshot({animations:'disabled',path:path.join(process.env.FOCUS_SCREENSHOT_DIR,'memo-'+width+'.png')});}
    await page.locator('[data-float-toggle]').click();
-   const compact=await page.locator('#mw-live').boundingBox();check(compact.height<110,'collapsed float has two content lines '+width);await shot('compact');
+   const compact=await page.locator('#mw-live').boundingBox();check(compact.height<160,'collapsed float remains compact with task shortcut '+width);check(await page.locator('#mw-live .float-complete').isVisible(),'collapsed shortcut opens task and completion '+width);await shot('compact');
    check(await page.locator('#mw-live-controls [data-schedule-command="pause"]').isVisible(),'pause accessible while collapsed '+width);
    await page.evaluate(()=>{App.store.data().queue[0].estimatedMinutes=60;App.memoSchedule.tick();});
    check(await page.locator('#mw-live').evaluate(e=>e.classList.contains('float-overtime')),'overtime remains visually distinct '+width);
