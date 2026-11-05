@@ -1541,7 +1541,7 @@ test('edited dependent next rounds survive undo with schedule history',async()=>
 test('automatic carry preserves original review due and a single executable identity',async()=>{const b=browser();await b.S.load();const {R,F,P,M}=reviewHarness(b),due=reviewAt(),s=R.newSeriesCore({text:'自动顺延',list:'extra',due}),r=R.rounds(s.id)[0],originalTaskId=r.taskRef.id;F.settleCore(due+3*86400000);assert.equal(r.due,due);assert.equal(R.state().rounds.length,1);const f=R.taskOf(r);assert.equal(f.task.id,originalTaskId);assert.equal(f.ref.day,M.userDay(due+3*86400000));assert.equal(P.state().items.filter(p=>p.memoReviewRoundId===r.id).length,1);});
 test('missing result is distinct from mastery and zero-point reviews stay zero',async()=>{const b=browser();await b.S.load();const {R,A}=reviewHarness(b);const s=R.newSeriesCore({text:'零分',points:0,due:reviewAt()}),r=R.rounds(s.id)[0];const e=A.completeCore({...r.taskRef,title:s.text},'');assert.equal(e.review.result,'');assert.equal(e.points,0);assert.equal(b.S.data().ledger.length,0);assert.equal(A.passage(e),'');});
 test('a failed next-time validation restores the entire completion transaction',async()=>{const b=browser();await b.S.load();const {R,A}=reviewHarness(b);b.ctx.App.memo.flush=async()=>true;const s=R.newSeriesCore({text:'校验事务',due:reviewAt()}),r=R.rounds(s.id)[0];await assert.rejects(A.commit(()=>A.completeCore({...r.taskRef,title:s.text,review:{mode:'relative',minutes:0}},'文本')));assert.equal(R.round(r.id).status,'pending');assert.equal(R.taskOf(R.round(r.id)).task.done,undefined);assert.equal(b.S.data().ledger.length,0);assert.equal(R.rounds(s.id).length,1);});
-test('review task copying cannot complete a cancelled round and required cancellations retain obligations',async()=>{const b=browser();await b.S.load();const {R,A,P}=reviewHarness(b);const s=R.newSeriesCore({text:'必做取消',list:'required',due:reviewAt()}),r=R.rounds(s.id)[0];R.cancelCore(r.id);assert.equal(P.columnItems(r.taskRef.day,'required').some(x=>x.ref.id===r.taskRef.id&&!x.done),true);assert.throws(()=>A.completeCore({...r.taskRef,title:s.text},''),/取消|暂停/);assert.equal(b.S.data().ledger.length,0);});
+test('cancelled required reviews cannot be carried, charged or completed',async()=>{const b=browser();await b.S.load();const {R,A,P,F}=reviewHarness(b);const due=reviewAt(),s=R.newSeriesCore({text:'必做取消',list:'required',due}),r=R.rounds(s.id)[0];R.cancelCore(r.id);assert.equal(P.columnItems(r.taskRef.day,'required').some(x=>x.ref.id===r.taskRef.id),false);assert.equal(F.overdue(due+86400000).length,0);F.settleCore(due+86400000);assert.throws(()=>A.completeCore({...r.taskRef,title:s.text},''),/取消|暂停/);assert.equal(b.S.data().ledger.length,0);assert(b.S.validate(b.S.data()));});
 test('173.6 store can round-trip new review metadata after create, complete and undo',async()=>{const b=browser();await b.S.load();const {R,A}=reviewHarness(b);const s=R.newSeriesCore({text:'回退兼容',due:reviewAt()}),r=R.rounds(s.id)[0],e=A.completeCore({...r.taskRef,title:s.text,review:{mode:'relative',minutes:30}},'');A.undoCore(e.id);await b.S.save();const oldSource=require('node:child_process').execFileSync('git',['show','9d009c6ecf6171a22368d6b497d46caf6e0da90d:js/store.js'],{cwd:root,encoding:'utf8'}),ctx=browser({shared:b}).ctx;vm.runInNewContext(oldSource,ctx);assert.equal(await ctx.App.store.load(),true);const expected=JSON.stringify(ctx.App.store.data().memoReview);assert.equal(await ctx.App.store.save(),true);assert.equal(JSON.stringify(ctx.App.store.data().memoReview),expected);const next=browser({shared:b});assert.equal(await next.S.load(),true);assert.equal(next.S.data().memoReview.rounds.length,2);});
 test('review rounds moved through the queue keep cancellation and pause visibility consistent',async()=>{const b=browser();await b.S.load();const {R,A,F,P}=reviewHarness(b);const s=R.newSeriesCore({text:'队列复习',due:reviewAt()}),r=R.rounds(s.id)[0];F.moveCore(r.taskRef,r.taskRef.day,'ideal','queue');const qref=P.canonical(r.taskRef);assert.equal(qref.kind,'queue');F.moveCore(qref,r.taskRef.day,'ideal');R.pauseCore(s.id,true);assert.equal(P.columnItems(r.taskRef.day,'ideal').some(x=>x.ref.id===qref.id),false);R.pauseCore(s.id,false);const e=A.completeCore({...qref,title:s.text},'');assert.equal(r.status,'done');A.undoCore(e.id);assert.equal(r.status,'pending');});
 test('review snapshots freeze scheduled titles and copy checkpoints track same-day time edits only',async()=>{const b=browser();await b.S.load();const {R,A,M}=reviewHarness(b);vm.runInContext(source('js/memo-report.js'),b.ctx);const due=reviewAt(),s=R.newSeriesCore({text:'原复习内容',due}),r=R.rounds(s.id)[0],day=M.userDay(due),other=M.shiftDay(day,-1),report=b.ctx.App.memoReport,baseline=JSON.stringify(report.facts(day)),unrelated=JSON.stringify(report.facts(other));R.rescheduleCore(r.id,due+60000);assert.notEqual(JSON.stringify(report.facts(day)),baseline);assert.equal(JSON.stringify(report.facts(other)),unrelated);s.text='仅修改未来内容';const e=A.completeCore({...r.taskRef,title:R.taskOf(r).task.text},'记录');assert.equal(e.review.title,'原复习内容');assert.match(A.passage(e),/原复习内容/);assert.equal(report.facts(day).reviews[0].title,'原复习内容');});
@@ -1648,4 +1648,62 @@ test('173.9.1 on-time backfill wins over stale carry markers and day-scoped proj
  b.S.getDay(day).tasks.ideal=[{id:'on-time',text:'按时补记',done:true,originalDay:old,backfillDay:old,carried:true},{id:'late',text:'延期补记',done:true,originalDay:old,backfillDay:day}];
  b.S.data().memoProjects=[{id:'daily-project',text:'每日推进',createdDay:old,originalDay:old,carried:true,days:{[day]:Date.now()},memoCategoryDays:{[day]:'ideal'}}];
  const q=C.column(day,'ideal');assert.equal(q.total,3);assert.equal(q.lateDone,1);assert.deepEqual(copy(q.segments.map(x=>x.count)),[1,2,0,0]);
+});
+
+test('174.2 required review carry synchronizes effective due, linked point and history exactly once',async()=>{
+ const b=browser();await b.S.load();const {R,F,P,M}=reviewHarness(b);
+ const due=reviewAt(),now=due+2*86400000,series=R.newSeriesCore({text:'必做顺延',list:'required',due}),round=R.rounds(series.id)[0];
+ const id=round.taskRef.id,original=round.originalDue,point=P.state().items.find(p=>p.memoReviewRoundId===round.id);
+ F.settleCore(now);
+ assert.equal(round.due,Date.parse(M.userDay(now)+'T04:00:00+08:00')+(due-Date.parse(M.userDay(due)+'T04:00:00+08:00')));
+ assert.equal(round.originalDue,original);
+ assert.equal(R.taskOf(round).ref.day,M.userDay(now));
+ assert.equal(round.taskRef.id,id);
+ assert.equal(point.start,round.due);
+ assert.equal(point.day,M.userDay(now));
+ assert.equal(P.state().items.filter(p=>p.memoReviewRoundId===round.id).length,1);
+ assert.equal(round.history.filter(h=>h.action==='carry').length,1);
+ const penalties=b.S.data().ledger.length;
+ F.settleCore(now);
+ assert.equal(b.S.data().ledger.length,penalties);
+ assert.equal(round.history.filter(h=>h.action==='carry').length,1);
+ assert(b.S.validate(b.S.data()));
+});
+test('174.2 stopping a review series cancels remaining rounds and blocks scheduling after reload',async()=>{
+ const b=browser();await b.S.load();const {R,P}=reviewHarness(b);
+ const s=R.newSeriesCore({text:'停用系列',due:reviewAt(),list:'required'}),r=R.rounds(s.id)[0];
+ R.stopSeriesCore(s.id);R.stopSeriesCore(s.id);
+ assert.equal(r.status,'cancelled');
+ assert.equal(P.columnItems(r.taskRef.day,'required').some(x=>x.ref.id===r.taskRef.id),false);
+ assert.throws(()=>R.scheduleCore(s.id,reviewAt()+60000),/停止|暂停/);
+ assert.equal(r.history.filter(h=>h.action==='cancel').length,1);
+ assert(b.S.validate(b.S.data()));
+ await b.S.save();const loaded=browser({shared:b});await loaded.S.load();const H=reviewHarness(loaded);
+ assert.equal(H.R.series(s.id).stoppedAt,s.stoppedAt);
+ assert.equal(H.R.round(r.id).status,'cancelled');
+});
+test('174.2 completion event records latest stored task title, not stale caller snapshot',async()=>{
+ const b=browser();await b.S.load();const {A}=flowHarness(b),d=b.S.data();
+ d.queue=[{id:'rename',text:'最后修改后的名称',points:2}];
+ const e=A.completeCore({kind:'queue',id:'rename',title:'之前的名称'},'');
+ assert.equal(e.title,'最后修改后的名称');
+ assert.equal(d.ledger.at(-1).note,'队列完成：最后修改后的名称');
+ assert.equal(d.queueDone[0].text,'最后修改后的名称');
+ assert(b.S.validate(d));
+});
+test('174.2 schedule window fixes the meter endpoint at the actual deadline',async()=>{
+ const b=browser();await b.S.load();const {P,M}=flowHarness(b);
+ b.S.data().queue=[{id:'clock-window',text:'时间窗口',estimatedMinutes:50}];
+ const ref={kind:'queue',id:'clock-window'},start=Date.parse('2026-11-05T14:00:00+08:00'),end=start+120*60000;
+ P.savePlan({ref,title:'时间窗口',day:M.userDay(start),type:'span',start,end});
+ const middle=start+90*60000,w=P.planWindow(ref,middle),meter=P.windowMeter(w,middle,30*60000);
+ assert.equal(w.end,end);assert.equal(meter.fill,75);
+ assert.equal(meter.expectedPosition,100);assert.equal(meter.timeEnd,'16:00');
+ assert.match(meter.detail,/距截止 0:30:00/);assert.match(meter.detail,/有效计时 0:30:00/);
+ const past=P.windowMeter(w,end+1000,30*60000);
+ assert.equal(past.state,'deadline-passed');assert.equal(past.fill,100);assert(past.over);
+ const noPlanRef={kind:'queue',id:'clock-window'};
+ P.state().items.length=0;
+ assert.equal(P.planWindow(noPlanRef,middle),null);
+ assert.equal(P.meterState(30*60000,50).state,'expected');
 });
