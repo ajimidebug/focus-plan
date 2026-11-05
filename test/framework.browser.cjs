@@ -11,11 +11,13 @@ for(const width of [320,390,1280]){
  assert.equal(await page.locator('.bottom-grid button').count(),5);
  const shell=await page.evaluate(()=>({
    stats:[...document.querySelectorAll('.shell-stats #stat-bar .stat-item')].filter(el=>getComputedStyle(el).display!=='none').length,
+   restored:['stat-extend','stat-aux'].every(id=>{const el=document.getElementById(id);return !!el&&getComputedStyle(el.closest('.stat-item')).display!=='none';}),
    navFixed:getComputedStyle(document.querySelector('.app-bottom-nav')).position==='fixed',
    hasStandaloneLate:!!document.querySelector('.framework-overview .mw-column-deferred-label'),
    columnDirection:getComputedStyle(document.querySelector('.framework-overview .cal-col-head')).flexDirection
  }));
- assert.equal(shell.stats,7,'all original header metrics remain accessible');
+ assert(shell.stats>=7,'original metrics and any newer indicators remain accessible');
+ assert(shell.restored,'formerly hidden extend and auxiliary metrics are visible');
  assert.equal(shell.navFixed,true,'five-item navigation is fixed');
  assert.equal(shell.columnDirection,'column','restore stacked category title and count');
  assert.equal(shell.hasStandaloneLate,false,'no redundant late item text under four-segment bar');
