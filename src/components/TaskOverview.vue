@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import OverviewTask from './OverviewTask.vue'
 const props=defineProps<{day:string;revision:number}>()
 const A=()=>window.App
@@ -9,6 +9,10 @@ function done(x:any){return !x.deferred&&(['project','daily'].includes(x.ref.kin
 function foldedKey(day:string,list:string,section:string){return 'task-fold:overview:'+day+':'+list+':'+section}
 function expanded(key:string,defaultOpen=false){try{return (localStorage.getItem(key)||(defaultOpen?'open':'closed'))==='open'}catch{return defaultOpen}}
 function remember(key:string,event:Event){try{localStorage.setItem(key,(event.target as HTMLDetailsElement).open?'open':'closed')}catch{}}
+const groupExpansion=ref<Record<string,boolean>>({})
+function showAllGroup(id:string){return Object.hasOwn(groupExpansion.value,id)?groupExpansion.value[id]:expanded('task-group:limit:'+id,false)}
+function visibleGroupRows(g:any){return g.rows.length>8&&!showAllGroup(g.id)?g.rows.slice(0,5):g.rows}
+function toggleGroup(id:string){const next=!showAllGroup(id);groupExpansion.value={...groupExpansion.value,[id]:next};try{localStorage.setItem('task-group:limit:'+id,next?'open':'closed')}catch{}}
 function choose(offset:number){const m=A().memoCore;A().memoWorkspace.setDay(m.shiftDay(m.userDay(),offset))}
 function dateChanged(e:Event){A().memoWorkspace.setDay((e.target as HTMLInputElement).value)}
 function pressed(offset:number){const m=A().memoCore;return props.day===m.shiftDay(m.userDay(),offset)}
@@ -30,7 +34,7 @@ const columns=computed(()=>{void props.revision;return lists.map(col=>{
  const habitActive=habits.filter((h:any)=>!h.achieved||h.continuing)
  const habitDone=habits.filter((h:any)=>h.achieved&&!h.continuing)
  const families=A().store.data().memoTaskGroups||[]
- const grouped=[{id:'',name:'未分组'},...families].map(g=>({...g,rows:normal.filter((x:any)=>(families.some((f:any)=>f.id===x.task.memoGroup)?x.task.memoGroup:'')===g.id)})).filter(g=>g.id||g.rows.length)
+ const grouped=[{id:'',name:'未分组'},...families].map(g=>({...g,rows:normal.filter((x:any)=>(families.some((f:any)=>f.id===x.task.memoGroup)?x.task.memoGroup:'')===g.id)})).filter(g=>g.rows.length)
  return {...col,progress:A().memoFinance.column(props.day,col.key,true),normal,late,historical,finished,habitActive,habitDone,grouped,completeCount:finished.length+habitDone.length}
 })})
 </script>
@@ -53,7 +57,7 @@ const columns=computed(()=>{void props.revision;return lists.map(col=>{
         <template v-if="col.key==='extra'">
           <details v-for="g in col.grouped" :key="g.id" class="task-family family-compact" :data-family="'overview:'+g.id" :data-family-id="g.id" :open="expanded('task-group:overview:'+g.id,true)" @toggle="remember('task-group:overview:'+g.id,$event)">
             <summary>{{g.name}} · {{g.rows.length}}</summary>
-            <div class="family-body"><OverviewTask v-for="x in g.rows" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" /></div>
+            <div class="family-body"><OverviewTask v-for="x in visibleGroupRows(g)" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" /><button v-if="g.rows.length>8" class="btn btn-small overview-group-more" @click.stop="toggleGroup(g.id)">{{showAllGroup(g.id)?'收起到前5项':'展开其余 '+(g.rows.length-5)+' 项'}}</button></div>
           </details>
         </template>
         <template v-else><OverviewTask v-for="x in col.normal" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" /></template>
