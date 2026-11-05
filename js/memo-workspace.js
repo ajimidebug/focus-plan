@@ -76,10 +76,10 @@
   function renderTasks() {
     taskDay = taskDay || M().userDay();if(A.memoRecurrence?.needsDay(taskDay)&&!A.memoActions.busy()){const requestedDay=taskDay;commit(()=>A.memoRecurrence.ensureCore(requestedDay));return;} const day = S().getDay(taskDay), occurrenceDay = taskDay === M().userDay() ? M().userDay() : taskDay;
     const root = $('mw-today');
-    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + '<div class="mw-day-shortcuts" role="group" aria-label="快捷日期">'+button('yesterday','昨天')+button('today','今天')+button('tomorrow','明天')+'</div>' + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + button('ddl', '截止日期', 'id="mw-ddl"') + '</div>' + (A.memoReview?.summary(taskDay)||'') + (A.framework ? '<div data-framework-overview></div>' : overviewHTML(taskDay)) + (A.memoFinance?.panel(taskDay)||'') + '<div class="mw-full-list">' + ['required', 'ideal', 'extra'].map(list => {
+    root.innerHTML = '<div class="mw-toolbar"><input type="date" id="mw-day" aria-label="任务日期" value="' + esc(taskDay) + '">' + '<div class="mw-day-shortcuts" role="group" aria-label="快捷日期">'+button('yesterday','昨天')+button('today','今天')+button('tomorrow','明天')+'</div>' + '<small>北京时间04:00分日</small>' + button('add-required', '＋ 添加任务', '', true) + button('ddl', '截止日期', 'id="mw-ddl"') + '</div>' + (A.memoReview?.summary(taskDay)||'') + (A.framework ? '<div data-framework-overview></div>' : overviewHTML(taskDay)) + (A.memoFinance?.panel(taskDay)||'') + '<details class="mw-detail-disclosure"><summary>详细任务与其他管理</summary><div class="mw-full-list">' + ['required', 'ideal', 'extra'].map(list => {
       const items = taskItems(taskDay,list);
       return '<section class="mw-group" id="mw-column-'+list+'"><div class="mw-group-head"><h2>' + names[list] + '<small> · 待做 ' + (items.filter(x => !x.deferred&&!doneFor(x.task, x.ref)).length+(A.memoFinance?.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode!=='punch'&&x.n<x.r.target).length||0)) + ((A.memoFinance?.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode==='punch').length||0)?' · 监督 '+A.memoFinance.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode==='punch').length:'') + '</small></h2>' + button('add-' + list, '＋ 添加', 'aria-label="添加' + names[list] + '"') + '</div>' + categoryBody(items,taskDay,list) + (list==='required'?(A.memoGoals?.html(taskDay,false)||''):'') + (list === 'extra' ? (A.memoRecurrence?.registry()||'')+(A.memoReview?.registry()||'')+'<details class="mw-project-help"><summary>项目说明与已停用项目</summary><p class="hint">长期拓展是三栏分类；长期项目是持续任务实体；积分习惯仅为安排引用，不会生成第二条积分任务。一次性任务保留日期，每日推进项目可以停用。</p>' + (S().data().daily || []).filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-daily', '恢复基础任务', refAttrs({ kind: 'daily', id: p.id })) + '</p>').join('') + projects().filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-project', '恢复项目', refAttrs({ kind: 'project', id: p.id })) + '</p>').join('') + '</details>' : '') + '</section>';
-    }).join('') + '</div>' + (A.memoGantt?.html()||'') + backlog() + ((S().data().daily || []).some(t => !t.archived) ? '<section class="mw-group"><h2>原有基础任务</h2>' + taskSection(S().data().daily.filter(t => !t.archived&&!t.memoCategoryDays?.[occurrenceDay]).map(task => ({ task, ref: { kind: 'daily', id: task.id, day: occurrenceDay } }))) + '</section>' : '');
+    }).join('') + '</div></details>' + (A.memoGantt?.html()||'') + backlog() + ((S().data().daily || []).some(t => !t.archived) ? '<section class="mw-group"><h2>原有基础任务</h2>' + taskSection(S().data().daily.filter(t => !t.archived&&!t.memoCategoryDays?.[occurrenceDay]).map(task => ({ task, ref: { kind: 'daily', id: task.id, day: occurrenceDay } }))) + '</section>' : '');
     ['yesterday','today','tomorrow'].forEach((k,i)=>{const b=root.querySelector('[data-mw="'+k+'"]');b?.setAttribute('aria-pressed',String(taskDay===M().shiftDay(M().userDay(),i-1)));});
     if (A.framework) A.framework.overview(root.querySelector('[data-framework-overview]'), taskDay);
     A.ms?.refresh();
@@ -98,10 +98,11 @@
     root?.querySelectorAll('details').forEach(el => { if (disclosures.has(detailKey(el))) el.open = true; });
     if (ref && document.body.dataset.view === 'tasks' && pane !== 'timeline') requestAnimationFrame(() => { const next = [...root.querySelectorAll('[data-mw-card],.mw-history-row[data-ref]')].find(el => el.dataset.ref === ref); if (next) window.scrollBy(0, next.getBoundingClientRect().top - offset); });
   }
-  function render() { if (!ready) return; preserve(() => { renderTasks(); renderQueue(); renderHistory(); renderPending(); applyPane(); }); A.memoSchedule.tick?.(); A.app?.refreshStats();
+  function renderReviews() { $('mw-reviews').innerHTML = (A.memoReview?.registry()||'') + (A.memoRecurrence?.registry()||''); }
+  function render() { if (!ready) return; preserve(() => { renderTasks(); if(pane==='queue')renderQueue(); if(pane==='history')renderHistory(); if(pane==='reviews')renderReviews(); renderPending(); applyPane(); }); A.memoSchedule.tick?.(); A.app?.refreshStats();
     if (completionFocus) { const ref = completionFocus.ref, t = A.memoSchedule.find(ref); if (t && doneFor(t, ref) !== completionFocus.before) { const cardEl = [...document.querySelectorAll('[data-mw-card]')].find(el => el.dataset.ref === JSON.stringify(ref)); const folded = cardEl?.closest('.mw-completed:not([open])'); (folded?.querySelector('summary') || cardEl?.querySelector('[data-mw="complete"]'))?.focus({ preventScroll: true }); completionFocus = null; } }
   }
-  function applyPane() { ['today', 'queue', 'history', 'pending'].forEach(p => { const el = $('mw-' + p); el.hidden = p !== pane; document.querySelector('[data-mw-pane="' + p + '"]')?.setAttribute('aria-pressed', String(p === pane)); });
+  function applyPane() { ['today', 'queue', 'reviews', 'history', 'pending'].forEach(p => { const el = $('mw-' + p); el.hidden = p !== pane; document.querySelector('[data-mw-pane="' + p + '"]')?.setAttribute('aria-pressed', String(p === pane)); });
     const sessions = A.memoSchedule.state().sessions, shown = sessions.find(s => s.status === 'running') || sessions.find(s => s.status === 'paused');
     const container = pane === 'timeline' ? null : $(pane === 'queue' ? 'mw-queue' : 'mw-today');
     $('mw-live')?.classList.toggle('mw-local-timer', !!shown && [...(container?.querySelectorAll('[data-mw-card]') || [])].some(el => A.memoSchedule.key(JSON.parse(el.dataset.ref)) === A.memoSchedule.key(shown.ref)));
@@ -110,14 +111,15 @@
     if(next==='pending')next='queue';
     if (next === 'timeline') { A.app.switchView('timeline'); return A.memoSchedule.open(Object.assign({}, options, { workspace: true })); }
     if (save) positions[pane] = window.scrollY;
-    pane = next; applyPane(); if (next === 'timeline') A.memoSchedule.open(Object.assign({}, options, { workspace: true }));
+    pane = next; if(next==='queue')renderQueue();else if(next==='history')renderHistory();else if(next==='reviews')renderReviews();applyPane(); if (next === 'timeline') A.memoSchedule.open(Object.assign({}, options, { workspace: true }));
     requestAnimationFrame(() => { if (options.focusCard) $('schedule-card-' + options.focusCard)?.scrollIntoView({ block: 'center' }); else window.scrollTo({ top: positions[next] || 0 }); });
   }
   function enter(next, day) { if(day && M().validDate(day)){taskDay=day;render();}  if (next) showPane(next, false); else { applyPane(); requestAnimationFrame(() => window.scrollTo({ top: positions[pane] || 0 })); } }
   function returnToday() {
     if(document.querySelector('#modal-root .modal-mask')||A.memoActions.busy())return;
-    taskDay=M().userDay();positions.today=0;pane='today';render();
-    requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:0,behavior:'instant'})));
+    const today=M().userDay(),changed=taskDay!==today||pane!=='today';taskDay=today;positions.today=0;pane='today';
+    if(changed)render();else applyPane();
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{const target=document.querySelector('#mw-today .framework-overview')||$('mw-today'),header=document.querySelector('.app-topbar');if(target)window.scrollTo({top:Math.max(0,window.scrollY+target.getBoundingClientRect().top-(header?.getBoundingClientRect().height||0)-8),behavior:'instant'});}));
   }
   function leave() { positions[pane] = window.scrollY; }
   function timingFields() { return '<details open><summary>安排时间（选填）</summary><div class="schedule-fields"><label>开始／时间点<input type="time" id="mw-start"></label><label>结束（选填）<input type="time" id="mw-end"></label></div><label><input type="checkbox" id="mw-next">次日结束</label><p class="hint">只填开始即为时间点；都不填则暂不安排。</p></details>'; }
@@ -253,7 +255,7 @@
     const root = $('view-tasks');
     const axis = document.createElement('section'); axis.id = 'view-memo-timeaxis'; axis.className = 'view'; document.querySelector('main').appendChild(axis); axis.appendChild($('memo-schedule-panel'));
     const error = document.createElement('button'); error.id = 'flow-save-error'; error.className = 'btn btn-danger'; error.hidden = true; document.querySelector('main').before(error);
-    root.insertAdjacentHTML('afterbegin', '<div class="mw-tabs" role="group" aria-label="任务子页面">' + [['today','当天任务'],['queue','待安排']].map(([id, label]) => '<button class="btn" data-mw-pane="' + id + '">' + label + '</button>').join('') + '</div><p id="mw-error" role="alert"></p><div id="mw-today"></div><div id="mw-queue" hidden></div><div id="mw-history" hidden></div><div id="mw-pending" hidden></div>');
+    root.insertAdjacentHTML('afterbegin', '<div class="mw-tabs" role="group" aria-label="任务子页面">' + [['today','三栏任务'],['queue','待安排'],['reviews','复习管理']].map(([id, label]) => '<button class="btn" data-mw-pane="' + id + '">' + label + '</button>').join('') + '</div><p id="mw-error" role="alert"></p><div id="mw-today"></div><div id="mw-queue" hidden></div><div id="mw-reviews" hidden></div><div id="mw-history" hidden></div><div id="mw-pending" hidden></div>');
     // Keep legacy review content reachable, with mutation entries retired in memo mode.
     const review = document.createElement('section'); review.id = 'view-memo-review'; review.className = 'view'; review.innerHTML = '<h2>今日复盘</h2><p class="hint">完成和补记请在任务中操作，统一关联笔记、积分与时间轴。</p>'; $('review-card').parentNode.removeChild($('review-card')); review.appendChild(document.createElement('div')).id = 'review-card'; document.querySelector('main').appendChild(review);
     document.querySelectorAll('.mn-grid, header nav').forEach(el => el.insertAdjacentHTML('beforeend', '<button class="nav-btn btn" data-view="memo-review">今日复盘</button>'));
