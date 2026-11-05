@@ -40,7 +40,7 @@ function collect(){
   const c=A.memoRecurrence.config(s,M().userDay())||s.revisions?.at(-1);
   return c?{externalKey:s.memoImportKey||'focus-plan:recurrence:'+s.id,sourceId:s.id,text:c.text,note:c.note||'',points:c.points??1,estimatedMinutes:c.estimatedMinutes||0,list:c.list||'ideal',rule:clone(c.rule),reviewMode:!!s.reviewMode,end:s.end||null}:null;
  }).filter(Boolean);
- out.projects=(d.memoProjects||[]).filter(p=>!p.archived).map(p=>({externalKey:p.memoImportKey||'focus-plan:projects:'+p.id,sourceId:p.id,text:p.text,note:p.note||'',memoGanttStart:p.memoGanttStart||'',memoGanttEnd:p.memoGanttEnd||'',memoGanttDependencies:clone(p.memoGanttDependencies||[])}));
+ out.projects=(d.memoProjects||[]).filter(p=>!p.archived).map(p=>({externalKey:p.memoImportKey||'focus-plan:projects:'+p.id,sourceId:p.id,text:p.text,note:p.note||'',memoGroup:p.memoGroup||'',memoGroupName:(d.memoTaskGroups||[]).find(g=>g.id===p.memoGroup)?.name||'',memoGanttStart:p.memoGanttStart||'',memoGanttEnd:p.memoGanttEnd||'',memoGanttDependencies:clone(p.memoGanttDependencies||[]),dependencyKeys:(p.memoGanttDependencies||[]).map(id=>{const dep=(d.memoProjects||[]).find(x=>x.id===id);return dep?.memoImportKey||'focus-plan:projects:'+id;})}));
  out.wishlist=(d.memoWishes||[]).filter(w=>!w.hidden&&!w.purchase).map(w=>({externalKey:w.memoImportKey||'focus-plan:wishlist:'+w.id,sourceId:w.id,name:w.name,cents:w.cents}));
  out.schedule=clone(d.memoSchedule?.items||[]);
  out.checkins=clone(d.checkins||[]);
@@ -106,6 +106,11 @@ function prepareOne(mod,raw){
  if(mod==='projects'){
   item.memoGanttStart=raw.memoGanttStart||'';item.memoGanttEnd=raw.memoGanttEnd||'';
   A.memoGantt.validate(null,item.memoGanttStart,item.memoGanttEnd,[]);
+  item.memoGroupName=bounded(raw.memoGroupName||'',100).trim();
+  item.memoGroup=bounded(raw.memoGroup||'',220);
+  item.memoGanttDependencies=raw.memoGanttDependencies||[];
+  item.dependencyKeys=raw.dependencyKeys||[];
+  if(!Array.isArray(item.memoGanttDependencies)||!Array.isArray(item.dependencyKeys)||item.memoGanttDependencies.length>20||item.dependencyKeys.length>20||item.memoGanttDependencies.some(x=>typeof x!=='string'||x.length>220)||item.dependencyKeys.some(x=>typeof x!=='string'||x.length>220))throw Error('长期项目依赖引用无效');
  }
  return item;
 }
@@ -122,6 +127,15 @@ function preview(data,names){
    seen.add(key);out.rows.push({mod,key,item,sourceId,skip:isDuplicate});
    if(isDuplicate)out.skip++;else out.create++;
   }
+ }
+ // A module import is never allowed to silently discard dependency edges.
+ const planned=out.rows.filter(r=>r.mod==='projects');
+ const allExisting=existing('projects');
+ const available=new Set([...allExisting.flatMap(p=>[p.id,p.memoImportKey,'focus-plan:projects:'+p.id].filter(Boolean)),...planned.flatMap(r=>[r.sourceId,r.key,r.key.replace(/^projects:/,''),'focus-plan:projects:'+r.sourceId].filter(Boolean))]);
+ for(const row of planned){
+  const refs=row.item.dependencyKeys.length?row.item.dependencyKeys:row.item.memoGanttDependencies;
+  const missing=refs.filter(ref=>!available.has(ref)&&!available.has(ref.startsWith('projects:')?ref:'projects:'+ref));
+  if(missing.length)throw Error('项目「'+row.item.text+'」存在缺失前置依赖：'+missing.join('、')+'。请一同导入依赖项目或从源文件中明确移除该关系。');
  }
  return out;
 }
@@ -142,10 +156,28 @@ function applyCore(plan){
    const series=A.memoRecurrence.newSeriesCore({...item,end:item.end&&item.end>=today?item.end:null});series.memoImportKey=key;
   }else if(mod==='projects'){
    d.memoProjects=d.memoProjects||[];
-   d.memoProjects.push({id:S().uid(),text:item.text,note:item.note,days:{},createdDay:today,memoImportKey:key,...(item.memoGanttStart?{memoGanttStart:item.memoGanttStart,memoGanttEnd:item.memoGanttEnd}:{})});
+   const defined=d.memoTaskGroups||(d.memoTaskGroups=[]);
+   let category=defined.find(g=>g.id===item.memoGroup);
+   if(!category&&item.memoGroupName){category=defined.find(g=>g.name===item.memoGroupName);if(!category){category={id:S().uid(),name:item.memoGroupName};defined.push(category);}}
+   d.memoProjects.push({id:S().uid(),text:item.text,note:item.note,days:{},createdDay:today,memoImportKey:key,...(category?{memoGroup:category.id}:{}),...(item.memoGanttStart?{memoGanttStart:item.memoGanttStart,memoGanttEnd:item.memoGanttEnd}:{})});
   }else if(mod==='wishlist'){
    d.memoWishes=d.memoWishes||[];d.memoWishes.push({id:S().uid(),name:item.name,cents:item.cents,memoImportKey:key});
   }
+ }
+ // Resolve newly generated project IDs only after all projects are created.
+ const imported=plan.rows.filter(r=>r.mod==='projects');
+ const locate=ref=>{
+  const r=imported.find(x=>x.sourceId===ref||x.key===ref||x.key==='projects:'+ref||x.key.replace(/^projects:/,'')===ref);
+  if(r){const p=(d.memoProjects||[]).find(p=>p.memoImportKey===r.key||p.id===r.sourceId);if(p)return p;}
+  return (d.memoProjects||[]).find(p=>p.id===ref||p.memoImportKey===ref||p.memoImportKey==='projects:'+ref||'focus-plan:projects:'+p.id===ref)||null;
+ };
+ for(const row of imported){
+  if(row.skip)continue;
+  const target=(d.memoProjects||[]).find(p=>p.memoImportKey===row.key);
+  if(!target)throw Error('无法定位已导入项目：'+row.item.text);
+  const refs=row.item.dependencyKeys.length?row.item.dependencyKeys:row.item.memoGanttDependencies;
+  const deps=refs.map(ref=>{const found=locate(ref);if(!found)throw Error('前置项目丢失：'+ref);return found.id});
+  target.memoGanttDependencies=A.memoGantt.validate(target,target.memoGanttStart||'',target.memoGanttEnd||'',deps).dependencies;
  }
  A.memoSchedule.invalidate?.();
 }

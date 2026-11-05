@@ -85,14 +85,14 @@ try {
       await page.locator('.modal [data-act="save"][data-list="required"]').click();
       await page.waitForFunction(id=>App.memoFinance.plans(App.memoCore.userDay()).some(x=>x.it.id===id && x.r.list==='required') && !App.memoActions.busy() && !document.querySelector('.modal'),id);
       await page.evaluate(()=>{App.app.switchView('tasks');App.memoWorkspace.showPane('today');});
-       assert.equal(await page.locator('.mw-overview .habit-plan-row').count(),0,'no duplicated points habits in task columns');
+       assert.equal(await page.locator('.mw-overview .habit-plan-row').count(),1,'one assigned points habit appears exactly once in task columns');
       await page.evaluate(()=>App.app.switchView('checkin'));
       await page.evaluate(id=>App.memoFinance.arrange(id),id);
       await page.locator('.modal [data-mode="daily"]').click();
       await page.locator('.modal [data-act="save"][data-list="ideal"]').click();
       await page.waitForFunction(id=>App.memoFinance.plans(App.memoCore.userDay()).some(x=>x.it.id===id && x.r.list==='ideal'),id);
       assert.equal(await page.evaluate(id=>App.memoFinance.plans(App.memoCore.userDay()).filter(x=>x.it.id===id).length,id),1);
-       assert.equal(await page.locator('.mw-overview .habit-plan-row').count(),0,'moving a habit never adds it to task columns');
+       assert.equal(await page.locator('.mw-overview .habit-plan-row').count(),1,'moving a habit preserves one visible assignment in task columns');
       await page.evaluate(()=>App.app.switchView('checkin'));
       await page.locator('#checkin-view [data-act="ck-add"]').first().click();
       await page.locator('#ck-text').fill('排序第二项目');

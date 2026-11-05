@@ -41,7 +41,7 @@ jobs:
       fail-fast: false
       max-parallel: 5
       matrix:
-        script: [browser-smoke.mjs, interaction-1732.browser.cjs, interaction-1733.browser.cjs, interaction-1734.browser.cjs, interaction-1735.browser.cjs, interaction-1736.browser.cjs, interaction-1737.browser.cjs, interaction-1738.browser.cjs, interaction-1739.browser.cjs, interaction-17391.browser.cjs, points-account.browser.cjs, framework.browser.cjs, interaction-1742.browser.cjs, interaction-1744.browser.cjs, interaction-1745.browser.cjs, interaction-1747.browser.cjs, interaction-1748.browser.cjs]
+        script: [interaction-1750.browser.cjs, browser-smoke.mjs, interaction-1732.browser.cjs, interaction-1733.browser.cjs, interaction-1734.browser.cjs, interaction-1735.browser.cjs, interaction-1736.browser.cjs, interaction-1737.browser.cjs, interaction-1738.browser.cjs, interaction-1739.browser.cjs, interaction-17391.browser.cjs, points-account.browser.cjs, framework.browser.cjs, interaction-1742.browser.cjs, interaction-1744.browser.cjs, interaction-1745.browser.cjs, interaction-1747.browser.cjs, interaction-1748.browser.cjs]
     env:
       FOCUS_TEST_ROOT: dist/spa
     steps:

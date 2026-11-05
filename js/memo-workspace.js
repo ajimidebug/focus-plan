@@ -42,7 +42,7 @@
   }
   function deferredHTML(x,compact=false){
     const t=x.task,current=A.memoSchedule.find(x.currentRef),attrs='data-deferred-source="'+esc(JSON.stringify(x.ref))+'"';
-    return '<article class="'+(compact?'cal-task':'mw-task')+' mw-deferred" '+attrs+'><strong>'+esc(t.text)+'</strong><small class="mw-deferred-status">'+esc(x.closed?'已补记至'+x.toDay+' · 本日安排结束':'未完成 · 已延期至'+x.toDay)+'</small>'+(x.legacy?'<small>旧延期记录，内容按现存记录展示</small>':'')+
+    return '<article class="'+(compact?'cal-task':'mw-task')+' mw-deferred" '+attrs+'><strong>'+esc(t.text)+'</strong><small class="mw-deferred-status">'+esc((current?.backfillDay&&((current.done||current.doneAt)))?'已补记完成至'+current.backfillDay+' · 原安排结束':(current?.memoAutoCarry||t.memoAutoCarry)?'已顺延至'+x.toDay+' · 原安排结束':'已改期至'+x.toDay+' · 原安排结束')+'</small>'+(x.legacy?'<small>旧延期记录，内容按现存记录展示</small>':'')+
       (!x.legacy?(t.subs||[]).concat((t.groups||[]).flatMap(g=>g.subs||[])).map(s=>'<small>'+esc((s.done===true?'✓ ':'○ ')+s.text)+'</small>').join(''):'')+
       (!compact&&t.note?'<details><summary>当时备注</summary><p>'+esc(t.note)+'</p></details>':'')+
       (current?'<div class="mw-deferred-actions"><button class="btn btn-small" data-deferred-open="'+esc(JSON.stringify(x.currentRef))+'">查看当前任务</button>'+(!current.done&&!current.doneAt?'<button class="btn btn-small" data-deferred-day="'+esc(x.ref.day)+'" data-deferred-backfill="'+esc(JSON.stringify(x.currentRef))+'">补记本日完成</button><button class="btn btn-small" data-deferred-assign="'+esc(JSON.stringify(x.currentRef))+'">调整安排</button>':'')+'</div>':'')+'</article>';

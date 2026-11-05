@@ -34,9 +34,9 @@ async function run(){
    await page.evaluate(()=>App.app.switchView('checkin'));
    check((await page.locator('#stat-points-today').innerText())==='今日 +120 / −50','header signed flow '+width);
    await page.evaluate(()=>App.app.switchView('tasks'));
-   check((await page.locator('#mw-today [data-overview-list="required"] .mw-column-count').innerText())==='1/3','task-only denominator excludes point habits '+width);
+   check((await page.locator('#mw-today [data-overview-list="required"] .mw-column-count').innerText())==='2/4','assigned positive habit counts once; supervision excluded from completion denominator '+width);
    check(await page.locator('#mw-today .mw-column-meter').count()===3,'one slim meter per column '+width);
-   check(!/监督 1项/.test(await page.locator('#mw-today [data-overview-list="required"]').innerText()),'habits are not shown in the task columns '+width);
+   check((await page.locator('#mw-today [data-overview-list="required"]').innerText()).includes('坏习惯监督'),'assigned supervision habit remains visible '+width);
    await page.evaluate(()=>App.app.switchView('checkin'));await page.locator('#stat-points-today').click();
    check(/收入 \+120.*支出 −50/.test(await page.locator('.modal-body').innerText()),'daily breakdown '+width);
    check((await page.locator('.modal-body').innerText()).includes('行为日 '+old),'backfill behavior day retained '+width);
