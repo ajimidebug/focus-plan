@@ -64,7 +64,7 @@ async function run(){
   await page.waitForFunction(()=>document.querySelector('#mw-live')?.dataset.meterState==='window');
   assert.equal(await page.locator('#float-meter .float-range-end').innerText(),'13:00');
   const detail=await page.locator('#float-meter .float-meter-text').innerText();
-  const match=detail.match(/距截止 (\\d+):(\\d{2}):(\\d{2})/);
+  const match=detail.match(/距截止 (\d+):(\d{2}):(\d{2})/);
   assert(match,'remaining time appears in deadline progress');
   const seconds=Number(match[1])*3600+Number(match[2])*60+Number(match[3]);
   assert(seconds>=3590&&seconds<=3600,'remaining time is within rendering delay of one hour');
