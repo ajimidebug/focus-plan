@@ -30,7 +30,6 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   assert.equal(await page.locator('.framework-overview .overview-habit').filter({hasText:'重置！'}).count(),1,'continuing habit stays visible');
   assert.equal(await page.locator('.framework-overview .mw-late-section').first().count(),1,'moved active task rendered as late');
   assert.equal(await page.locator('.framework-overview .mw-completed .overview-habit').filter({hasText:'重置！'}).count(),0,'continuing habit not folded');
-  await page.locator('.memo-gantt > summary').click();
   assert.equal(await page.locator('.memo-gantt .gantt-group').count(),3,'one-off tasks appear in ungrouped Gantt');
   assert.equal(await page.locator('.memo-gantt .gantt-group[data-gantt-group=""]').evaluate(el=>el.open),false,'ungrouped defaults collapsed');
   await page.locator('[data-gantt-filter="g-study"]').click();
