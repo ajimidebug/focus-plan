@@ -78,11 +78,13 @@ function validate(task,from,to,deps=[]){
  return {start:from||'',end:to||'',dependencies:unique.map(keyToStored)};
 }
 function editor(modal,task,kind,list){
- const field=document.createElement('fieldset');field.id='memo-gantt-fields';
- field.innerHTML='<legend>甘特图计划与依赖（可选）</legend><label>甘特图分组<select id="memo-gantt-group"><option value="">未分组</option>'+groups().map(g=>'<option value="'+E(g.id)+'">'+E(g.name)+'</option>').join('')+'</select></label>'+dateFields('memo-gantt',task?.memoGanttStart,task?.memoGanttEnd)+
+ const field=document.createElement('details');field.id='memo-gantt-fields';
+ field.open=kind==='project'||!!(task?.memoGanttStart||task?.memoGanttEnd||(task?.memoGanttDependencies||[]).length);
+ field.innerHTML='<summary>甘特图计划与依赖（可选）</summary><label>甘特图分组<select id="memo-gantt-group"><option value="">未分组</option>'+groups().map(g=>'<option value="'+E(g.id)+'">'+E(g.name)+'</option>').join('')+'</select></label>'+dateFields('memo-gantt',task?.memoGanttStart,task?.memoGanttEnd)+
  '<label class="gantt-cross-label"><input type="checkbox" data-gantt-cross> 显示其他分组项目</label><div class="gantt-dependency-list" id="memo-gantt-dependency-list"></div><p class="hint">依赖只提示，不会自动调整安排、积分或计时。</p>';
  modal.querySelector('#mw-form-error').before(field);
  const group=field.querySelector('#memo-gantt-group');group.value=category(task||{});
+ const outer=modal.querySelector('#task-group');if(outer){group.closest('label').hidden=true;group.value=outer.value;outer.addEventListener('change',()=>{group.value=outer.value;group.dispatchEvent(new Event('change'));});}
  const update=()=>{const selected=modal.querySelector('#mw-list')?.value||list;field.hidden=!(kind==='project'||kind==='task'||kind==='queue'||selected==='extra');};
  modal.querySelector('#mw-list')?.addEventListener('change',update);
  modal.querySelectorAll('[name="mw-repeat"]').forEach(x=>x.addEventListener('change',update));update();
@@ -166,7 +168,7 @@ function syncEdges(){
  const defs=document.createElementNS('http://www.w3.org/2000/svg','defs'),marker=document.createElementNS('http://www.w3.org/2000/svg','marker'),tip=document.createElementNS('http://www.w3.org/2000/svg','path');
  marker.setAttribute('id','gantt-175-arrow');marker.setAttribute('markerWidth','7');marker.setAttribute('markerHeight','7');marker.setAttribute('refX','6');marker.setAttribute('refY','3');marker.setAttribute('orient','auto');
  tip.setAttribute('d','M0,0 L6,3 L0,6 Z');tip.setAttribute('fill','#bc903f');marker.appendChild(tip);defs.appendChild(marker);svg.appendChild(defs);
- const shown=new Map([...track.querySelectorAll('[data-gantt-row]')].map(x=>[x.dataset.ganttRow,x]));
+ const shown=new Map([...track.querySelectorAll('[data-gantt-row]')].filter(x=>x.getClientRects().length>0).map(x=>[x.dataset.ganttRow,x]));
  for(const [id,node] of shown){
   const item=locate(id)?.task,bar=node.querySelector('.memo-gantt-bar');
   if(!item||!bar)continue;
