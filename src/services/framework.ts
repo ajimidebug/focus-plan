@@ -1,5 +1,5 @@
-import { createApp, h, markRaw } from 'vue'
-import { Quasar, QDialog, QBtn, Notify } from 'quasar'
+import { createApp, h, markRaw, ref } from 'vue'
+import { Quasar, QDialog, QBtn, QDate, Notify } from 'quasar'
 import { Chart, registerables } from 'chart.js'
 import Papa from 'papaparse'
 import { z } from 'zod'
@@ -25,7 +25,7 @@ export function installFramework(state:any, appRouter:any) {
   screen=state;router=appRouter
   window.App=window.App||{}
   const framework={
-    openModal, closeModal, toast, barChart, lineChart, calendar, overview,
+    openModal, closeModal, toast, barChart, lineChart, calendar, overview, ganttRange,
     csv:(rows:any[][])=>Papa.unparse(rows,{quotes:true,newline:'\r\n'}),
     validateTask:(text:string,minutes:unknown)=>z.object({text:z.string().trim().min(1,'请填写任务名称'),minutes:z.number().finite().min(0).max(1440)}).safeParse({text,minutes:Number(minutes)||0}),
     busy:()=>screen.modalCount>0||screen.more||screen.dirtyDialogs>0,
@@ -132,3 +132,19 @@ function calendar(node:HTMLElement,month:string,selected:string,onSelect:(day:st
   mount(node,FullCalendar,{options:{plugins:[dayGridPlugin,interactionPlugin],locale:zh,firstDay:1,initialView:'dayGridMonth',initialDate:month,headerToolbar:false,height:'auto',fixedWeekCount:false,events,dayMaxEvents:1,editable:false,selectable:false,dateClick:(info:any)=>onSelect(info.dateStr),dayCellDidMount:(info:any)=>{const n=info.el.querySelector('.fc-daygrid-day-number');if(!n)return;const d=info.date,key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');n.setAttribute('role','button');n.setAttribute('tabindex','0');n.setAttribute('aria-label','查看'+key+'任务');n.addEventListener('keydown',(e:KeyboardEvent)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(key)}})},dayCellClassNames:(info:any)=>{const d=info.date;const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return key===selected?['framework-selected-day']:[]}}})
 }
 function overview(node:HTMLElement,day:string) { mount(node,TaskOverview,{day,revision:screen.revision}) }
+
+function ganttRange(node:HTMLElement,initialStart:string,initialEnd:string,onChange:(start:string,end:string)=>void){
+  const value=ref<any>(initialStart&&initialEnd?{from:initialStart,to:initialEnd}:initialEnd||initialStart||null)
+  const component={setup(){return ()=>h(QDate,{modelValue:value.value,range:true,minimal:true,flat:true,mask:'YYYY-MM-DD',
+    firstDayOfWeek:1,landscape:false,
+    'onUpdate:modelValue':(next:any)=>{
+      value.value=next
+      if(next&&typeof next==='object')onChange(next.from||'',next.to||'')
+      else if(typeof next==='string')onChange(next,'')
+      else onChange('','')
+    },
+    onRangeStart:(date:any)=>{const d=typeof date==='string'?date:date?.date;if(d)onChange(d,'')}
+  })}}
+  mount(node,component)
+  ;(node as any)._ganttSet=(start:string,end:string)=>{value.value=start&&end?{from:start,to:end}:end||start||null}
+}
