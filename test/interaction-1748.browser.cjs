@@ -1,0 +1,34 @@
+'use strict';
+const {chromium}=require('playwright'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
+const root=path.resolve(process.env.FOCUS_TEST_ROOT||'dist/spa');
+const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://localhost').pathname,file=path.resolve(root,'.'+(name==='/'?'/index.html':name));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return}fs.readFile(file,(e,b)=>{if(e){res.writeHead(404).end();return}res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.json':'application/json'})[path.extname(file)]||'text/html');res.end(b)})});
+(async()=>{await new Promise(ok=>server.listen(0,'127.0.0.1',ok));const browser=await chromium.launch({headless:true});try{
+ const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Asia/Shanghai',serviceWorkers:'block'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.clock.install({time:new Date('2026-11-05T12:00:00+08:00')});await page.goto('http://127.0.0.1:'+server.address().port+'/#/tasks');await page.waitForFunction(()=>App?.app?.ready&&App?.memoTransfer?.exportData);
+ assert.equal(await page.locator('.framework-overview .cal-col').count(),3);
+ assert.equal(await page.locator('#mw-today > .mw-detail-disclosure,#mw-today > .task-habit-panel,#mw-today > .mw-backlog').count(),0);
+ assert.equal(await page.locator('#mw-today .mw-toolbar').count(),1);
+ assert.equal(await page.locator('.mw-tabs').count(),0);
+ const check=await page.evaluate(async()=>{
+  const A=App,d=A.store.data(),beforeLedger=JSON.stringify(d.ledger||[]),beforeEvents=JSON.stringify(d.memoEvents||[]);
+  const file={format:'focus-plan-modules',version:1,modules:{required:[{text:'测试必做',day:'2026-11-05',priorityWeight:4,externalKey:'test-required-1'}],queue:[{text:'AI 待安排',externalKey:'test-queue-1'}],recurrence:[{text:'定期复习',list:'ideal',reviewMode:true,rule:{kind:'days',every:3,anchor:'2026-11-05'},externalKey:'test-review-1'}]}};
+  const parsed=A.memoTransfer.parse(JSON.stringify(file));
+  const plan=A.memoTransfer.preview(parsed,['required','queue','recurrence']);
+  if(!await A.memoActions.commit(()=>A.memoTransfer.applyCore(plan)))throw Error('save failed');
+  const repeat=A.memoTransfer.preview(parsed,['required','queue','recurrence']);
+  const exported=A.memoTransfer.exportData(['required','queue','recurrence']);
+  return {first:plan.create,duplicate:repeat.skip,remaining:repeat.create,keys:Object.keys(exported.modules),ledgerSame:JSON.stringify(d.ledger||[])===beforeLedger,eventsSame:JSON.stringify(d.memoEvents||[])===beforeEvents};
+ });
+ assert.equal(check.first,3);assert.equal(check.duplicate,3);assert.equal(check.remaining,0);
+ assert(check.ledgerSame&&check.eventsSame);assert.deepEqual(check.keys,['required','queue','recurrence']);
+ await page.getByRole('button',{name:'更多',exact:true}).click();
+ await page.getByRole('button',{name:'复习与周期管理'}).click();
+ assert.equal(await page.locator('#mw-reviews:not([hidden])').count(),1);
+ await page.getByRole('button',{name:'更多',exact:true}).click();
+ await page.getByRole('button',{name:'批量导入导出'}).click();
+ assert(await page.locator('#mx-modules input').count()>=9);
+ await page.locator('#mx-modules input[value="required"]').check();
+ assert.equal(await page.locator('#mx-modules input:checked').count(),1);
+ assert.deepEqual(errors,[]);
+ console.log('174.8 tasks-only overview, modular import, deduplication and More routing passed');
+ }finally{await browser.close();await new Promise(ok=>server.close(ok))}})().catch(e=>{console.error(e);process.exitCode=1;server.close()});
