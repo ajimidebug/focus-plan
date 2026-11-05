@@ -77,6 +77,32 @@ const server=http.createServer((req,res)=>{
   await page.locator('#family-name').fill('新分组');
   await page.locator('[data-act="save"]').last().click();
   assert(await page.evaluate(()=>App.store.data().memoTaskGroups.some(g=>g.name==='新分组')),'new category saved');
+  await page.locator('[data-gantt-manage]').click();
+  await page.locator('[data-group-manage="g-math"]').click();
+  await page.locator('#family-target').selectOption('g-life');
+  await page.locator('[data-act="remove"]').click();
+  await page.locator('[data-act="ok"]').last().click();
+  await page.waitForFunction(()=>!App.store.data().memoTaskGroups.some(g=>g.id==='g-math'));
+  const groupState=await page.evaluate(()=>{
+   const d=App.store.data();
+   return {ideal:(d.queue||[]).find(t=>t.id==='once-ideal')?.memoGroup,project:d.memoProjects.find(t=>t.id==='p-math')?.memoGroup};
+  });
+  assert.equal(groupState.ideal,'g-life','one-off reassigned when deleting category');
+  assert.equal(groupState.project,'g-life','recurring project reassigned when deleting category');
+  const imported=await page.evaluate(()=>{
+   const A=App,d=A.store.data();
+   d.memoProjects.find(p=>p.id==='p-math').memoGanttDependencies=['once:once-queue'];
+   const exported=A.memoTransfer.exportData(['queue','projects']);
+   d.queue=[];d.memoProjects=[];
+   const preview=A.memoTransfer.preview(A.memoTransfer.parse(JSON.stringify(exported)),['queue','projects']);
+   A.memoTransfer.applyCore(preview);
+   const project=d.memoProjects.find(p=>p.text==='高数强化');
+   const once=d.queue.find(q=>q.text==='待安排的原始任务');
+   return {created:preview.create,dep:project?.memoGanttDependencies?.[0],key:once?'once:'+once.id:null,group:project?.memoGroup};
+  });
+  assert(imported.created>=4,'mixed module imports created plans');
+  assert.equal(imported.dep,imported.key,'cross-type dependency remaps to imported queue ID');
+  assert.equal(imported.group,'g-life','project category still restored');
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
   assert(overflow<=1,'no page-level horizontal overflow: '+overflow);
   assert.deepEqual(errors,[],'page errors');
