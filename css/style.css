@@ -2722,3 +2722,11 @@ body[data-theme="dark"] [data-bounty-tier="high"],body[data-theme="purple"] [dat
  .memo-gantt-dates{grid-template-columns:minmax(0,1fr);}
  .review-registry-actions>.btn{flex:1 1 100%;min-height:40px;}
 }
+
+
+/* 175.1: Gantt and waiting list use local, horizontally contained scrolling. */
+#mw-today .memo-gantt { min-width:0;max-width:100%; }
+#mw-today .memo-gantt-scroller { max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }
+#mw-today .mw-inline-waiting { min-width:0;max-width:100%; }
+#mw-today .mw-inline-waiting .mw-queue-grid { display:block; }
+#mw-today .gantt-range-wrap { min-width:0;max-width:100%; }
