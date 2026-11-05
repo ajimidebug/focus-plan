@@ -305,10 +305,10 @@
           return;
         }
         if(spec.day&&spec.day!==M().userDay())throw Error('日期已改变，请重新打开');
-        const active=timerState();timerButton.textContent='保存中…';
+        const active=timerState(),wasRunning=active?.status==='running';timerButton.textContent='保存中…';
         if(await transaction(()=>{saveEstimate();if(active?.status==='running')App.memoSchedule.pauseCore(active,Date.now());else App.memoSchedule.startRef(ref);})){
           m.querySelector('#memo-action-error').textContent='';
-          if(active?.status!=='running'&&!pendingEdits){App.ui.closeModal();refresh();App.ui.toast(active?'已继续计时':'计时已开始；其他任务的运行计时会自动暂停');}
+          if(!wasRunning&&!pendingEdits){App.ui.closeModal();refresh();App.ui.toast(active?'已继续计时':'计时已开始；其他任务的运行计时会自动暂停');}
           else timerState();
         }else timerState();
       }catch(e){m.querySelector('#memo-action-error').textContent=e.message;if(unsettled)timerButton.textContent='重试保存';else timerState();}
