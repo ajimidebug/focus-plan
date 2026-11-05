@@ -32,6 +32,40 @@ for(const width of [320,390,1280]){
  await page.getByRole('button',{name:/^打开任务：成熟框架验收/}).click();await page.getByRole('checkbox',{name:'同时领取额外全部完成（含选做，非全勤）奖励'}).uncheck();await page.getByRole('button',{name:'确认完成 · 2026-11-04',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
  assert.equal(await page.evaluate(()=>App.store.pointsTotal()),1);
  await page.locator('.framework-overview .mw-completed summary').click();await page.getByRole('button',{name:/^打开任务：成熟框架验收/}).click();await page.getByRole('button',{name:'确认取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});assert.equal(await page.evaluate(()=>App.store.pointsTotal()),0);
+ // 174.3: priority only sorts required; bounty tiers are pure display, with no points created.
+ await page.evaluate(async()=>{
+   const day='2026-11-04',d=App.store.getDay(day);
+   d.tasks.required.push({id:'priority-low',text:'低优先测试',priorityWeight:1},{id:'priority-high',text:'高优先测试',priorityWeight:5},{id:'priority-default',text:'默认权重测试'});
+   d.tasks.ideal.push(...[10,11,30,31].map(n=>({id:'bounty-'+n,text:'悬赏'+n,points:n})));
+   await App.store.save();App.memoWorkspace.render();
+ });
+ const initial=await page.evaluate(()=>({
+   order:App.memoWorkspace.taskItems('2026-11-04','required').filter(x=>['priority-low','priority-high','priority-default'].includes(x.task.id)).map(x=>x.task.id),
+   tiers:[10,11,30,31].map(n=>App.memoOrganize.bountyTier(n)),
+   invalid:App.memoWorkspace.priorityWeight({priorityWeight:99}),
+   segments:App.memoFinance.column('2026-11-04','ideal').segments.map(x=>x.state)
+ }));
+ assert.deepEqual(initial.order,['priority-high','priority-default','priority-low'],'required priority and stable default');
+ assert.deepEqual(initial.tiers,['none','basic','basic','high'],'11/31 thresholds');
+ assert.equal(initial.invalid,3,'invalid legacy weight defaults safely');
+ assert.deepEqual(initial.segments,['late-done','done','pending','deferred'],'four progress segments retain their ordering');
+ const tierEls=await page.locator('.framework-overview .overview-task[data-bounty-tier]').evaluateAll(nodes=>Object.fromEntries(nodes.filter(n=>n.getAttribute('data-overview-ref')?.includes('bounty-')).map(n=>[JSON.parse(n.dataset.overviewRef).id,n.dataset.bountyTier])));
+ assert.equal(tierEls['bounty-10'],'none');assert.equal(tierEls['bounty-11'],'basic');assert.equal(tierEls['bounty-31'],'high');
+ await page.evaluate(()=>App.memoWorkspace.editor({kind:'task',id:'priority-low',day:'2026-11-04',list:'required'}));
+ await page.locator('#mw-priority').selectOption('4');await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
+ assert.equal(await page.evaluate(()=>App.store.getDay('2026-11-04').tasks.required.find(t=>t.id==='priority-low').priorityWeight),4,'UI persists priority');
+ const resort=await page.evaluate(()=>App.memoWorkspace.taskItems('2026-11-04','required').filter(x=>['priority-low','priority-high','priority-default'].includes(x.task.id)).map(x=>x.task.id));
+ assert.deepEqual(resort,['priority-high','priority-low','priority-default'],'required order refreshes after editing');
+ await page.evaluate(()=>{
+   App.memoSchedule.startRef({kind:'task',id:'priority-high',day:'2026-11-04',list:'required'},Date.now()-67*60000);
+   App.memoSchedule.tick();
+ });
+ await page.locator('#mw-live .float-toggle').click();
+ assert(await page.locator('#mw-live .float-hour-note').isVisible(),'second-hour hint is visible');
+ assert(await page.locator('#mw-live .float-complete').isVisible(),'task and completion shortcut visible');
+ assert((await page.locator('#mw-live .float-meter-track').evaluate(el=>el.getBoundingClientRect().height))>=8,'timer ruler is visible');
+ assert.equal(await page.locator('#mw-live [data-schedule-command=pause]').count(),1,'pause is available');
+ await page.evaluate(()=>{App.memoSchedule.stopRef({kind:'task',id:'priority-high',day:'2026-11-04',list:'required'});App.memoSchedule.tick();});
  const axe=await new AxeBuilder({page}).include('.app-topbar').include('.app-bottom-nav').include('.framework-overview').withTags(['wcag2a','wcag2aa']).analyze();fs.writeFileSync('test-results/axe-'+width+'.json',JSON.stringify(axe,null,2));assert.deepEqual(axe.violations.filter(v=>['critical','serious'].includes(v.impact)).map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],'new framework accessibility');
  await page.screenshot({path:'test-results/tasks-'+width+'.png',fullPage:true});
  for(const view of ['memo','timeline','checkin','memo-history','calendar','stats','cards','mistakes','sport','memo-review','settings','tasks']){
