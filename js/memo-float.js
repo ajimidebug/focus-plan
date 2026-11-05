@@ -2,7 +2,7 @@
 (function () {
 'use strict';
 const A = window.App;
-let selected = null, collapsed = true;
+let selected = null, collapsed = true, lastPlacement = '';
 try { collapsed = localStorage.getItem('focusPlanFloatExpanded') !== '1'; } catch {}
 const clock = ms => { const s = Math.floor(Math.max(0, ms) / 1000); return Math.floor(s / 3600) + ':' + String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
 // Anchor to the visible viewport, including when a mobile keyboard reduces it.
@@ -12,6 +12,9 @@ function place() {
  const bottom = height < 500 ? 64 : 88;
  const target = height < 500 ? Math.min(64, height * .18) : Math.max(144, Math.min(260, height * .24));
  const top = Math.max(12, Math.min(target, height - bottom - 112));
+ const placement = (offset + top).toFixed(1) + ':' + Math.max(44, height - top - bottom).toFixed(1);
+ if (placement === lastPlacement) return;
+ lastPlacement = placement;
  root.style.setProperty('--float-top', (offset + top) + 'px');
  root.style.setProperty('--float-room', Math.max(44, height - top - bottom) + 'px');
 }
@@ -38,7 +41,7 @@ function update(session, paused = []) {
  selected = session;
  const root = document.getElementById('mw-live'); if (!root) return;
  ensure(root);
- place();
+ if (!lastPlacement) place();
  const memoFocused = document.activeElement?.id === 'memo-editor', folded = collapsed || memoFocused;
  root.classList.toggle('float-empty', !session);
  root.classList.toggle('float-collapsed', folded);
