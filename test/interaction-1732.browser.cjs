@@ -37,7 +37,8 @@ async function run(){
    await page.waitForFunction(()=>{const e=document.querySelector('#memo-editor');return e.scrollHeight-e.clientHeight-e.scrollTop<2;});
    check(await page.evaluate(()=>document.activeElement?.id!=='memo-editor'),'opening memo does not summon keyboard '+width);
    await editor.click({position:{x:20,y:25}});
-   check(await page.evaluate(()=>App.memoEditor.selection().end===App.memoEditor.text().length),'first click selects document end '+width);
+   check(await page.evaluate(()=>{const s=App.memoEditor.selection(),n=App.memoEditor.text().length;return s&&s.end<n;}),'first click on visible text retains its caret instead of forcing document end '+width);
+   await page.evaluate(()=>App.memoEditor.select(App.memoEditor.text().length));
    await page.keyboard.insertText('末尾追加');
    check(await page.evaluate(()=>App.memoEditor.text().endsWith('末尾追加')),'text appends at tail '+width);
    await page.evaluate(()=>App.memoEditor.select(2));await page.keyboard.insertText('编辑');
