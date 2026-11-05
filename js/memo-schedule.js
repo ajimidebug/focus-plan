@@ -182,6 +182,27 @@
       expectedPosition: valid ? limit / rangeMs * 100 : null, detail, tick: '25%',
       state: over ? 'overtime' : bounded ? 'expected' : 'unbounded' };
   }
+  // Scheduled spans are clock windows, never evidence of executed study.
+  // Prefer a live span, then an upcoming span, then the latest elapsed span.
+  function planWindow(ref, now = Date.now()) {
+    const r=canonical(ref),all=state().items.filter(p=>!p.deleted&&!p.suspendedByArchive&&!p.suspendedByBackfill&&!p.suspendedByReview&&p.type==='span'&&Number.isFinite(p.end)&&p.end>p.start&&key(p.ref)===key(r))
+      .sort((a,b)=>a.start-b.start);
+    const today=M().userDay(now);
+    const relevant=all.filter(p=>p.day===today||p.day===r.day||p.end>=now-86400000);
+    const live=relevant.find(p=>p.start<=now&&now<p.end);
+    const future=relevant.find(p=>p.start>now);
+    const past=relevant.filter(p=>p.end<=now).at(-1);
+    const chosen=live||future||past;
+    return chosen?{id:chosen.id,start:chosen.start,end:chosen.end,day:chosen.day}:null;
+  }
+  function windowMeter(window, now = Date.now(), executedMs = 0) {
+    if(!window||!Number.isFinite(window.start)||!Number.isFinite(window.end)||window.end<=window.start)return null;
+    const total=window.end-window.start,elapsed=Math.min(total,Math.max(0,now-window.start));
+    const ratio=100*elapsed/total,over=now>window.end;
+    const fmt=ms=>M().clock(ms),label=fmt(window.start)+'—'+fmt(window.end)+(M().naturalDay(window.end)!==M().naturalDay(window.start)?'（跨日）':'');
+    const remaining=now<window.start?'距开始 '+duration(window.start-now):over?'已过截止 '+duration(now-window.end):'距截止 '+duration(window.end-now);
+    return {valid:true,over,bounded:true,fill:ratio,previous:0,current:ratio,rangeMs:total,stepMinutes:total/240000,expectedPosition:100,detail:'计划 '+label+' · '+remaining+' · 有效计时 '+duration(executedMs),tick:'25%',state:over?'deadline-passed':'window',timeStart:fmt(window.start),timeEnd:fmt(window.end)};
+  }
   function active() { return state().sessions.find(s => s.status === 'running'); }
   function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
   function startRef(ref, now = Date.now(), itemId = null) {
@@ -543,5 +564,5 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } }); window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();
   }
-  App.memoSchedule = { invalidate:()=>{summaryCache=null;},meterTiming,meterState,setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
+  App.memoSchedule = { invalidate:()=>{summaryCache=null;},meterTiming,meterState,planWindow,windowMeter,setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
 })();
