@@ -2632,7 +2632,7 @@ body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:clip;overscrol
 
 
 /* 174.3: required priorities only affect order and category rails, not points. */
-body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-category="required"][data-priority="1"]{--task-rail:#94a3b8;}
+body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-category="required"][data-priority="1"]{--task-rail:#475569;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-category="required"][data-priority="2"]{--task-rail:#0f766e;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-category="required"][data-priority="3"]{--task-rail:#3274b5;}
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-category="required"][data-priority="4"]{--task-rail:#c2410c;}
