@@ -277,6 +277,8 @@ document.addEventListener('pointercancel',()=>{if(drag){drag.bar.style.outline='
 
 function refresh(){A.memoWorkspace.render();requestAnimationFrame(syncEdges);}
 document.addEventListener('click',e=>{
+ const rootSummary=e.target.closest?.('.memo-gantt[data-gantt-root] > summary');
+ if(rootSummary){const details=rootSummary.closest('[data-gantt-root]');if(details)setPref('root',details.open?'closed':'open');}
  const b=e.target.closest('[data-gantt-create],[data-gantt-manage],[data-gantt-quick],[data-gantt-filter],[data-gantt-navigate],[data-gantt-expand]');if(!b)return;
  e.preventDefault();e.stopPropagation();
  if(b.hasAttribute('data-gantt-create'))return createProject();
