@@ -92,8 +92,10 @@ body.framework-layout .legacy-host .framework-overview .cal-col { min-width:0!im
 @media(max-width:500px) {
   .shell-toolbar { min-height:44px; padding:0 10px; }
   .shell-brand { font-size:18px; }
-  .shell-stats #stat-bar { display:grid!important; grid-template-columns:repeat(4,minmax(0,1fr)); padding:5px 10px 6px!important; gap:6px 4px!important; }
-  .shell-stats #stat-bar .stat-item { min-width:0; flex:none; }
+  /* Keep all seven metrics accessible without making a second fixed header row. */
+  .shell-stats #stat-bar { display:flex!important; flex-wrap:nowrap!important; justify-content:flex-start!important; padding:5px 10px 6px!important; gap:10px!important; overflow-x:auto!important; overflow-y:hidden; overscroll-behavior-x:contain; }
+  .shell-stats #stat-bar .stat-item { flex:0 0 64px; min-width:0; max-width:120px; }
+  .shell-stats #stat-bar .stat-points-group { flex-basis:105px; }
   .shell-stats .stat-label { font-size:11px; }
   .shell-stats .stat-today { font-size:10.5px; }
   .shell-stats .stat-value { font-size:13px; overflow-wrap:anywhere; }
@@ -137,3 +139,12 @@ body.framework-layout .legacy-host .framework-overview .overview-task:focus-visi
 body.framework-layout .legacy-host .framework-overview .overview-task.done { background:color-mix(in srgb,var(--extra) 8%,var(--card)); }
 body.framework-layout .legacy-host .framework-overview .overview-task.done .ov-task-name { color:var(--ink); text-decoration:line-through; }
 body.framework-layout .app-bottom-nav .bottom-nav-item:focus-visible { outline:2px solid white; outline-offset:-3px; }
+
+/* Landscape/short mobile viewport: one scrollable statistics row avoids occluding tasks. */
+@media(max-height:500px) and (min-width:501px) {
+  .shell-toolbar { min-height:40px; }
+  .shell-stats #stat-bar { display:flex!important; flex-wrap:nowrap!important; justify-content:flex-start!important; padding:3px 10px!important; gap:10px!important; overflow-x:auto!important; overflow-y:hidden; overscroll-behavior-x:contain; }
+  .shell-stats #stat-bar .stat-item { flex:0 0 68px; }
+  .shell-stats #stat-bar .stat-points-group { flex-basis:105px; }
+  .shell-save-status { padding-top:0; padding-bottom:2px; }
+}
