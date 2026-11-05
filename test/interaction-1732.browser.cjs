@@ -89,13 +89,13 @@ async function run(){
    check(await page.locator('#mw-live').evaluate(e=>e.classList.contains('float-overtime')),'overtime remains visually distinct '+width);
    await page.locator('[data-float-toggle]').click();check(/超时/.test(await page.locator('.float-meter-text').innerText()),'overtime label visible '+width);
    await page.evaluate(()=>{const P=App.memoSchedule;P.stopRef({kind:'queue',id:'visual-clock'});App.app.switchView('tasks');App.memoWorkspace.showPane('today');});
-   const green=page.locator('.mw-overview [data-habit-punch="green"]');
+   await page.evaluate(()=>App.app.switchView('checkin'));const green=page.locator('.ck-row[data-id="green"]');
    const color=await green.evaluate(e=>getComputedStyle(e).backgroundColor);
-   check(color==='rgb(232, 245, 236)','task-page attainment is green '+width);await shot('green');
+   check(color==='rgb(232, 245, 236)','points-page attainment is green '+width);await shot('green');
    check(await green.locator('xpath=ancestor::details[contains(@class,"mw-completed")]').count()===0,'attained habit remains visible '+width);
-   await page.evaluate(()=>{const it=App.store.data().checkins.find(i=>i.id==='green');it.days[App.memoCore.userDay()]=3;App.tasks.renderAll();});
+   await page.evaluate(()=>{const it=App.store.data().checkins.find(i=>i.id==='green');it.days[App.memoCore.userDay()]=3;App.checkin.render();});
    check(await green.evaluate(e=>getComputedStyle(e).backgroundColor)===color,'cap exhausted keeps green and original position '+width);
-   await page.evaluate(()=>{App.store.data().checkins.find(i=>i.id==='green').days[App.memoCore.userDay()]=1;App.tasks.renderAll();});
+   await page.evaluate(()=>{App.store.data().checkins.find(i=>i.id==='green').days[App.memoCore.userDay()]=1;App.checkin.render();});
    check(await green.evaluate(e=>getComputedStyle(e).backgroundColor)!==color,'undo below goal removes green '+width);
    await page.evaluate(()=>{App.store.data().checkins.find(i=>i.id==='green').days[App.memoCore.userDay()]=2;App.app.switchView('checkin');});
    check(await page.locator('.ck-row[data-id="green"]').evaluate(e=>getComputedStyle(e).backgroundColor)===color,'points and tasks share attainment color '+width);
