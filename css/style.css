@@ -2679,3 +2679,46 @@ body[data-theme="dark"] [data-bounty-tier="high"],body[data-theme="purple"] [dat
   #mw-live #mw-live-controls .btn{padding:4px 6px;font-size:11px;}
 }
 
+
+
+/* 174.4: scoped review, wishlist and long-term planning presentation. */
+.review-registry-actions{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
+.review-registry-actions>.btn{min-height:40px;flex:1 1 105px;white-space:normal;}
+.review-history article small{display:block;max-width:100%;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;}
+.review-history article .btn{max-width:100%;white-space:normal;}
+.review-completion [data-review-this],.review-completion [data-review-next-note]{display:block;width:100%;min-height:68px;max-width:100%;resize:vertical;color:var(--ink);background:var(--card);border:1px solid var(--line);}
+.wish-row .wish-progress-label{grid-column:1/-1;line-height:1.5;font-size:12px;color:var(--muted);overflow-wrap:anywhere;}
+.wish-row progress{height:12px;accent-color:var(--extra);border-radius:6px;}
+/* The chart scrolls inside its own viewport; neither body nor the three task columns scroll sideways. */
+.memo-gantt{min-width:0;max-width:100%;margin:12px 0;}
+.memo-gantt>summary{font-weight:700;min-height:40px;padding:8px 0;cursor:pointer;}
+.memo-gantt-scroller{max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:8px;}
+.memo-gantt-scale{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted);white-space:nowrap;padding:6px 0;}
+.memo-gantt-item{padding:8px 0;border-bottom:1px solid var(--line);width:max-content;min-width:100%;box-sizing:border-box;}
+.memo-gantt-name{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:4px;max-width:min(100%,640px);}
+.memo-gantt-name strong{font-size:13.5px;overflow-wrap:anywhere;white-space:normal;max-width:430px;}
+.memo-gantt-name .btn{min-height:36px;}
+.memo-gantt-lane{height:24px;position:relative;overflow:hidden;border-radius:6px;border:1px solid var(--line);background:repeating-linear-gradient(to right,transparent 0,transparent calc(10% - 1px),color-mix(in srgb,var(--muted) 18%,transparent) calc(10% - 1px),color-mix(in srgb,var(--muted) 18%,transparent) 10%);}
+.memo-gantt-bar{display:block;position:absolute;top:3px;bottom:3px;min-width:2px;background:color-mix(in srgb,var(--primary) 18%,var(--card));border:1px solid var(--primary);border-radius:3px;overflow:hidden;}
+.memo-gantt-bar>i{display:block;height:100%;background:color-mix(in srgb,var(--primary) 70%,var(--card));}
+.memo-gantt-unscheduled{display:block;padding:2px 8px;color:var(--muted);font-size:12px;}
+.memo-gantt-item>small{display:block;color:var(--muted);font-size:11.5px;white-space:normal;max-width:650px;margin-top:4px;}
+.memo-gantt-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+#memo-gantt-fields{margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:8px;min-width:0;}
+#memo-gantt-fields[hidden]{display:none!important;}
+#memo-gantt-fields input,#memo-gantt-fields select{min-width:0;max-width:100%;width:100%;background:var(--card);color:var(--ink);}
+#memo-gantt-dependencies{min-height:80px;}
+.schedule-toolbar{display:grid;grid-template-columns:minmax(130px,2fr) repeat(2,minmax(0,1fr));gap:6px;align-items:stretch;min-width:0;}
+.schedule-toolbar>*{min-width:0;max-width:100%;width:100%;box-sizing:border-box;margin:0;}
+.schedule-toolbar #schedule-view{grid-column:span 2;}
+.schedule-toolbar #schedule-range{grid-column:span 1;}
+.schedule-toolbar [data-sc=prev],.schedule-toolbar [data-sc=next]{min-height:42px;}
+.schedule-filters{min-width:0;}
+.schedule-filters>summary{min-height:36px;cursor:pointer;}
+@media(max-width:440px){
+ .schedule-toolbar{grid-template-columns:repeat(2,minmax(0,1fr));}
+ .schedule-toolbar #schedule-date,.schedule-toolbar #schedule-view,.schedule-toolbar #schedule-range{grid-column:1/-1;}
+ .schedule-toolbar [data-sc=today],.schedule-toolbar [data-sc=now]{grid-column:auto;}
+ .memo-gantt-dates{grid-template-columns:minmax(0,1fr);}
+ .review-registry-actions>.btn{flex:1 1 100%;min-height:40px;}
+}

@@ -124,7 +124,8 @@
     const { round:r, series:s } = x, value = spec.review || {};
     if (!Object.hasOwn(results,value.result || '')) throw Error('复习结果无效');
     r.status='done'; r.at=event.at; r.eventId=event.id; r.result=value.result || '';if(event.backfillDay)r.backfillDay=event.backfillDay;
-    event.review={seriesId:s.id,roundId:r.id,n:r.n,title:r.title||s.text,due:r.due,originalDue:r.originalDue,result:r.result};
+    r.memoThis=String(value.memoThis||'').slice(0,4000);r.memoNext=String(value.memoNext||'').slice(0,4000);
+    event.review={seriesId:s.id,roundId:r.id,n:r.n,title:r.title||s.text,due:r.due,originalDue:r.originalDue,result:r.result,memoThis:r.memoThis,memoNext:r.memoNext};
     const previous=rounds(s.id).filter(v=>v.status==='done'&&v.id!==r.id&&Date.parse(v.at)<=Date.parse(event.at)).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at))[0];
     if(event.backfillDay)event.review.reportedDay=event.backfillDay;
     if(previous&&!event.backfillDay&&!previous.backfillDay)event.review.gapMs=Date.parse(event.at)-Date.parse(previous.at);
@@ -133,13 +134,16 @@
       if(!Number.isFinite(due)||due<=Date.parse(event.at))throw Error('下一轮应晚于本轮完成时刻');
       const pending=rounds(s.id).find(x=>x.id!==r.id&&x.status==='pending'&&x.parentEventId===event.id);
       const next=pending||scheduleCore(s.id,due,{parentEventId:event.id,templateStep:(r.templateStep||0)+1});event.review.nextRoundId=next.id;
+      if(r.memoNext&&!next.prepNote){next.prepNote=r.memoNext;const f=taskOf(next);
+        // Independent next rounds keep their manually edited task notes intact.
+        if(f&&!pending)f.task.note=[f.task.note||s.note,'下轮目标：'+r.memoNext].filter(Boolean).join('\n');}
     }
     return '\n复习：'+(r.title||s.text)+' · 第'+r.n+'轮\n原定：'+clock(r.due)+(event.backfillDay?'；补记完成日：'+event.backfillDay+'；录入：':'；实际：')+clock(Date.parse(event.at))+'\n结果：'+results[r.result]+(event.review.gapMs!=null?'；距上次实际完成 '+gapText(event.review.gapMs):'')+(event.review.nextRoundId?'\n下次：'+clock(round(event.review.nextRoundId).due):'');
   }
   function started(r) { const f=taskOf(r); return !!f && P().state().sessions.some(s=>s.ref.id===f.ref.id&&s.ref.kind===f.ref.kind&&s.chunks.length); }
   function onUndo(event) {
     if(!event.review)return;const r=round(event.review.roundId);if(!r||r.eventId!==event.id)throw Error('复习完成关联已改变');
-    r.status='pending';delete r.at;delete r.eventId;delete r.backfillDay;r.result='';
+    r.status='pending';delete r.at;delete r.eventId;delete r.backfillDay;r.result='';delete r.memoThis;delete r.memoNext;
     const next=round(event.review.nextRoundId);
     if(next&&next.status==='pending'&&!next.editedAt&&!started(next))cancelCore(next.id,'撤销上轮完成时取消未使用的下一轮');
     else if(next)next.predecessorUndone=true;
@@ -156,17 +160,42 @@
   function label(task) {
     const r=round(task?.memoReviewRoundId);if(!r)return '';
     const s=series(r.seriesId),status=r.status==='cancelled'?'已取消':s?.stoppedAt?'已停止':s?.paused?'已暂停':r.status==='done'?'已完成':'原定 '+clock(r.due);
-    return '<small class="review-badge">第'+r.n+'轮 · '+E(status)+(r.predecessorUndone?' · 上轮已撤销':'')+'</small>';
+    return '<small class="review-badge">第'+r.n+'轮 · '+E(status)+(r.prepNote?' · 下轮目标：'+E(r.prepNote):'')+(r.predecessorUndone?' · 上轮已撤销':'')+'</small>';
   }
   function summary(day) {
     const due=state().rounds.filter(r=>r.status==='pending'&&!series(r.seriesId)?.paused&&!series(r.seriesId)?.stoppedAt&&r.due<=Date.now()&&taskOf(r));
     if(!due.length || day!==M().userDay())return '';
     return '<details class="review-due"><summary>到期复习 '+due.length+'轮</summary>'+due.sort((a,b)=>a.due-b.due).map(r=>'<p>'+E(series(r.seriesId)?.text)+' · '+E(clock(r.due))+' <button class="btn btn-small" data-review-open="'+r.id+'">打开本轮</button></p>').join('')+'</details>';
   }
+
+  // Standalone audit exports preserve IDs and existing records; full browser backup remains the restore path.
+  function exportData(){
+    const d=S().data(),q=state(),roundIds=new Set(q.rounds.map(r=>r.id));
+    const tasks=q.rounds.filter(r=>r.taskRef).map(r=>{const f=P().resolve(r.taskRef);return f?{ref:clone(f.ref),task:clone(f.task)}:null}).filter(Boolean);
+    const plans=(d.memoSchedule?.items||[]).filter(p=>roundIds.has(p.memoReviewRoundId)).map(clone);
+    const events=(d.memoEvents||[]).filter(e=>roundIds.has(e.review?.roundId)).map(clone);
+    return {format:'focus-plan-review-export',version:1,exportedAt:new Date().toISOString(),
+      restoreAdvice:'独立报告供审计与人工核对；完整恢复请使用设置中的完整备份，不能把本报告直接当主数据导入。',
+      series:clone(q.series),rounds:clone(q.rounds),tasks,plans,events};
+  }
+  function exportCSV(){
+    const d=exportData(),names=new Map(d.series.map(x=>[x.id,x.text]));
+    const csv=x=>'"'+String(x??'').replace(/"/g,'""')+'"';
+    const rows=[['系列ID','系列名称','轮次ID','轮次','状态','当前计划','原定计划','实际完成','结果','本轮备注','下轮目标','本轮准备','调整次数']];
+    d.rounds.forEach(r=>rows.push([r.seriesId,names.get(r.seriesId)||'',r.id,r.n,r.status,new Date(r.due).toISOString(),new Date(r.originalDue??r.due).toISOString(),r.at||'',results[r.result||'']||'',r.memoThis||'',r.memoNext||'',r.prepNote||'',(r.history||[]).length]));
+    return '\uFEFF'+rows.map(row=>row.map(csv).join(',')).join('\r\n')+'\r\n';
+  }
+  function download(kind='json'){
+    const content=kind==='csv'?exportCSV():JSON.stringify(exportData(),null,2);
+    const blob=new Blob([content],{type:kind==='csv'?'text/csv;charset=utf-8':'application/json;charset=utf-8'});
+    const url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;link.download='focus-plan-reviews-'+M().userDay()+'.'+kind;document.body.appendChild(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
   function registry() {
-    return '<details class="review-registry"><summary>复习任务（'+state().series.length+'）</summary><button class="btn btn-small" data-review-new>＋ 新建复习任务</button>'+state().series.map(s=>{
+    return '<details class="review-registry"><summary>复习任务（'+state().series.length+'）</summary><div class="review-registry-actions"><button class="btn btn-small" data-review-new>＋ 新建复习任务</button><button class="btn btn-small" data-review-export="json">导出复习JSON</button><button class="btn btn-small" data-review-export="csv">导出轮次CSV</button></div><p class="hint">独立导出用于审计；恢复完整数据请使用设置中的完整备份。</p>'+state().series.map(s=>{
       const rs=rounds(s.id),next=rs.filter(r=>r.status==='pending').sort((a,b)=>a.due-b.due)[0];
-      return '<div class="review-series"><strong>'+E(s.text)+'</strong><small>已完成'+rs.filter(r=>r.status==='done').length+'轮 · '+(s.stoppedAt?'已停止':s.paused?'已暂停':next?'下次 '+E(clock(next.due)):'暂无下次安排')+'</small><button class="btn btn-small" data-review-series="'+s.id+'">历史与安排</button></div>';
+      return '<div class="review-series"><strong>'+E(s.text)+'</strong><small>已完成'+rs.filter(r=>r.status==='done').length+'轮 · '+(s.stoppedAt?'已停止':s.paused?'已暂停':next?'下次 '+E(clock(next.due)):'暂无下次安排')+'</small>'+(next&&next.originalDue!==next.due?'<small>最初 '+E(clock(next.originalDue))+'</small>':'')+(next?.prepNote?'<small>目标：'+E(next.prepNote)+'</small>':'')+'<button class="btn btn-small" data-review-series="'+s.id+'">历史与安排</button></div>';
     }).join('')+'</details>';
   }
   function refresh(){A.memoWorkspace?.render();P().render();A.app?.refreshStats();}
@@ -195,12 +224,18 @@
     const s=series(id);if(!s)return;const rs=rounds(id);
     const m=A.ui.openModal('复习任务 · '+s.text,'<p>'+E(s.note)+'</p><div class="review-history">'+rs.map((r,i)=>{
       const previous=rs.slice(0,i).filter(v=>v.status==='done').at(-1),interval=r.at&&previous?.at&&!r.backfillDay&&!previous.backfillDay?' · 间隔 '+gapText(Date.parse(r.at)-Date.parse(previous.at)):'';
-      return '<article><strong>第'+r.n+'轮 · '+E(r.status==='done'?'已完成':r.status==='cancelled'?'已取消':'待复习')+'</strong><small>计划 '+E(clock(r.due))+(r.originalDue!==r.due?' · 最初 '+E(clock(r.originalDue)):'')+'</small>'+(r.at?'<small>'+E(r.backfillDay?'补记日 '+r.backfillDay+'；录入 ':'实际 ')+E(clock(Date.parse(r.at)))+E(interval)+' · '+results[r.result||'']+'</small>':'')+(r.legacy?'<small>旧记录 · '+E(r.legacy.via==='move'?'移动记作完成，未验证实际复习':'保留原记录，未重新计分')+'</small>':'')+(r.predecessorUndone?'<small>前置完成已撤销；本轮保留</small>':'')+(taskOf(r)?'<button class="btn btn-small" data-review-open="'+r.id+'">查看本轮</button>':'')+(r.status==='pending'&&!s.paused&&!s.stoppedAt?'<button class="btn btn-small" data-review-edit="'+r.id+'">改时间</button><button class="btn btn-small" data-review-task="'+r.id+'">本轮内容与积分</button><button class="btn btn-small" data-review-cancel="'+r.id+'">取消本轮</button>':'')+(r.history.length?'<details><summary>调整记录</summary>'+r.history.map(h=>'<small>'+E(clock(Date.parse(h.at)))+' · '+E(h.reason||(h.from?clock(h.from)+' → '+clock(h.to):h.action))+'</small>').join('')+'</details>':'')+'</article>';
+      return '<article><strong>第'+r.n+'轮 · '+E(r.status==='done'?'已完成':r.status==='cancelled'?'已取消':'待复习')+'</strong><small>计划 '+E(clock(r.due))+(r.originalDue!==r.due?' · 最初 '+E(clock(r.originalDue)):'')+'</small>'+(r.at?'<small>'+E(r.backfillDay?'补记日 '+r.backfillDay+'；录入 ':'实际 ')+E(clock(Date.parse(r.at)))+E(interval)+' · '+results[r.result||'']+'</small>':'')+(r.legacy?'<small>旧记录 · '+E(r.legacy.via==='move'?'移动记作完成，未验证实际复习':'保留原记录，未重新计分')+'</small>':'')+(r.memoThis?'<small>本轮备注：'+E(r.memoThis)+'</small>':'')+(r.memoNext?'<small>下轮目标：'+E(r.memoNext)+'</small>':'')+(r.prepNote?'<small>本轮准备：'+E(r.prepNote)+'</small>':'')+(r.predecessorUndone?'<small>前置完成已撤销；本轮保留</small>':'')+(taskOf(r)?'<button class="btn btn-small" data-review-open="'+r.id+'">查看本轮</button>':'')+(r.status==='pending'&&!s.paused&&!s.stoppedAt?'<button class="btn btn-small" data-review-notes="'+r.id+'">本轮备注</button><button class="btn btn-small" data-review-edit="'+r.id+'">改时间</button><button class="btn btn-small" data-review-task="'+r.id+'">本轮内容与积分</button><button class="btn btn-small" data-review-cancel="'+r.id+'">取消本轮</button>':'')+(r.history.length?'<details><summary>调整记录</summary>'+r.history.map(h=>'<small>'+E(clock(Date.parse(h.at)))+' · '+E(h.reason||(h.from?clock(h.from)+' → '+clock(h.to):h.action))+'</small>').join('')+'</details>':'')+'</article>';
     }).join('')+'</div><p role="alert">'+(A.memoActions.busy()?'本次操作尚未保存，请重试保存。':'')+'</p>','<button class="btn" data-act="close">关闭</button><button class="btn" data-act="edit">修改内容</button><button class="btn" data-act="pause">'+(s.paused?'恢复复习':'暂停复习')+'</button>'+(!s.paused&&!s.stoppedAt?'<button class="btn" data-act="stop">停止后续</button><button class="btn btn-primary" data-act="add">安排下一轮</button>':''),{lock:true});
     if(s.stoppedAt)m.querySelector('[data-act="pause"]')?.remove();
     async function change(fn){try{if(await A.memoActions.commit(fn)){refresh();manage(id);}}catch(e){m.querySelector('[role=alert]').textContent=e.message;const b=document.createElement('button');b.className='btn';b.textContent='重试保存';b.onclick=()=>change(()=>{});m.querySelector('[role=alert]').append(b);}}
     if(A.memoActions.busy()){const retry=document.createElement('button');retry.className='btn';retry.textContent='重试保存';retry.onclick=()=>change(()=>{});m.querySelector('[role=alert]').append(retry);}
     m.querySelectorAll('[data-review-edit]').forEach(b=>b.onclick=()=>{if(!A.memoActions.busy())scheduleEditor(id,b.dataset.reviewEdit);});
+    m.querySelectorAll('[data-review-notes]').forEach(b=>b.onclick=()=>{
+      if(A.memoActions.busy())return;
+      const current=round(b.dataset.reviewNotes);if(!current)return;
+      const modal=A.ui.openModal('第'+current.n+'轮 · 备注','<label>本轮准备 / 重点<textarea id="review-prep-note" rows="4" maxlength="4000">'+E(current.prepNote||'')+'</textarea></label><p role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">保存备注</button>',{lock:true});
+      bindSave(modal,()=>{current.prepNote=modal.querySelector('#review-prep-note').value.slice(0,4000);},()=>manage(id));
+    });
     m.querySelectorAll('[data-review-task]').forEach(b=>b.onclick=()=>{if(!A.memoActions.busy()){const f=taskOf(round(b.dataset.reviewTask));if(f)A.memoWorkspace.editor(f.ref,undefined,true);}});
     m.querySelectorAll('[data-review-cancel]').forEach(b=>b.onclick=()=>change(()=>cancelCore(b.dataset.reviewCancel)));
     A.ui.bindActions({close:()=>{if(!A.memoActions.busy())A.ui.closeModal();},add:()=>{if(!A.memoActions.busy())scheduleEditor(id);},pause:()=>change(()=>pauseCore(id,!s.paused)),stop:()=>change(()=>stopSeriesCore(id)),edit:()=>{if(!A.memoActions.busy())editSeries(id);}});
@@ -217,17 +252,17 @@
   }
   function completionFields(ref,m){
     const x=locate(ref);if(!x)return ()=>null;const proposed=suggestion(x.round);
-    const box=document.createElement('fieldset');box.className='review-completion';box.innerHTML='<legend>本轮复习与下次安排</legend><label>结果<select data-review-result>'+Object.entries(results).map(([k,t])=>'<option value="'+k+'">'+t+'</option>').join('')+'</select></label><label>下次<select data-review-next>'+(proposed.existing?'<option value="existing">保留已有下一轮</option>':proposed.minutes?'<option value="template">接受模板建议</option>':'')+'<option value="none">暂不安排</option><option value="30">30分钟后</option><option value="120">2小时后</option><option value="240">4小时后</option><option value="1440">1天后</option><option value="4320">3天后</option><option value="custom">自定义分钟</option><option value="at">指定时刻</option></select></label><input data-review-custom type="number" min="1" placeholder="间隔分钟" hidden><input data-review-at type="datetime-local" value="'+inputTime(Date.now()+86400000)+'" hidden><p class="hint">间隔从实际确认完成时计算；已有独立安排保留。若新增同日任务，整组奖励以保存后的条件为准。</p>';
+    const box=document.createElement('fieldset');box.className='review-completion';box.innerHTML='<legend>本轮复习与下次安排</legend><label>结果<select data-review-result>'+Object.entries(results).map(([k,t])=>'<option value="'+k+'">'+t+'</option>').join('')+'</select></label><label>本次复习备注<textarea data-review-this rows="2" maxlength="4000" placeholder="本轮掌握情况、存在的问题"></textarea></label><label>下次复习目标<textarea data-review-next-note rows="2" maxlength="4000" placeholder="下一轮需要重点检索的内容"></textarea></label><label>下次<select data-review-next>'+(proposed.existing?'<option value="existing">保留已有下一轮</option>':proposed.minutes?'<option value="template">接受模板建议</option>':'')+'<option value="none">暂不安排</option><option value="30">30分钟后</option><option value="120">2小时后</option><option value="240">4小时后</option><option value="1440">1天后</option><option value="4320">3天后</option><option value="custom">自定义分钟</option><option value="at">指定时刻</option></select></label><input data-review-custom type="number" min="1" placeholder="间隔分钟" hidden><input data-review-at type="datetime-local" value="'+inputTime(Date.now()+86400000)+'" hidden><p class="hint">间隔从实际确认完成时计算；已有独立安排保留。若新增同日任务，整组奖励以保存后的条件为准。</p>';
     const hint=document.createElement('p');hint.className='review-suggestion';hint.textContent=proposed.existing?'已有下一轮：'+clock(proposed.existing.due)+'，默认保留，避免重复安排。':proposed.minutes?'建议下次：'+clock(Date.now()+proposed.minutes*60000)+'（确认完成后 '+gapText(proposed.minutes*60000)+'；接受后生成）':'暂无后续模板，可手动安排或暂不安排。';box.prepend(hint);
     m.querySelector('.action-passage').before(box);
     const next=box.querySelector('[data-review-next]');next.onchange=()=>{box.querySelector('[data-review-custom]').hidden=next.value!=='custom';box.querySelector('[data-review-at]').hidden=next.value!=='at';};
-    return ()=>{const mode=next.value;return {result:box.querySelector('[data-review-result]').value,mode:['none','existing'].includes(mode)?'none':mode==='at'?'at':'relative',minutes:mode==='template'?proposed.minutes:mode==='custom'?Number(box.querySelector('[data-review-custom]').value):Number(mode),due:mode==='at'?parseTime(box.querySelector('[data-review-at]').value):null};};
+    return ()=>{const mode=next.value;return {memoThis:box.querySelector('[data-review-this]').value,memoNext:box.querySelector('[data-review-next-note]').value,result:box.querySelector('[data-review-result]').value,mode:['none','existing'].includes(mode)?'none':mode==='at'?'at':'relative',minutes:mode==='template'?proposed.minutes:mode==='custom'?Number(box.querySelector('[data-review-custom]').value):Number(mode),due:mode==='at'?parseTime(box.querySelector('[data-review-at]').value):null};};
   }
   async function openRound(id){const r=round(id);let f=taskOf(r);if(!f)return A.ui.toast('原执行任务已删除，历史仍保留');if(r.status==='cancelled'||series(r.seriesId)?.paused||series(r.seriesId)?.stoppedAt)return manage(r.seriesId);if(f.ref.kind==='task'&&f.ref.day<M().userDay()){try{if(!await A.memoActions.commit(()=>{A.memoFlow.moveCore(f.ref,M().userDay(),f.ref.list);r.taskRef=clone(P().canonical(f.ref));}))return;f=taskOf(r);refresh();}catch(e){A.ui.toast(e.message);manage(r.seriesId);return;}}A.ui.closeModal();if(f.ref.kind==='queue')A.memoActions.queue(f.ref.id);else A.memoActions.task(f.ref.list,f.ref.id,f.ref.day);}
   function init(){
-    document.addEventListener('click',e=>{const b=e.target.closest('[data-review-new],[data-review-series],[data-review-open]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();if(A.memoActions.busy())return A.ui.toast('请先重试保存');if(b.hasAttribute('data-review-new'))newEditor();else if(b.dataset.reviewOpen)openRound(b.dataset.reviewOpen);else manage(b.dataset.reviewSeries);},true);
+    document.addEventListener('click',e=>{const b=e.target.closest('[data-review-new],[data-review-series],[data-review-open],[data-review-export]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();if(A.memoActions.busy())return A.ui.toast('请先重试保存');if(b.dataset.reviewExport){download(b.dataset.reviewExport);return;}if(b.hasAttribute('data-review-new'))newEditor();else if(b.dataset.reviewOpen)openRound(b.dataset.reviewOpen);else manage(b.dataset.reviewSeries);},true);
     let last='';const check=()=>{const key=state().rounds.filter(r=>r.status==='pending'&&r.due<=Date.now()&&!series(r.seriesId)?.paused&&!series(r.seriesId)?.stoppedAt).map(r=>r.id).join('|');if(key!==last&&!document.querySelector('.modal-mask')&&!A.memoActions.busy()){last=key;refresh();}};
     setInterval(check,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)check();});
   }
-  A.memoReview={intervals,suggestion,state,series,round,rounds,locate,taskOf,newSeriesCore,scheduleCore,rescheduleCore,carryCore,skipCarry,stopSeriesCore,cancelCore,pauseCore,assertExecutable,onComplete,onUndo,onDelete,restoreTask,hidden,label,summary,registry,newEditor,scheduleEditor,manage,importCore,completionFields,point,init};
+  A.memoReview={intervals,suggestion,state,series,round,rounds,locate,taskOf,exportData,exportCSV,download,newSeriesCore,scheduleCore,rescheduleCore,carryCore,skipCarry,stopSeriesCore,cancelCore,pauseCore,assertExecutable,onComplete,onUndo,onDelete,restoreTask,hidden,label,summary,registry,newEditor,scheduleEditor,manage,importCore,completionFields,point,init};
 })();
