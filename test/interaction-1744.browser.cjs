@@ -30,7 +30,7 @@ const server=http.createServer((req,res)=>{
     let cycle=false;try{A.memoGantt.validate({id:'gantt-a'},'2026-11-02','2026-11-12',['gantt-b'])}catch(e){cycle=/循环/.test(e.message)}
     return {cycle,review:A.memoReview.exportData(),csv:A.memoReview.exportCSV(),followNote:follow.prepNote,model:A.memoGantt.model(),mainVersion:window.__RELEASE};
    });
-   assert.equal(result.mainVersion,'174.4.0');
+   assert.equal(result.mainVersion,require('../package.json').version);
    assert.equal(result.cycle,true,'dependency cycle rejected');
    assert.equal(result.review.series.length,1);
    assert.equal(result.review.rounds.length,2);

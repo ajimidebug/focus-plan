@@ -18,11 +18,12 @@
   // Historical copies never resolve to an active task for rendering or counting.
   function deferred(day,list){
     const out=[],d=S().data();
-    (d.days[day]?.tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&t.memoMovedTo?.kind==='task'&&t.memoMovedTo.day!==day).forEach(t=>{
+    (d.days[day]?.tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!A.memoReview?.hidden(t,list)&&t.memoMovedTo?.kind==='task'&&t.memoMovedTo.day!==day).forEach(t=>{
       const ref={kind:'task',id:t.id,day,list},found=A.memoSchedule.resolve(ref);
       out.push({task:t,ref,done:false,deferred:true,toDay:t.memoMovedTo.day,currentRef:found?.ref||t.memoMovedTo,closed:t.memoMovedTo.day<day,legacy:!t.memoDeferred});
     });
     queues().forEach(t=>{
+      if(A.memoReview?.hidden(t,list))return;
       if(t.assignment?.day===day)return;
       const steps=(t.assignmentHistory||[]).concat(t.assignment?[t.assignment]:[]),matches=[];
       steps.forEach((h,i)=>{if(h.day!==day||h.list!==list)return;const next=steps.slice(i+1).find(x=>x.day&&x.list);if(!next||next.day===day)return;

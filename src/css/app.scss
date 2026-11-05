@@ -148,3 +148,9 @@ body.framework-layout .app-bottom-nav .bottom-nav-item:focus-visible { outline:2
   .shell-stats #stat-bar .stat-points-group { flex-basis:105px; }
   .shell-save-status { padding-top:0; padding-bottom:2px; }
 }
+
+/* 174.5: center task dialogs within the visible viewport when the keyboard opens. */
+.q-dialog .q-dialog__inner { top:var(--app-visible-top,0px); bottom:auto; height:var(--app-visible-height,100dvh); max-height:var(--app-visible-height,100dvh); }
+.q-dialog .framework-dialog-layer { max-height:calc(var(--app-visible-height,100dvh) - 20px); }
+.q-dialog .legacy-host .modal { max-height:calc(var(--app-visible-height,100dvh) - 24px)!important; }
+.q-dialog .legacy-host .modal-actions { flex-shrink:0; }

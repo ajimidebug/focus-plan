@@ -41,7 +41,7 @@ jobs:
       fail-fast: false
       max-parallel: 5
       matrix:
-        script: [browser-smoke.mjs, interaction-1732.browser.cjs, interaction-1733.browser.cjs, interaction-1734.browser.cjs, interaction-1735.browser.cjs, interaction-1736.browser.cjs, interaction-1737.browser.cjs, interaction-1738.browser.cjs, interaction-1739.browser.cjs, interaction-17391.browser.cjs, points-account.browser.cjs, framework.browser.cjs, interaction-1742.browser.cjs, interaction-1744.browser.cjs]
+        script: [browser-smoke.mjs, interaction-1732.browser.cjs, interaction-1733.browser.cjs, interaction-1734.browser.cjs, interaction-1735.browser.cjs, interaction-1736.browser.cjs, interaction-1737.browser.cjs, interaction-1738.browser.cjs, interaction-1739.browser.cjs, interaction-17391.browser.cjs, points-account.browser.cjs, framework.browser.cjs, interaction-1742.browser.cjs, interaction-1744.browser.cjs, interaction-1745.browser.cjs]
     env:
       FOCUS_TEST_ROOT: dist/spa
     steps:
@@ -92,5 +92,5 @@ jobs:
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -a "$GITHUB_WORKSPACE/dist/spa/." .
           git add -A
-          git -c user.name="focus-plan release bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "release: 174.4.0 verified SPA"
+          git -c user.name="focus-plan release bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "release: 174.5.0 verified SPA"
           git push origin HEAD:refs/heads/release/174.4.0-built

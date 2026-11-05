@@ -2339,8 +2339,8 @@ body[data-theme="purple"] :is(#checkin-view .ck-row,.habit-plan-row,.task-habit-
 
 /* 173.2: one compact timer layout, shared by collapsed and expanded states. */
 body #mw-live,body[data-view="tasks"] #mw-live.mw-local-timer{
-  position:fixed;right:12px;top:100px;z-index:60;display:grid;grid-template-columns:minmax(0,1fr) auto;
-  gap:3px 6px;width:min(300px,calc(100vw - 24px));max-height:calc(100dvh - 180px);overflow:auto;
+  position:fixed;right:12px;top:var(--float-top,100px);z-index:60;display:grid;grid-template-columns:minmax(0,1fr) auto;
+  gap:3px 6px;width:min(300px,calc(100vw - 24px));max-height:var(--float-room,calc(100dvh - 180px));overflow:auto;
   margin:0;padding:6px 10px 0;background:var(--card);color:var(--ink);border:1px solid var(--line);
   border-radius:12px;box-shadow:0 5px 20px #172b4626;font-size:12px;box-sizing:border-box;
 }
@@ -2377,7 +2377,7 @@ body[data-view="memo"] #mw-live,body[data-view="memo-history"] #mw-live,body[dat
 body:is([data-view="memo"],[data-view="memo-history"],[data-view="checkin"]) #mw-live button{pointer-events:auto;}
 body #mw-live.float-editor-focus{opacity:.9;}
 #memo-editor{padding-bottom:34px;scroll-padding-bottom:34px;}
-@media(max-height:400px){body #mw-live{top:55px;max-height:calc(100dvh - 120px);}}
+@media(max-height:400px){body #mw-live{max-height:var(--float-room,calc(100dvh - 120px));}}
 @media(prefers-reduced-motion:reduce){#mw-live .float-meter-fill{transition:none;}}
 
 /* The date stays outside the scrolling form, including while the keyboard is open. */
