@@ -23,7 +23,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: node scripts/prepare-release.mjs "$(node -p 'require(\"./package.json\").version')"
+      - run: node scripts/prepare-release.mjs "$(node -p 'require("./package.json").version')"
       - run: npm run check
       - run: npm run build
       - run: npm run typecheck
