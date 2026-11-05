@@ -8,6 +8,13 @@ body.framework-layout { margin:0; padding:0; background:var(--bg); color:var(--i
 .shell-brand { font-size:20px; font-weight:750; letter-spacing:.03em; }
 .shell-location { margin-left:10px; padding-left:10px; border-left:1px solid #ffffff52; color:#ffffffe0; font-size:13px; }
 .shell-stats { max-width:1160px; margin:auto; }
+body[data-view='tasks'] .shell-stats { display:none!important; }
+.framework-overview .overview-heading { gap:8px;flex-wrap:wrap; }
+.framework-overview .mw-date-header { margin:0;display:flex;gap:6px;align-items:center;flex:1 1 200px;justify-content:flex-end;min-width:0; }
+.framework-overview .mw-date-header #mw-day { flex:0 1 130px;min-width:0; }
+.framework-overview .mw-date-header .mw-day-shortcuts { order:initial;flex:0 1 194px;width:auto;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px; }
+.framework-overview .mw-day-shortcuts>.btn { min-height:38px;padding:4px 2px; }
+@media(max-width:420px){.framework-overview .mw-date-header{flex:1 1 100%;justify-content:space-between;}.framework-overview .mw-date-header #mw-day{flex:0 1 130px;}.framework-overview .mw-date-header .mw-day-shortcuts{flex:1 1 180px;}}
 .shell-stats #stat-bar { position:static!important; display:flex!important; flex-wrap:wrap!important; justify-content:space-between; gap:6px 14px!important; width:100%; padding:5px 14px 8px!important; overflow:visible; background:transparent!important; color:inherit; }
 .shell-stats #stat-bar .stat-item { flex:1 1 72px; min-width:0; display:flex!important; flex-direction:column; align-items:flex-start; gap:0; padding:0!important; }
 .shell-stats .stat-label { font-size:11.5px; color:#ffffffcc; opacity:1; }

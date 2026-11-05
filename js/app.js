@@ -400,7 +400,7 @@
       // The task hub renders its own visible content; timeline is rendered on demand.
       if (App.memoSchedule && !window.__MEMO_MODE) App.memoSchedule.render();
       if (App.queue && !window.__MEMO_MODE) App.queue.render();
-      App.memoWorkspace?.enter(unifiedTimeline ? 'timeline' : unifiedQueue ? 'queue' : null);
+      App.memoWorkspace?.enter(unifiedTimeline ? 'timeline' : unifiedQueue ? 'queue' : 'today');
     } else if (v === 'queue' && App.queue) App.queue.render();
     if (v === 'cards' && App.memcards) App.memcards.renderPage();   // 🃏 v93：卡片页
     if (v === 'mistakes' && App.mistakes) App.mistakes.render();  // 📕 v129：错题本

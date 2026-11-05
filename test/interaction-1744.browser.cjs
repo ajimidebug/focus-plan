@@ -53,7 +53,7 @@ const server=http.createServer((req,res)=>{
    await page.locator('.mw-task-editor').waitFor({state:'detached'});
    assert.equal(await page.evaluate(()=>App.store.data().memoProjects[0].memoGanttEnd),'2026-11-19');
    assert((await page.locator('#memo-wishes').innerText()).includes('进度不可相加'));
-   await page.locator('[data-mw-pane="reviews"]').click();
+   await page.evaluate(()=>App.memoWorkspace.showPane('reviews'));
    const review=page.locator('#mw-reviews .review-registry');
    await review.locator('summary').first().click();
    const [download]=await Promise.all([page.waitForEvent('download'),review.locator('[data-review-export="json"]').click()]);
