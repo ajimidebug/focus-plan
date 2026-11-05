@@ -29,7 +29,7 @@ function nodes(){
 function normalizeKey(id){if(typeof id!=='string')return '';if(id.startsWith('once:')||id.startsWith('project:'))return id;return 'project:'+id;}
 function keyToStored(key){return key.startsWith('project:')?key.slice(8):key;}
 function locate(key){return nodes().find(n=>n.key===normalizeKey(key))||null}
-function dependencies(t){return Array.isArray(t.memoGanttDependencies)?t.memoGanttDependencies:[]}
+function dependencies(t){return Array.isArray(t?.memoGanttDependencies)?t.memoGanttDependencies:[]}
 function optionsHtml(task,group,selected=[],cross=false){
  const chosen=new Set(selected.map(normalizeKey));
  return nodes().filter(n=>n.id!==task?.id&&(n.group===group||cross||chosen.has(n.key)))
