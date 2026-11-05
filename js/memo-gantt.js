@@ -107,6 +107,9 @@ function syncEdges(){
  const track=root.querySelector('.memo-gantt-track'),svg=track?.querySelector('.memo-gantt-edges');if(!svg)return;
  const bounds=track.getBoundingClientRect();
  svg.setAttribute('width',String(track.scrollWidth));svg.setAttribute('height',String(track.scrollHeight));svg.textContent='';
+ const defs=document.createElementNS('http://www.w3.org/2000/svg','defs'),marker=document.createElementNS('http://www.w3.org/2000/svg','marker'),tip=document.createElementNS('http://www.w3.org/2000/svg','path');
+ marker.setAttribute('id','gantt-175-arrow');marker.setAttribute('markerWidth','7');marker.setAttribute('markerHeight','7');marker.setAttribute('refX','6');marker.setAttribute('refY','3');marker.setAttribute('orient','auto');
+ tip.setAttribute('d','M0,0 L6,3 L0,6 Z');tip.setAttribute('fill','#bc903f');marker.appendChild(tip);defs.appendChild(marker);svg.appendChild(defs);
  const shown=new Map([...track.querySelectorAll('[data-gantt-row]')].map(x=>[x.dataset.ganttRow,x]));
  for(const [id,node] of shown){
   const item=projects().find(x=>x.id===id),bar=node.querySelector('.memo-gantt-bar');
@@ -119,7 +122,7 @@ function syncEdges(){
    const mid=Math.max(x1+8,(x1+x2)/2);
    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
    path.setAttribute('d','M'+x1+','+y1+' H'+mid+' V'+y2+' H'+x2);
-   path.setAttribute('fill','none');path.setAttribute('stroke','#bc903f');path.setAttribute('stroke-width','1.5');path.setAttribute('opacity','0.75');svg.appendChild(path);
+   path.setAttribute('marker-end','url(#gantt-175-arrow)');path.setAttribute('fill','none');path.setAttribute('stroke','#bc903f');path.setAttribute('stroke-width','1.5');path.setAttribute('opacity','0.75');svg.appendChild(path);
   }
  }
 }
