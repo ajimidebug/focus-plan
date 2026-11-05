@@ -14,7 +14,7 @@ const names=Object.fromEntries([...primary,...more].map(x=>[x.view,x.name]))
 function navigate(view:string) {
   if(!screen.ready)return
   screen.more=false
-  if(screen.view==='tasks'&&view==='tasks')window.App.memoWorkspace.returnToday()
+  if(screen.view==='tasks'&&view==='tasks'){window.App.memoWorkspace.returnToday();return}
   if(route.params.page!==view)void router.push('/'+view)
   else window.App.app.switchView(view)
 }
