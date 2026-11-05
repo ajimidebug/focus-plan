@@ -154,3 +154,13 @@ body.framework-layout .app-bottom-nav .bottom-nav-item:focus-visible { outline:2
 .q-dialog .framework-dialog-layer { max-height:calc(var(--app-visible-height,100dvh) - 20px); }
 .q-dialog .legacy-host .modal { max-height:calc(var(--app-visible-height,100dvh) - 24px)!important; }
 .q-dialog .legacy-host .modal-actions { flex-shrink:0; }
+
+/* 174.6: keep the three-column hub primary; secondary panels are on demand. */
+body.framework-layout .mw-tabs { position:static; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+body.framework-layout .mw-tabs .btn { font-size:12.5px; padding:6px 3px; }
+body.framework-layout .mw-detail-disclosure { margin-top:14px; border:1px solid var(--line); border-radius:9px; padding:8px; }
+body.framework-layout .mw-detail-disclosure>summary { cursor:pointer; font-size:13px; color:var(--muted); padding:6px; }
+body.framework-layout .mw-detail-disclosure:not([open]) .mw-full-list { display:none; }
+body.framework-layout .shell-toolbar { min-height:40px; }
+body.framework-layout .shell-stats #stat-bar { row-gap:3px!important; }
+body.framework-layout .shell-save-status { font-size:10px; line-height:1.2; padding:2px 10px; }
