@@ -130,7 +130,7 @@ body[data-theme='dark'] .legacy-host .framework-selected-day,body[data-theme='pu
 .shell-stats.legacy-host #stat-bar .stat-label { opacity:1!important; color:#ffffffcc!important; }
 
 /* 174.1: retain the established 173.9.1 column tint and accessible text. */
-body.framework-layout .legacy-host .framework-overview [data-overview-list="required"] { --ov-accent:#3274b5; --ov-tint:#eff6fc; }
+body.framework-layout .legacy-host .framework-overview [data-overview-list="required"] { --ov-accent:#285f96; --ov-tint:#eff6fc; }
 body.framework-layout .legacy-host .framework-overview [data-overview-list="ideal"] { --ov-accent:#886016; --ov-tint:#fcf6e8; }
 body.framework-layout .legacy-host .framework-overview [data-overview-list="extra"] { --ov-accent:#35704d; --ov-tint:#eef7f0; }
 body.framework-layout:is(:not([data-theme]),[data-theme="default"],[data-theme=""]) .legacy-host .framework-overview .cal-col-head { background:var(--ov-tint); color:var(--ov-accent); border-radius:5px; }
