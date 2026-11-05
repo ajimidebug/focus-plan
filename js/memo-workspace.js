@@ -89,6 +89,13 @@
     if(!M().validDate(day))return;
     taskDay=day;positions.today=0;pane='today';render();
   }
+  function renderDetails() {
+    const root=$('mw-details');if(!root)return;
+    root.innerHTML='<h2>详细任务管理 · '+esc(taskDay)+'</h2><div class="mw-full-list">' + ['required', 'ideal', 'extra'].map(list => {
+      const items = taskItems(taskDay,list);
+      return '<section class="mw-group" id="mw-column-'+list+'"><div class="mw-group-head"><h2>' + names[list] + '<small> · 待做 ' + (items.filter(x => !x.deferred&&!doneFor(x.task, x.ref)).length+(A.memoFinance?.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode!=='punch'&&x.n<x.r.target).length||0)) + ((A.memoFinance?.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode==='punch').length||0)?' · 监督 '+A.memoFinance.plans(taskDay).filter(x=>x.r.list===list&&A.memoPenalty?.policy(x.it,taskDay).mode==='punch').length:'') + '</small></h2>' + button('add-' + list, '＋ 添加', 'aria-label="添加' + names[list] + '"') + '</div>' + categoryBody(items,taskDay,list) + (list==='required'?(A.memoGoals?.html(taskDay,false)||''):'') + (list === 'extra' ? (A.memoRecurrence?.registry()||'')+(A.memoReview?.registry()||'')+'<details class="mw-project-help"><summary>项目说明与已停用项目</summary><p class="hint">长期拓展是三栏分类；长期项目是持续任务实体；积分习惯仅为安排引用，不会生成第二条积分任务。一次性任务保留日期，每日推进项目可以停用。</p>' + (S().data().daily || []).filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-daily', '恢复基础任务', refAttrs({ kind: 'daily', id: p.id })) + '</p>').join('') + projects().filter(p => p.archived).map(p => '<p>' + esc(p.text) + button('restore-project', '恢复项目', refAttrs({ kind: 'project', id: p.id })) + '</p>').join('') + '</details>' : '') + '</section>';
+    }).join('') + '</div>' + (A.memoReview?.registry()||'') + (A.memoRecurrence?.registry()||'');
+  }
   function renderLegacy() {
     const root=$('mw-legacy');if(!root)return;
     const day=taskDay||M().userDay();
@@ -117,10 +124,10 @@
     if (ref && document.body.dataset.view === 'tasks' && pane !== 'timeline') requestAnimationFrame(() => { const next = [...root.querySelectorAll('[data-mw-card],.mw-history-row[data-ref]')].find(el => el.dataset.ref === ref); if (next) window.scrollBy(0, next.getBoundingClientRect().top - offset); });
   }
   function renderReviews() { $('mw-reviews').innerHTML = (A.memoReview?.summary(M().userDay())||'') + (A.memoReview?.registry()||'') + (A.memoRecurrence?.registry()||''); }
-  function render() { if (!ready) return; preserve(() => { renderTasks(); if(pane==='queue')renderQueue(); if(pane==='history')renderHistory(); if(pane==='reviews')renderReviews(); if(pane==='legacy')renderLegacy(); renderPending(); applyPane(); }); A.memoSchedule.tick?.(); A.app?.refreshStats();
+  function render() { if (!ready) return; preserve(() => { renderTasks(); if(pane==='queue')renderQueue(); if(pane==='history')renderHistory(); if(pane==='reviews')renderReviews(); if(pane==='legacy')renderLegacy(); if(pane==='details')renderDetails(); renderPending(); applyPane(); }); A.memoSchedule.tick?.(); A.app?.refreshStats();
     if (completionFocus) { const ref = completionFocus.ref, t = A.memoSchedule.find(ref); if (t && doneFor(t, ref) !== completionFocus.before) { const cardEl = [...document.querySelectorAll('[data-mw-card]')].find(el => el.dataset.ref === JSON.stringify(ref)); const folded = cardEl?.closest('.mw-completed:not([open])'); (folded?.querySelector('summary') || cardEl?.querySelector('[data-mw="complete"]'))?.focus({ preventScroll: true }); completionFocus = null; } }
   }
-  function applyPane() { ['today', 'queue', 'reviews', 'history', 'legacy', 'pending'].forEach(p => { const el = $('mw-' + p); el.hidden = p !== pane; document.querySelector('[data-mw-pane="' + p + '"]')?.setAttribute('aria-pressed', String(p === pane)); });
+  function applyPane() { ['today', 'queue', 'reviews', 'history', 'legacy', 'details', 'pending'].forEach(p => { const el = $('mw-' + p); el.hidden = p !== pane; document.querySelector('[data-mw-pane="' + p + '"]')?.setAttribute('aria-pressed', String(p === pane)); });
     const sessions = A.memoSchedule.state().sessions, shown = sessions.find(s => s.status === 'running') || sessions.find(s => s.status === 'paused');
     const container = pane === 'timeline' ? null : $(pane === 'queue' ? 'mw-queue' : 'mw-today');
     $('mw-live')?.classList.toggle('mw-local-timer', !!shown && [...(container?.querySelectorAll('[data-mw-card]') || [])].some(el => A.memoSchedule.key(JSON.parse(el.dataset.ref)) === A.memoSchedule.key(shown.ref)));
@@ -129,7 +136,7 @@
     if(next==='pending')next='queue';
     if (next === 'timeline') { A.app.switchView('timeline'); return A.memoSchedule.open(Object.assign({}, options, { workspace: true })); }
     if (save) positions[pane] = window.scrollY;
-    pane = next; if(next==='queue')renderQueue();else if(next==='history')renderHistory();else if(next==='reviews')renderReviews();else if(next==='legacy')renderLegacy();applyPane(); if (next === 'timeline') A.memoSchedule.open(Object.assign({}, options, { workspace: true }));
+    pane = next; if(next==='queue')renderQueue();else if(next==='history')renderHistory();else if(next==='reviews')renderReviews();else if(next==='legacy')renderLegacy();else if(next==='details')renderDetails();applyPane(); if (next === 'timeline') A.memoSchedule.open(Object.assign({}, options, { workspace: true }));
     requestAnimationFrame(() => { if (options.focusCard) $('schedule-card-' + options.focusCard)?.scrollIntoView({ block: 'center' }); else window.scrollTo({ top: positions[next] || 0 }); });
   }
   function enter(next, day) { if(day && M().validDate(day)){taskDay=day;render();}  if (next) showPane(next, false); else { applyPane(); requestAnimationFrame(() => window.scrollTo({ top: positions[pane] || 0 })); } }
@@ -273,7 +280,7 @@
     const root = $('view-tasks');
     const axis = document.createElement('section'); axis.id = 'view-memo-timeaxis'; axis.className = 'view'; document.querySelector('main').appendChild(axis); axis.appendChild($('memo-schedule-panel'));
     const error = document.createElement('button'); error.id = 'flow-save-error'; error.className = 'btn btn-danger'; error.hidden = true; document.querySelector('main').before(error);
-    root.insertAdjacentHTML('afterbegin', '<p id="mw-error" role="alert"></p><div id="mw-today"></div><div id="mw-queue" hidden></div><div id="mw-reviews" hidden></div><div id="mw-history" hidden></div><div id="mw-legacy" hidden></div><div id="mw-pending" hidden></div>');
+    root.insertAdjacentHTML('afterbegin', '<p id="mw-error" role="alert"></p><div id="mw-today"></div><div id="mw-queue" hidden></div><div id="mw-reviews" hidden></div><div id="mw-history" hidden></div><div id="mw-legacy" hidden></div><div id="mw-details" hidden></div><div id="mw-pending" hidden></div>');
     // Keep legacy review content reachable, with mutation entries retired in memo mode.
     const review = document.createElement('section'); review.id = 'view-memo-review'; review.className = 'view'; review.innerHTML = '<h2>今日复盘</h2><p class="hint">完成和补记请在任务中操作，统一关联笔记、积分与时间轴。</p>'; $('review-card').parentNode.removeChild($('review-card')); review.appendChild(document.createElement('div')).id = 'review-card'; document.querySelector('main').appendChild(review);
     document.querySelectorAll('.mn-grid, header nav').forEach(el => el.insertAdjacentHTML('beforeend', '<button class="nav-btn btn" data-view="memo-review">今日复盘</button>'));

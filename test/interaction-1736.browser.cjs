@@ -75,7 +75,7 @@ async function run(){
    await group.click();check((await page.locator('.modal-body').innerText()).includes('密集打卡 5'),'dense popup retains every source '+width);
    await page.locator('[data-density-open]').last().click();check(await page.locator('[data-schedule-checkins]').getAttribute('open')!==null,'group links to exact checkin card '+width);
    // Entry points share a form; points must be above notes, including grouped extras.
-   await page.evaluate(day=>{App.app.switchView('tasks');App.memoWorkspace.enter('today',day);},day);await page.locator('.mw-detail-disclosure > summary').click();
+   await page.evaluate(day=>{App.app.switchView('tasks');App.memoWorkspace.enter('today',day);},day);await page.evaluate(()=>App.memoWorkspace.showPane('details'));
    for(const list of ['required','ideal','extra']){
     await page.locator('#mw-column-'+list+' [data-mw="add-'+list+'"]').click();
     await page.locator('.modal').waitFor({state:'visible'});await page.locator('.modal').evaluate(e=>e.getAnimations().forEach(a=>a.finish()));
