@@ -239,7 +239,8 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .memo-gantt .gantt-expand { min-height:40px; margin:8px; }
 .memo-gantt .memo-gantt-item { position:relative; z-index:2; }
 .memo-gantt .memo-gantt-bar { z-index:2; }
-.memo-gantt .memo-gantt-edges { pointer-events:none; }
+.memo-gantt .memo-gantt-edges { pointer-events:none; z-index:3!important; }
+.framework-overview .overview-group-more { width:100%; min-height:36px; font-size:11px; margin:4px 0; }
 .memo-gantt .memo-gantt-scroller { overscroll-behavior-x:contain; max-width:100%; }
 @media(max-width:480px) {
   .memo-gantt .memo-gantt-name { max-width:calc(100vw - 32px); align-items:flex-start; flex-wrap:wrap; }
