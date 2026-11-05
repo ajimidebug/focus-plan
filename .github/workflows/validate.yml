@@ -93,4 +93,4 @@ jobs:
           cp -a "$GITHUB_WORKSPACE/dist/spa/." .
           git add -A
           git -c user.name="focus-plan release bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "release: 174.6.0 verified SPA"
-          git push origin HEAD:refs/heads/release/174.4.0-built
+          git push origin HEAD:refs/heads/release/$(node -p "require('$GITHUB_WORKSPACE/package.json').version")-built
