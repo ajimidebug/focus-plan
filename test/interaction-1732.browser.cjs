@@ -65,9 +65,12 @@ async function run(){
    // Reopening returns to the tail; layout changes keep the tail visible without stealing focus.
    await page.evaluate(()=>{window.getSelection().removeAllRanges();App.app.switchView('tasks');App.app.switchView('memo');});
    await page.waitForFunction(()=>{const e=document.querySelector('#memo-editor');return e.scrollHeight-e.clientHeight-e.scrollTop<2;});
-   await editor.click({position:{x:20,y:25}});await page.setViewportSize({width,height:Math.min(height,400)});
-   await page.waitForFunction(()=>{const e=document.querySelector('#memo-editor');return e.scrollHeight-e.clientHeight-e.scrollTop<3;});
+   await editor.click({position:{x:20,y:25}});
+   const caretBeforeResize=await page.evaluate(()=>App.memoEditor.selection()?.end);
+   await page.setViewportSize({width,height:Math.min(height,400)});
+   await page.waitForFunction(()=>{const e=document.querySelector('#memo-editor');return document.activeElement===e&&e.getBoundingClientRect().height>0;});
    check(await page.evaluate(()=>document.activeElement.id==='memo-editor'),'resizing retains editor focus '+width);
+   check(await page.evaluate(()=>App.memoEditor.selection()?.end)===caretBeforeResize,'resizing preserves selected caret instead of forcing tail '+width);
    await page.setViewportSize({width,height});
    await page.evaluate(()=>{document.querySelector('#memo-editor').blur();App.memoSchedule.startRef({kind:'queue',id:'visual-clock'},Date.now()-83*60000);App.memoSchedule.tick();});
    // The float becomes expanded explicitly, independent of previous test state.
