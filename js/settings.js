@@ -78,6 +78,7 @@
       '<div class="set-group"><h4>⭐ 积分规则（每条任务可单独定价）</h4>' +
       numRow('set-ideal-points', '新理想任务默认积分', s.idealPoints, '分/条') +
       numRow('set-ext-points', '新拓展任务默认积分', s.extPoints, '分/条') +
+      numRow('set-memo-review-points', '新复习系列默认每轮积分', s.reviewDefaultPoints == null ? 1 : s.reviewDefaultPoints, '分/轮') +
       numRow('set-sub-points', '新小题默认积分', s.subDefaultPoints, '分/题') +
       '<p class="hint">每条任务可在“编辑”中单独调整积分；这里设置新任务的默认值。</p>' +
       '</div>' +
@@ -253,6 +254,7 @@
     bind('set-ext-strict', function () { s.extStrict = this.checked; S().save(); render(); });
     // 📋 v77 队列
     bind('set-queue-points', function () { s.queuePoints = Math.max(0, +this.value || 0); S().save(); });
+    bind('set-memo-review-points', function () { const value=Number(this.value);if(Number.isFinite(value)&&value>=0&&value<=100000){s.reviewDefaultPoints=value;S().save();} });
     bind('set-queue-bar', function () { s.queueBarOn = this.checked; S().save(); if (App.queue) App.queue.refreshBar(); });
     bind('set-qfirst', function () { s.queueFirst = this.checked; S().save(); if (App.tasks) App.tasks.renderAll(); });
     bind('set-auto-end', function () { s.autoEndDay = this.checked; S().save(); });
