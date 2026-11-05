@@ -39,6 +39,7 @@ const server=http.createServer((req,res)=>{
    assert.equal(result.followNote,'下次集中测试');
    assert(result.csv.includes('本次识别错误')&&result.csv.includes('下次集中测试'));
    assert.equal(result.model.rows.length,2);
+   await page.locator('.memo-gantt > summary').click();
    assert((await page.locator('.memo-gantt').innerText()).includes('长期项目一'));
    const bar=page.locator('.memo-gantt-bar').first();
    assert((await bar.getAttribute('aria-label')).includes('计划 2026-11-02 至 2026-11-12'));
