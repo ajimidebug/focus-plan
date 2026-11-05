@@ -66,17 +66,17 @@
   function overdue(now = Date.now()) {
     const today = M().userDay(now), f = state(), out = [];
     Object.entries(S().data().days).filter(([day]) => day >= f.startedDay && day < today).sort(([a], [b]) => a.localeCompare(b)).forEach(([day, d]) => {
-      (d.tasks.required || []).filter(t => !t.done && !t.memoNoAutoCarry && !t.fromDaily && !t.fromQueue && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed).forEach(t => out.push({ task: t, ref: { kind: 'task', id: t.id, day, list: 'required' } }));
+      (d.tasks.required || []).filter(t => !t.done && !t.memoNoAutoCarry && !t.fromDaily && !t.fromQueue && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed && !A.memoReview?.skipCarry(t)).forEach(t => out.push({ task: t, ref: { kind: 'task', id: t.id, day, list: 'required' } }));
     });
-    (S().data().queue || []).filter(t => !t.memoDismissed && !t.archived && !t.memoNoAutoCarry && !t.doneAt && t.assignment?.list === 'required' && t.assignment.day >= f.startedDay && t.assignment.day < today).forEach(task => out.push({ task, ref: { kind: 'queue', id: task.id }, day: task.assignment.day }));
+    (S().data().queue || []).filter(t => !t.memoDismissed && !t.archived && !t.memoNoAutoCarry && !t.doneAt && t.assignment?.list === 'required' && t.assignment.day >= f.startedDay && t.assignment.day < today && !A.memoReview?.skipCarry(t)).forEach(task => out.push({ task, ref: { kind: 'queue', id: task.id }, day: task.assignment.day }));
     return out;
   }
   function longOverdue(now = Date.now()) {
     const today=M().userDay(now),out=[];
     Object.entries(S().data().days).filter(([day])=>day<today).sort(([a],[b])=>a.localeCompare(b)).forEach(([day,d])=>{
-      (d.tasks.extra||[]).filter(t=>!t.done&&!t.doneAt&&!t.archived&&!t.memoNoAutoCarry&&!t.fromDaily&&!t.fromQueue&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed&&!t.memoReviewHidden).forEach(task=>out.push({task,ref:{kind:'task',id:task.id,day,list:'extra'},day}));
+      (d.tasks.extra||[]).filter(t=>!t.done&&!t.doneAt&&!t.archived&&!t.memoNoAutoCarry&&!t.fromDaily&&!t.fromQueue&&!t.memoProjectId&&!t.memoMovedTo&&!t.memoDismissed&&!t.memoReviewHidden&&!A.memoReview?.skipCarry(t)).forEach(task=>out.push({task,ref:{kind:'task',id:task.id,day,list:'extra'},day}));
     });
-    (S().data().queue||[]).filter(t=>!t.doneAt&&!t.done&&!t.archived&&!t.memoDismissed&&!t.memoNoAutoCarry&&t.assignment?.list==='extra'&&t.assignment.day<today).forEach(task=>out.push({task,ref:{kind:'queue',id:task.id},day:task.assignment.day}));
+    (S().data().queue||[]).filter(t=>!t.doneAt&&!t.done&&!t.archived&&!t.memoDismissed&&!t.memoNoAutoCarry&&t.assignment?.list==='extra'&&t.assignment.day<today&&!A.memoReview?.skipCarry(t)).forEach(task=>out.push({task,ref:{kind:'queue',id:task.id},day:task.assignment.day}));
     return out;
   }
   function settleCore(now = Date.now()) {
@@ -94,6 +94,7 @@
       }
       t.originalDay = origin; t.overdueEventId = event.id;
       moveCore(ref, today, 'required');
+      if(t.memoReviewRoundId) A.memoReview?.carryCore(t.memoReviewRoundId,today,now);
     });
   }
   function forgiveCore(ref, reason) {
