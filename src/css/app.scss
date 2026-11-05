@@ -248,3 +248,39 @@ body.framework-layout #mw-live button{pointer-events:auto;}
   .memo-gantt .gantt-controls .btn { padding:5px 7px; }
   .framework-overview .overview-habit { padding:6px 3px; }
 }
+
+
+/* 175.1: shared calendar and deadline guides stay within the Gantt scroller. */
+.memo-gantt .gantt-time-overlay { position:absolute; inset:0; pointer-events:none; z-index:1; overflow:hidden; }
+.memo-gantt .gantt-past { position:absolute; top:0; bottom:0; left:0; background:color-mix(in srgb,var(--muted) 12%,transparent); }
+.memo-gantt .gantt-today-line { position:absolute; top:0; bottom:0; border-left:2px solid #c93e47; z-index:4; }
+.memo-gantt .gantt-deadline-line { position:absolute; top:0; bottom:0; border-left:2px dashed #bd914a; z-index:3; }
+.memo-gantt .gantt-today-line small,.memo-gantt .gantt-deadline-line small { position:absolute; top:0; left:3px; background:var(--card); padding:1px 3px; font-size:10px; white-space:nowrap; border-radius:3px; max-width:130px; overflow:hidden; text-overflow:ellipsis; }
+.memo-gantt .gantt-today-line small { color:#c93e47;font-weight:700; }
+.memo-gantt .gantt-deadline-line small { top:14px; color:#a27633; }
+.memo-gantt .memo-gantt-scale { position:relative; z-index:2; }
+.memo-gantt .gantt-milestone { min-width:12px;max-width:12px;transform:rotate(45deg);border-radius:1px; }
+.memo-gantt .gantt-achieved { background:color-mix(in srgb,var(--primary) 60%,var(--card)); }
+.memo-gantt .gantt-group>summary { overflow-wrap:anywhere; }
+.gantt-dependency-list { max-height:150px; overflow:auto; margin:8px 0; padding:6px; border:1px solid var(--line);border-radius:6px; }
+.gantt-dependency-option { display:flex; gap:8px; min-height:36px; align-items:center; padding:4px 2px; }
+.gantt-dependency-option input { flex:none; }
+.gantt-dependency-option span { overflow-wrap:anywhere; }
+.gantt-dependency-option small { color:var(--muted); }
+.gantt-cross-label { display:flex; gap:6px; align-items:center; }
+.gantt-range-picker { max-width:100%; overflow-x:auto; }
+.gantt-range-picker .q-date { width:100%; min-width:252px; max-width:100%; }
+.gantt-range-actions { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+.gantt-range-status { color:var(--muted); font-size:12px; margin:4px 0; }
+.gantt-native-date[hidden] { display:none!important; }
+#memo-gantt-fields { margin:10px 0; padding:10px; border:1px solid var(--line);border-radius:8px; }
+#memo-gantt-fields>summary { cursor:pointer; font-weight:600; padding:6px; }
+.gantt-manage-group { display:flex;align-items:center;gap:8px;padding:9px 4px;border-bottom:1px solid var(--line); }
+.gantt-manage-group strong { flex:1; min-width:0; overflow-wrap:anywhere; }
+.gantt-manage-group small { color:var(--muted); }
+.mw-inline-waiting { min-width:0;max-width:100%;margin:12px 0 25px; }
+.mw-inline-waiting .mw-queue-grid { display:grid;grid-template-columns:minmax(0,1fr);gap:8px; }
+.mw-inline-waiting .mw-history-row { min-width:0;overflow-wrap:anywhere; }
+.mw-inline-waiting .mw-group-head { display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px; }
+.mw-inline-waiting .mw-pending-inline { margin:12px 0; }
+.mw-inline-waiting summary { cursor:pointer;min-height:35px; }
