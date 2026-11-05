@@ -76,14 +76,14 @@ function rowHtml(p,m,width){
  const progress=p.valid?Math.max(0,Math.min(100,(m.now-p.start+1)/(p.end-p.start+1)*100)):0;
  const depNames=p.dependencies.map(id=>{const pre=projects().find(x=>x.id===id);return (pre?.text||'不存在的项目')+(pre?.archived?'（已停用）':'');});
  const label=p.valid?dayString(p.start)+' — '+dayString(p.end)+' · 期间打卡 '+p.completed+' 次':'尚未安排计划日期';
- return '<div class="memo-gantt-item" data-gantt-row="'+E(p.id)+'"><div class="memo-gantt-name"><strong>'+E(p.title)+'</strong><div class="gantt-row-actions"><button class="btn btn-small" data-gantt-quick="'+E(p.id)+'">日期/依赖</button><button class="btn btn-small" data-gantt-edit="'+E(p.id)+'">任务编辑</button></div></div>'+
+ return '<div class="memo-gantt-item" data-gantt-row="'+E(p.id)+'"><div class="memo-gantt-name"><strong>'+E(p.title)+'</strong><div class="gantt-row-actions"><button class="btn btn-small" data-gantt-quick="'+E(p.id)+'">日期/依赖</button><button class="btn btn-small" data-gantt-edit="'+E(p.id)+'">编辑计划</button></div></div>'+
   '<div class="memo-gantt-lane" style="width:'+width+'px">'+(visible?'<span class="memo-gantt-bar" data-gantt-bar-id="'+E(p.id)+'" style="left:'+left+'%;width:'+bar+'%" role="img" aria-label="计划 '+E(dayString(p.start))+' 至 '+E(dayString(p.end))+'，已过 '+Math.round(progress)+'%"><i style="width:'+progress+'%"></i></span>':'<span class="memo-gantt-unscheduled">'+(p.valid?'不在当前时间范围':'未设定日期')+'</span>')+'</div>'+
   '<small>'+E(label)+(p.achieved?' · 项目已达成':'')+(depNames.length?' · 前置：'+E(depNames.join('、')):'')+(p.conflicts.length?' · ⚠ 前置日期冲突':'')+'</small></div>';
 }
 function html(now=Date.now()){
  const m=model(now);if(!m.rows.length)return '<div class="card memo-gantt"><button class="btn" data-gantt-create>＋ 新建长期项目</button></div>';
  const selected=pref('filter','all'),allowed=new Set(['all','',...groups().map(g=>g.id)]);
- const filter=allowed.has(selected)?selected:'all';
+ const filter=selected==='uncategorized'?'':allowed.has(selected)?selected:'all';
  const categories=[{id:'',name:'未分类'},...groups().map(g=>({id:g.id,name:g.name}))].filter(g=>m.rows.some(p=>p.group===g.id));
  const width=Math.max(580,Math.min(11000,Math.max(1,m.to-m.from+1)*(m.zoom==='month'?20:m.zoom==='quarter'?9:m.zoom==='year'?2.8:3.1)));
  const nav='<div class="gantt-controls"><div class="gantt-filters"><button class="btn btn-small'+(filter==='all'?' btn-primary':'')+'" data-gantt-filter="all">全部</button>'+categories.map(g=>'<button class="btn btn-small'+(filter===g.id?' btn-primary':'')+'" data-gantt-filter="'+E(g.id||'uncategorized')+'">'+E(g.name)+' ('+m.rows.filter(p=>p.group===g.id).length+')</button>').join('')+'</div>'+
@@ -108,7 +108,7 @@ function syncEdges(){
  const bounds=track.getBoundingClientRect();
  svg.setAttribute('width',String(track.scrollWidth));svg.setAttribute('height',String(track.scrollHeight));svg.textContent='';
  const shown=new Map([...track.querySelectorAll('[data-gantt-row]')].map(x=>[x.dataset.ganttRow,x]));
- mrow:for(const [id,node] of shown){
+ for(const [id,node] of shown){
   const item=projects().find(x=>x.id===id),bar=node.querySelector('.memo-gantt-bar');
   if(!item||!bar)continue;
   for(const preId of item.memoGanttDependencies||[]){
@@ -161,7 +161,7 @@ document.addEventListener('click',e=>{
  e.preventDefault();e.stopPropagation();
  if(b.hasAttribute('data-gantt-create'))return createProject();
  if(b.hasAttribute('data-gantt-quick'))return quick(b.dataset.ganttQuick);
- if(b.hasAttribute('data-gantt-filter')){setPref('filter',b.dataset.ganttFilter==='uncategorized'?'':b.dataset.ganttFilter);return refresh();}
+ if(b.hasAttribute('data-gantt-filter')){setPref('filter',b.dataset.ganttFilter);return refresh();}
  if(b.hasAttribute('data-gantt-expand')){const id=b.dataset.ganttExpand==='uncategorized'?'':b.dataset.ganttExpand;setPref('all:'+id,pref('all:'+id,'closed')==='open'?'closed':'open');return refresh();}
  if(b.hasAttribute('data-gantt-navigate')){
   const step=Number(b.dataset.ganttNavigate);
