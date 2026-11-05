@@ -50,7 +50,7 @@
     return s;
   }
   function scheduleCore(id, due, options = {}) {
-    const s = series(id); if (!s || s.paused) throw Error('复习任务已暂停或不存在');
+    const s = series(id); if (!s || s.paused || s.stoppedAt) throw Error('复习任务已暂停、停止或不存在');
     if (!Number.isFinite(due) || due <= 0 || (!options.legacy && due <= Date.now())) throw Error('下次复习时间必须在当前时刻之后');
     if (options.parentEventId) {
       const existing = rounds(id).find(r => r.parentEventId === options.parentEventId && r.status !== 'cancelled');
@@ -64,12 +64,12 @@
     state(true).rounds.push(r); S().getDay(day).tasks[list].push(task); point(r); return r;
   }
   function assertExecutable(ref) {
-    const x = locate(ref); if (x && (x.round.status !== 'pending' || x.series?.paused)) throw Error('这轮已取消、完成或暂停，请在复习管理中查看');
+    const x = locate(ref); if (x && (x.round.status !== 'pending' || x.series?.paused || x.series?.stoppedAt)) throw Error('这轮已取消、完成、暂停或停止，请在复习管理中查看');
     return x;
   }
   function rescheduleCore(id, due, list) {
     const r = round(id), s = r && series(r.seriesId), f = taskOf(r);
-    if (!r || r.status !== 'pending' || !f || s.paused) throw Error('只能调整未完成且未暂停的轮次');
+    if (!r || r.status !== 'pending' || !f || !s || s.paused || s.stoppedAt) throw Error('只能调整未完成且未暂停的轮次');
     if (!Number.isFinite(due) || due <= Date.now()) throw Error('请选择未来的复习时刻');
     list = list || f.ref.list || f.task.assignment?.list || s.list;
     if (due === r.due && list === (f.ref.list || f.task.assignment?.list)) return;
@@ -80,6 +80,32 @@
     r.history.push({ at: new Date().toISOString(), from: r.due, to: due, action: 'reschedule' });
     r.due = due; r.editedAt = new Date().toISOString(); r.taskRef = clone(next.ref); point(r); P().invalidate?.();
   }
+  // Advance the effective deadline with an automatic carry. Keep the original
+  // deadline and review identity for audit/undo, and never create a new round.
+  function carryCore(id, day, at = Date.now()) {
+    const r=round(id),s=r&&series(r.seriesId);
+    if(!r||r.status!=='pending'||!s||s.paused||s.stoppedAt)return false;
+    const f=taskOf(r);if(!f)return false;
+    const actualDay=f.ref.kind==='queue'?f.task.assignment?.day:f.ref.day;
+    if(actualDay!==day)throw Error('复习顺延目标日期未同步');
+    const former=M().userDay(r.due),offset=r.due-Date.parse(former+'T04:00:00+08:00');
+    const due=Date.parse(day+'T04:00:00+08:00')+offset;
+    if(due===r.due&&JSON.stringify(r.taskRef)===JSON.stringify(f.ref))return false;
+    r.history.push({at:new Date(at).toISOString(),from:r.due,to:due,action:'carry'});
+    r.due=due;r.taskRef=clone(f.ref);
+    point(r);P().invalidate?.();return true;
+  }
+  function skipCarry(task){
+    if(!task?.memoReviewRoundId)return false;
+    const r=round(task.memoReviewRoundId),s=series(r?.seriesId);
+    return !r||r.status!=='pending'||!!s?.paused||!!s?.stoppedAt;
+  }
+  function stopSeriesCore(id){
+    const s=series(id);if(!s)throw Error('复习任务不存在');
+    if(s.stoppedAt)return;
+    s.stoppedAt=new Date().toISOString();
+    rounds(id).filter(r=>r.status==='pending').forEach(r=>cancelCore(r.id,'停止后续复习'));
+  }
   function cancelCore(id, reason = '取消安排') {
     const r = round(id); if (!r || r.status === 'cancelled') return;
     if (r.status === 'done') throw Error('请先撤销本轮完成');
@@ -88,7 +114,7 @@
     P().state().items.filter(p=>p.memoReviewRoundId===id).forEach(p=>p.suspendedByReview=true); P().invalidate?.();
   }
   function pauseCore(id, paused) {
-    const s = series(id); if (!s) throw Error('复习任务不存在');
+    const s = series(id); if (!s || s.stoppedAt) throw Error('复习任务已停止或不存在');
     s.paused = paused; s.pausedAt = paused ? new Date().toISOString() : null;
     rounds(id).filter(r=>r.status==='pending').forEach(r=>{ const f=taskOf(r); if(f){if(paused)P().stopRef(f.ref);f.task.memoReviewHidden=paused;} point(r); });
     P().invalidate?.();
@@ -121,14 +147,19 @@
   }
   function onDelete(task){const r=round(task?.memoReviewRoundId);if(r&&r.status==='pending')cancelCore(r.id,'删除执行任务');}
   function restoreTask(task){const r=round(task?.memoReviewRoundId);if(!r)return;if(r.status!=='done'){r.status='pending';delete task.memoReviewHidden;point(r);}}
-  function hidden(task,list) { return !!task.memoReviewHidden && list!=='required'; }
+  function hidden(task,list) {
+    const r=round(task?.memoReviewRoundId),s=series(r?.seriesId);
+    if(r?.status==='cancelled'||s?.stoppedAt)return true;
+    // A paused required round still counts as an obligation, but cannot carry.
+    return !!task?.memoReviewHidden&&list!=='required';
+  }
   function label(task) {
     const r=round(task?.memoReviewRoundId);if(!r)return '';
     const s=series(r.seriesId),status=r.status==='cancelled'?'已取消':s?.paused?'已暂停':r.status==='done'?'已完成':'原定 '+clock(r.due);
     return '<small class="review-badge">第'+r.n+'轮 · '+E(status)+(r.predecessorUndone?' · 上轮已撤销':'')+'</small>';
   }
   function summary(day) {
-    const due=state().rounds.filter(r=>r.status==='pending'&&!series(r.seriesId)?.paused&&r.due<=Date.now()&&taskOf(r));
+    const due=state().rounds.filter(r=>r.status==='pending'&&!series(r.seriesId)?.paused&&!series(r.seriesId)?.stoppedAt&&r.due<=Date.now()&&taskOf(r));
     if(!due.length || day!==M().userDay())return '';
     return '<details class="review-due"><summary>到期复习 '+due.length+'轮</summary>'+due.sort((a,b)=>a.due-b.due).map(r=>'<p>'+E(series(r.seriesId)?.text)+' · '+E(clock(r.due))+' <button class="btn btn-small" data-review-open="'+r.id+'">打开本轮</button></p>').join('')+'</details>';
   }
@@ -191,11 +222,11 @@
     const next=box.querySelector('[data-review-next]');next.onchange=()=>{box.querySelector('[data-review-custom]').hidden=next.value!=='custom';box.querySelector('[data-review-at]').hidden=next.value!=='at';};
     return ()=>{const mode=next.value;return {result:box.querySelector('[data-review-result]').value,mode:['none','existing'].includes(mode)?'none':mode==='at'?'at':'relative',minutes:mode==='template'?proposed.minutes:mode==='custom'?Number(box.querySelector('[data-review-custom]').value):Number(mode),due:mode==='at'?parseTime(box.querySelector('[data-review-at]').value):null};};
   }
-  async function openRound(id){const r=round(id);let f=taskOf(r);if(!f)return A.ui.toast('原执行任务已删除，历史仍保留');if(r.status==='cancelled'||series(r.seriesId)?.paused)return manage(r.seriesId);if(f.ref.kind==='task'&&f.ref.day<M().userDay()){try{if(!await A.memoActions.commit(()=>{A.memoFlow.moveCore(f.ref,M().userDay(),f.ref.list);r.taskRef=clone(P().canonical(f.ref));}))return;f=taskOf(r);refresh();}catch(e){A.ui.toast(e.message);manage(r.seriesId);return;}}A.ui.closeModal();if(f.ref.kind==='queue')A.memoActions.queue(f.ref.id);else A.memoActions.task(f.ref.list,f.ref.id,f.ref.day);}
+  async function openRound(id){const r=round(id);let f=taskOf(r);if(!f)return A.ui.toast('原执行任务已删除，历史仍保留');if(r.status==='cancelled'||series(r.seriesId)?.paused||series(r.seriesId)?.stoppedAt)return manage(r.seriesId);if(f.ref.kind==='task'&&f.ref.day<M().userDay()){try{if(!await A.memoActions.commit(()=>{A.memoFlow.moveCore(f.ref,M().userDay(),f.ref.list);r.taskRef=clone(P().canonical(f.ref));}))return;f=taskOf(r);refresh();}catch(e){A.ui.toast(e.message);manage(r.seriesId);return;}}A.ui.closeModal();if(f.ref.kind==='queue')A.memoActions.queue(f.ref.id);else A.memoActions.task(f.ref.list,f.ref.id,f.ref.day);}
   function init(){
     document.addEventListener('click',e=>{const b=e.target.closest('[data-review-new],[data-review-series],[data-review-open]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();if(A.memoActions.busy())return A.ui.toast('请先重试保存');if(b.hasAttribute('data-review-new'))newEditor();else if(b.dataset.reviewOpen)openRound(b.dataset.reviewOpen);else manage(b.dataset.reviewSeries);},true);
-    let last='';const check=()=>{const key=state().rounds.filter(r=>r.status==='pending'&&r.due<=Date.now()&&!series(r.seriesId)?.paused).map(r=>r.id).join('|');if(key!==last&&!document.querySelector('.modal-mask')&&!A.memoActions.busy()){last=key;refresh();}};
+    let last='';const check=()=>{const key=state().rounds.filter(r=>r.status==='pending'&&r.due<=Date.now()&&!series(r.seriesId)?.paused&&!series(r.seriesId)?.stoppedAt).map(r=>r.id).join('|');if(key!==last&&!document.querySelector('.modal-mask')&&!A.memoActions.busy()){last=key;refresh();}};
     setInterval(check,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)check();});
   }
-  A.memoReview={intervals,suggestion,state,series,round,rounds,locate,taskOf,newSeriesCore,scheduleCore,rescheduleCore,cancelCore,pauseCore,assertExecutable,onComplete,onUndo,onDelete,restoreTask,hidden,label,summary,registry,newEditor,scheduleEditor,manage,importCore,completionFields,point,init};
+  A.memoReview={intervals,suggestion,state,series,round,rounds,locate,taskOf,newSeriesCore,scheduleCore,rescheduleCore,carryCore,skipCarry,stopSeriesCore,cancelCore,pauseCore,assertExecutable,onComplete,onUndo,onDelete,restoreTask,hidden,label,summary,registry,newEditor,scheduleEditor,manage,importCore,completionFields,point,init};
 })();
