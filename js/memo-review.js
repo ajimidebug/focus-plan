@@ -29,7 +29,7 @@
     const f = taskOf(r); if (!f) return;
     const items = P().state().items, old = items.find(p => p.memoReviewRoundId === r.id && !p.deleted);
     const p = P().savePlan({ ref: f.ref, title: f.task.text, day: M().userDay(r.due), type: 'point', start: r.due, end: null, memoReviewRoundId: r.id, reviewSync: true }, old?.id);
-    delete p.reviewSync; p.suspendedByReview = !!series(r.seriesId)?.paused || r.status !== 'pending';
+    delete p.reviewSync; p.suspendedByReview = !!series(r.seriesId)?.paused || !!series(r.seriesId)?.stoppedAt || r.status !== 'pending';
     // Completed points remain visible as the saved expectation.
     if (r.status === 'done') p.suspendedByReview = false;
     return p;
@@ -50,7 +50,7 @@
     return s;
   }
   function scheduleCore(id, due, options = {}) {
-    const s = series(id); if (!s || s.paused) throw Error('复习任务已暂停或不存在');
+    const s = series(id); if (!s || s.paused || s.stoppedAt) throw Error('复习任务已暂停、停止或不存在');
     if (!Number.isFinite(due) || due <= 0 || (!options.legacy && due <= Date.now())) throw Error('下次复习时间必须在当前时刻之后');
     if (options.parentEventId) {
       const existing = rounds(id).find(r => r.parentEventId === options.parentEventId && r.status !== 'cancelled');
@@ -64,12 +64,12 @@
     state(true).rounds.push(r); S().getDay(day).tasks[list].push(task); point(r); return r;
   }
   function assertExecutable(ref) {
-    const x = locate(ref); if (x && (x.round.status !== 'pending' || x.series?.paused)) throw Error('这轮已取消、完成或暂停，请在复习管理中查看');
+    const x = locate(ref); if (x && (x.round.status !== 'pending' || x.series?.paused || x.series?.stoppedAt)) throw Error('这轮已取消、完成、暂停或停止，请在复习管理中查看');
     return x;
   }
   function rescheduleCore(id, due, list) {
     const r = round(id), s = r && series(r.seriesId), f = taskOf(r);
-    if (!r || r.status !== 'pending' || !f || s.paused) throw Error('只能调整未完成且未暂停的轮次');
+    if (!r || r.status !== 'pending' || !f || !s || s.paused || s.stoppedAt) throw Error('只能调整未完成且未暂停的轮次');
     if (!Number.isFinite(due) || due <= Date.now()) throw Error('请选择未来的复习时刻');
     list = list || f.ref.list || f.task.assignment?.list || s.list;
     if (due === r.due && list === (f.ref.list || f.task.assignment?.list)) return;
@@ -80,6 +80,32 @@
     r.history.push({ at: new Date().toISOString(), from: r.due, to: due, action: 'reschedule' });
     r.due = due; r.editedAt = new Date().toISOString(); r.taskRef = clone(next.ref); point(r); P().invalidate?.();
   }
+  // Advance the effective deadline with an automatic carry. Keep the original
+  // deadline and review identity for audit/undo, and never create a new round.
+  function carryCore(id, day, at = Date.now()) {
+    const r=round(id),s=r&&series(r.seriesId);
+    if(!r||r.status!=='pending'||!s||s.paused||s.stoppedAt)return false;
+    const f=taskOf(r);if(!f)return false;
+    const actualDay=f.ref.kind==='queue'?f.task.assignment?.day:f.ref.day;
+    if(actualDay!==day)throw Error('复习顺延目标日期未同步');
+    const former=M().userDay(r.due),offset=r.due-Date.parse(former+'T04:00:00+08:00');
+    const due=Date.parse(day+'T04:00:00+08:00')+offset;
+    if(due===r.due&&JSON.stringify(r.taskRef)===JSON.stringify(f.ref))return false;
+    r.history.push({at:new Date(at).toISOString(),from:r.due,to:due,action:'carry'});
+    r.due=due;r.taskRef=clone(f.ref);
+    point(r);P().invalidate?.();return true;
+  }
+  function skipCarry(task){
+    if(!task?.memoReviewRoundId)return false;
+    const r=round(task.memoReviewRoundId),s=series(r?.seriesId);
+    return !r||r.status!=='pending'||!!s?.paused||!!s?.stoppedAt;
+  }
+  function stopSeriesCore(id){
+    const s=series(id);if(!s)throw Error('复习任务不存在');
+    if(s.stoppedAt)return;
+    s.stoppedAt=new Date().toISOString();
+    rounds(id).filter(r=>r.status==='pending').forEach(r=>cancelCore(r.id,'停止后续复习'));
+  }
   function cancelCore(id, reason = '取消安排') {
     const r = round(id); if (!r || r.status === 'cancelled') return;
     if (r.status === 'done') throw Error('请先撤销本轮完成');
@@ -88,7 +114,7 @@
     P().state().items.filter(p=>p.memoReviewRoundId===id).forEach(p=>p.suspendedByReview=true); P().invalidate?.();
   }
   function pauseCore(id, paused) {
-    const s = series(id); if (!s) throw Error('复习任务不存在');
+    const s = series(id); if (!s || s.stoppedAt) throw Error('复习任务已停止或不存在');
     s.paused = paused; s.pausedAt = paused ? new Date().toISOString() : null;
     rounds(id).filter(r=>r.status==='pending').forEach(r=>{ const f=taskOf(r); if(f){if(paused)P().stopRef(f.ref);f.task.memoReviewHidden=paused;} point(r); });
     P().invalidate?.();
@@ -120,22 +146,27 @@
     const f=taskOf(r);if(f)f.task.memoReviewHidden=!!series(r.seriesId)?.paused;point(r);
   }
   function onDelete(task){const r=round(task?.memoReviewRoundId);if(r&&r.status==='pending')cancelCore(r.id,'删除执行任务');}
-  function restoreTask(task){const r=round(task?.memoReviewRoundId);if(!r)return;if(r.status!=='done'){r.status='pending';delete task.memoReviewHidden;point(r);}}
-  function hidden(task,list) { return !!task.memoReviewHidden && list!=='required'; }
+  function restoreTask(task){const r=round(task?.memoReviewRoundId);if(!r||series(r.seriesId)?.stoppedAt)return;if(r.status!=='done'){r.status='pending';delete task.memoReviewHidden;point(r);}}
+  function hidden(task,list) {
+    const r=round(task?.memoReviewRoundId),s=series(r?.seriesId);
+    if(r?.status==='cancelled'||s?.stoppedAt)return true;
+    // A paused required round still counts as an obligation, but cannot carry.
+    return !!task?.memoReviewHidden&&list!=='required';
+  }
   function label(task) {
     const r=round(task?.memoReviewRoundId);if(!r)return '';
-    const s=series(r.seriesId),status=r.status==='cancelled'?'已取消':s?.paused?'已暂停':r.status==='done'?'已完成':'原定 '+clock(r.due);
+    const s=series(r.seriesId),status=r.status==='cancelled'?'已取消':s?.stoppedAt?'已停止':s?.paused?'已暂停':r.status==='done'?'已完成':'原定 '+clock(r.due);
     return '<small class="review-badge">第'+r.n+'轮 · '+E(status)+(r.predecessorUndone?' · 上轮已撤销':'')+'</small>';
   }
   function summary(day) {
-    const due=state().rounds.filter(r=>r.status==='pending'&&!series(r.seriesId)?.paused&&r.due<=Date.now()&&taskOf(r));
+    const due=state().rounds.filter(r=>r.status==='pending'&&!series(r.seriesId)?.paused&&!series(r.seriesId)?.stoppedAt&&r.due<=Date.now()&&taskOf(r));
     if(!due.length || day!==M().userDay())return '';
     return '<details class="review-due"><summary>到期复习 '+due.length+'轮</summary>'+due.sort((a,b)=>a.due-b.due).map(r=>'<p>'+E(series(r.seriesId)?.text)+' · '+E(clock(r.due))+' <button class="btn btn-small" data-review-open="'+r.id+'">打开本轮</button></p>').join('')+'</details>';
   }
   function registry() {
     return '<details class="review-registry"><summary>复习任务（'+state().series.length+'）</summary><button class="btn btn-small" data-review-new>＋ 新建复习任务</button>'+state().series.map(s=>{
       const rs=rounds(s.id),next=rs.filter(r=>r.status==='pending').sort((a,b)=>a.due-b.due)[0];
-      return '<div class="review-series"><strong>'+E(s.text)+'</strong><small>已完成'+rs.filter(r=>r.status==='done').length+'轮 · '+(s.paused?'已暂停':next?'下次 '+E(clock(next.due)):'暂无下次安排')+'</small><button class="btn btn-small" data-review-series="'+s.id+'">历史与安排</button></div>';
+      return '<div class="review-series"><strong>'+E(s.text)+'</strong><small>已完成'+rs.filter(r=>r.status==='done').length+'轮 · '+(s.stoppedAt?'已停止':s.paused?'已暂停':next?'下次 '+E(clock(next.due)):'暂无下次安排')+'</small><button class="btn btn-small" data-review-series="'+s.id+'">历史与安排</button></div>';
     }).join('')+'</details>';
   }
   function refresh(){A.memoWorkspace?.render();P().render();A.app?.refreshStats();}
@@ -164,14 +195,15 @@
     const s=series(id);if(!s)return;const rs=rounds(id);
     const m=A.ui.openModal('复习任务 · '+s.text,'<p>'+E(s.note)+'</p><div class="review-history">'+rs.map((r,i)=>{
       const previous=rs.slice(0,i).filter(v=>v.status==='done').at(-1),interval=r.at&&previous?.at&&!r.backfillDay&&!previous.backfillDay?' · 间隔 '+gapText(Date.parse(r.at)-Date.parse(previous.at)):'';
-      return '<article><strong>第'+r.n+'轮 · '+E(r.status==='done'?'已完成':r.status==='cancelled'?'已取消':'待复习')+'</strong><small>计划 '+E(clock(r.due))+(r.originalDue!==r.due?' · 最初 '+E(clock(r.originalDue)):'')+'</small>'+(r.at?'<small>'+E(r.backfillDay?'补记日 '+r.backfillDay+'；录入 ':'实际 ')+E(clock(Date.parse(r.at)))+E(interval)+' · '+results[r.result||'']+'</small>':'')+(r.legacy?'<small>旧记录 · '+E(r.legacy.via==='move'?'移动记作完成，未验证实际复习':'保留原记录，未重新计分')+'</small>':'')+(r.predecessorUndone?'<small>前置完成已撤销；本轮保留</small>':'')+(taskOf(r)?'<button class="btn btn-small" data-review-open="'+r.id+'">查看本轮</button>':'')+(r.status==='pending'&&!s.paused?'<button class="btn btn-small" data-review-edit="'+r.id+'">改时间</button><button class="btn btn-small" data-review-task="'+r.id+'">本轮内容与积分</button><button class="btn btn-small" data-review-cancel="'+r.id+'">取消本轮</button>':'')+(r.history.length?'<details><summary>调整记录</summary>'+r.history.map(h=>'<small>'+E(clock(Date.parse(h.at)))+' · '+E(h.reason||(h.from?clock(h.from)+' → '+clock(h.to):h.action))+'</small>').join('')+'</details>':'')+'</article>';
-    }).join('')+'</div><p role="alert">'+(A.memoActions.busy()?'本次操作尚未保存，请重试保存。':'')+'</p>','<button class="btn" data-act="close">关闭</button><button class="btn" data-act="edit">修改内容</button><button class="btn" data-act="pause">'+(s.paused?'恢复复习':'暂停复习')+'</button>'+(!s.paused?'<button class="btn" data-act="stop">停止后续</button><button class="btn btn-primary" data-act="add">安排下一轮</button>':''),{lock:true});
+      return '<article><strong>第'+r.n+'轮 · '+E(r.status==='done'?'已完成':r.status==='cancelled'?'已取消':'待复习')+'</strong><small>计划 '+E(clock(r.due))+(r.originalDue!==r.due?' · 最初 '+E(clock(r.originalDue)):'')+'</small>'+(r.at?'<small>'+E(r.backfillDay?'补记日 '+r.backfillDay+'；录入 ':'实际 ')+E(clock(Date.parse(r.at)))+E(interval)+' · '+results[r.result||'']+'</small>':'')+(r.legacy?'<small>旧记录 · '+E(r.legacy.via==='move'?'移动记作完成，未验证实际复习':'保留原记录，未重新计分')+'</small>':'')+(r.predecessorUndone?'<small>前置完成已撤销；本轮保留</small>':'')+(taskOf(r)?'<button class="btn btn-small" data-review-open="'+r.id+'">查看本轮</button>':'')+(r.status==='pending'&&!s.paused&&!s.stoppedAt?'<button class="btn btn-small" data-review-edit="'+r.id+'">改时间</button><button class="btn btn-small" data-review-task="'+r.id+'">本轮内容与积分</button><button class="btn btn-small" data-review-cancel="'+r.id+'">取消本轮</button>':'')+(r.history.length?'<details><summary>调整记录</summary>'+r.history.map(h=>'<small>'+E(clock(Date.parse(h.at)))+' · '+E(h.reason||(h.from?clock(h.from)+' → '+clock(h.to):h.action))+'</small>').join('')+'</details>':'')+'</article>';
+    }).join('')+'</div><p role="alert">'+(A.memoActions.busy()?'本次操作尚未保存，请重试保存。':'')+'</p>','<button class="btn" data-act="close">关闭</button><button class="btn" data-act="edit">修改内容</button><button class="btn" data-act="pause">'+(s.paused?'恢复复习':'暂停复习')+'</button>'+(!s.paused&&!s.stoppedAt?'<button class="btn" data-act="stop">停止后续</button><button class="btn btn-primary" data-act="add">安排下一轮</button>':''),{lock:true});
+    if(s.stoppedAt)m.querySelector('[data-act="pause"]')?.remove();
     async function change(fn){try{if(await A.memoActions.commit(fn)){refresh();manage(id);}}catch(e){m.querySelector('[role=alert]').textContent=e.message;const b=document.createElement('button');b.className='btn';b.textContent='重试保存';b.onclick=()=>change(()=>{});m.querySelector('[role=alert]').append(b);}}
     if(A.memoActions.busy()){const retry=document.createElement('button');retry.className='btn';retry.textContent='重试保存';retry.onclick=()=>change(()=>{});m.querySelector('[role=alert]').append(retry);}
     m.querySelectorAll('[data-review-edit]').forEach(b=>b.onclick=()=>{if(!A.memoActions.busy())scheduleEditor(id,b.dataset.reviewEdit);});
     m.querySelectorAll('[data-review-task]').forEach(b=>b.onclick=()=>{if(!A.memoActions.busy()){const f=taskOf(round(b.dataset.reviewTask));if(f)A.memoWorkspace.editor(f.ref,undefined,true);}});
     m.querySelectorAll('[data-review-cancel]').forEach(b=>b.onclick=()=>change(()=>cancelCore(b.dataset.reviewCancel)));
-    A.ui.bindActions({close:()=>{if(!A.memoActions.busy())A.ui.closeModal();},add:()=>{if(!A.memoActions.busy())scheduleEditor(id);},pause:()=>change(()=>pauseCore(id,!s.paused)),stop:()=>change(()=>{rounds(id).filter(r=>r.status==='pending').forEach(r=>cancelCore(r.id,'停止后续复习'));}),edit:()=>{if(!A.memoActions.busy())editSeries(id);}});
+    A.ui.bindActions({close:()=>{if(!A.memoActions.busy())A.ui.closeModal();},add:()=>{if(!A.memoActions.busy())scheduleEditor(id);},pause:()=>change(()=>pauseCore(id,!s.paused)),stop:()=>change(()=>stopSeriesCore(id)),edit:()=>{if(!A.memoActions.busy())editSeries(id);}});
   }
   function editSeries(id){const s=series(id);if(!s)return;const m=A.ui.openModal('修改复习内容','<label>名称<input id="review-title" value="'+E(s.text)+'"></label><label>后续新轮次积分<input id="review-points" type="number" min="0" value="'+s.points+'"></label><label>备注<textarea id="review-note">'+E(s.note)+'</textarea></label>'+templateFields(s.intervals||[])+'<p class="hint">已经安排的轮次保留当时的内容和积分。</p><p role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">保存</button>',{lock:true});bindTemplate(m);bindSave(m,()=>{const current=series(id),text=m.querySelector('#review-title').value.trim(),points=Number(m.querySelector('#review-points').value);if(!text||!Number.isFinite(points)||points<0)throw Error('请检查名称与积分');current.text=text;current.note=m.querySelector('#review-note').value;current.points=points;current.intervals=intervals(m.querySelector('#review-intervals').value);},()=>manage(id));}
   function importCore(ref,input){
@@ -191,11 +223,11 @@
     const next=box.querySelector('[data-review-next]');next.onchange=()=>{box.querySelector('[data-review-custom]').hidden=next.value!=='custom';box.querySelector('[data-review-at]').hidden=next.value!=='at';};
     return ()=>{const mode=next.value;return {result:box.querySelector('[data-review-result]').value,mode:['none','existing'].includes(mode)?'none':mode==='at'?'at':'relative',minutes:mode==='template'?proposed.minutes:mode==='custom'?Number(box.querySelector('[data-review-custom]').value):Number(mode),due:mode==='at'?parseTime(box.querySelector('[data-review-at]').value):null};};
   }
-  async function openRound(id){const r=round(id);let f=taskOf(r);if(!f)return A.ui.toast('原执行任务已删除，历史仍保留');if(r.status==='cancelled'||series(r.seriesId)?.paused)return manage(r.seriesId);if(f.ref.kind==='task'&&f.ref.day<M().userDay()){try{if(!await A.memoActions.commit(()=>{A.memoFlow.moveCore(f.ref,M().userDay(),f.ref.list);r.taskRef=clone(P().canonical(f.ref));}))return;f=taskOf(r);refresh();}catch(e){A.ui.toast(e.message);manage(r.seriesId);return;}}A.ui.closeModal();if(f.ref.kind==='queue')A.memoActions.queue(f.ref.id);else A.memoActions.task(f.ref.list,f.ref.id,f.ref.day);}
+  async function openRound(id){const r=round(id);let f=taskOf(r);if(!f)return A.ui.toast('原执行任务已删除，历史仍保留');if(r.status==='cancelled'||series(r.seriesId)?.paused||series(r.seriesId)?.stoppedAt)return manage(r.seriesId);if(f.ref.kind==='task'&&f.ref.day<M().userDay()){try{if(!await A.memoActions.commit(()=>{A.memoFlow.moveCore(f.ref,M().userDay(),f.ref.list);r.taskRef=clone(P().canonical(f.ref));}))return;f=taskOf(r);refresh();}catch(e){A.ui.toast(e.message);manage(r.seriesId);return;}}A.ui.closeModal();if(f.ref.kind==='queue')A.memoActions.queue(f.ref.id);else A.memoActions.task(f.ref.list,f.ref.id,f.ref.day);}
   function init(){
     document.addEventListener('click',e=>{const b=e.target.closest('[data-review-new],[data-review-series],[data-review-open]');if(!b)return;e.preventDefault();e.stopImmediatePropagation();if(A.memoActions.busy())return A.ui.toast('请先重试保存');if(b.hasAttribute('data-review-new'))newEditor();else if(b.dataset.reviewOpen)openRound(b.dataset.reviewOpen);else manage(b.dataset.reviewSeries);},true);
-    let last='';const check=()=>{const key=state().rounds.filter(r=>r.status==='pending'&&r.due<=Date.now()&&!series(r.seriesId)?.paused).map(r=>r.id).join('|');if(key!==last&&!document.querySelector('.modal-mask')&&!A.memoActions.busy()){last=key;refresh();}};
+    let last='';const check=()=>{const key=state().rounds.filter(r=>r.status==='pending'&&r.due<=Date.now()&&!series(r.seriesId)?.paused&&!series(r.seriesId)?.stoppedAt).map(r=>r.id).join('|');if(key!==last&&!document.querySelector('.modal-mask')&&!A.memoActions.busy()){last=key;refresh();}};
     setInterval(check,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)check();});
   }
-  A.memoReview={intervals,suggestion,state,series,round,rounds,locate,taskOf,newSeriesCore,scheduleCore,rescheduleCore,cancelCore,pauseCore,assertExecutable,onComplete,onUndo,onDelete,restoreTask,hidden,label,summary,registry,newEditor,scheduleEditor,manage,importCore,completionFields,point,init};
+  A.memoReview={intervals,suggestion,state,series,round,rounds,locate,taskOf,newSeriesCore,scheduleCore,rescheduleCore,carryCore,skipCarry,stopSeriesCore,cancelCore,pauseCore,assertExecutable,onComplete,onUndo,onDelete,restoreTask,hidden,label,summary,registry,newEditor,scheduleEditor,manage,importCore,completionFields,point,init};
 })();

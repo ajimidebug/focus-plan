@@ -182,6 +182,27 @@
       expectedPosition: valid ? limit / rangeMs * 100 : null, detail, tick: '25%',
       state: over ? 'overtime' : bounded ? 'expected' : 'unbounded' };
   }
+  // Scheduled spans are clock windows, never evidence of executed study.
+  // Prefer a live span, then an upcoming span, then the latest elapsed span.
+  function planWindow(ref, now = Date.now()) {
+    const r=canonical(ref),all=state().items.filter(p=>!p.deleted&&!p.suspendedByArchive&&!p.suspendedByBackfill&&!p.suspendedByReview&&p.type==='span'&&Number.isFinite(p.end)&&p.end>p.start&&key(p.ref)===key(r))
+      .sort((a,b)=>a.start-b.start);
+    const today=M().userDay(now);
+    const relevant=all.filter(p=>p.day===today||p.day===r.day||p.end>=now-86400000);
+    const live=relevant.find(p=>p.start<=now&&now<p.end);
+    const future=relevant.find(p=>p.start>now);
+    const past=relevant.filter(p=>p.end<=now).at(-1);
+    const chosen=live||future||past;
+    return chosen?{id:chosen.id,start:chosen.start,end:chosen.end,day:chosen.day}:null;
+  }
+  function windowMeter(window, now = Date.now(), executedMs = 0) {
+    if(!window||!Number.isFinite(window.start)||!Number.isFinite(window.end)||window.end<=window.start)return null;
+    const total=window.end-window.start,elapsed=Math.min(total,Math.max(0,now-window.start));
+    const ratio=100*elapsed/total,over=now>window.end;
+    const fmt=ms=>M().clock(ms),label=fmt(window.start)+'—'+fmt(window.end)+(M().naturalDay(window.end)!==M().naturalDay(window.start)?'（跨日）':'');
+    const remaining=now<window.start?'距开始 '+duration(window.start-now):over?'已过截止 '+duration(now-window.end):'距截止 '+duration(window.end-now);
+    return {valid:true,over,bounded:true,fill:ratio,previous:0,current:ratio,rangeMs:total,stepMinutes:total/240000,expectedPosition:100,detail:'计划 '+label+' · '+remaining+' · 有效计时 '+duration(executedMs),tick:'25%',state:over?'deadline-passed':'window',timeStart:fmt(window.start),timeEnd:fmt(window.end)};
+  }
   function active() { return state().sessions.find(s => s.status === 'running'); }
   function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
   function startRef(ref, now = Date.now(), itemId = null) {
@@ -331,6 +352,31 @@
   function completeRef(ref) {
     const found = resolve(ref); if (!found) return App.ui.toast('原任务已移动或删除'); const r = found.ref;
     return r.kind === 'project' ? App.memoActions.project(r.id, r.day) : r.kind === 'queue' ? App.memoActions.queue(r.id) : r.kind === 'daily' ? App.memoActions.daily(r.id, r.day) : App.memoActions.task(r.list, r.id, r.day);
+  }
+  function confirmEnd(ref, sessionId = null) {
+    if(App.memoActions.busy())return App.ui.toast('请先重试保存当前操作');
+    const targets=()=>state().sessions.filter(x=>x.status!=='ended'&&key(x.ref)===key(ref)&&(!sessionId||x.id===sessionId));
+    const current=targets();
+    if(!current.length)return App.ui.toast('计时已经结束，请刷新任务');
+    const name=find(ref)?.text||current.at(-1)?.title||'当前任务';
+    const total=timing(ref).allMs;
+    const m=App.ui.openModal('结束计时','<p>结束“'+esc(name)+'”的当前计时？</p><p class="hint">已累计 '+duration(total)+'。确认后仅结束计时，任务仍未完成，已保存的时间片段会保留。</p><p role="alert"></p>',
+      '<button class="btn" data-act="cancel">保留计时</button><button class="btn btn-primary" data-act="end">确认结束</button>',{lock:true});
+    let submitting=false;
+    App.ui.bindActions({cancel:()=>{if(!submitting&&!App.memoActions.busy())App.ui.closeModal();},
+      end:async b=>{
+        if(submitting)return;submitting=true;b.disabled=true;
+        try{
+          const retry=App.memoActions.busy();
+          const ok=await perform(retry?()=>{}:()=>{
+            const sessions=targets();if(!sessions.length)throw Error('计时状态已改变，请重新打开');
+            const at=Date.now();sessions.forEach(x=>stopSession(x,at));
+          },retry);
+          if(ok){App.ui.closeModal();App.ui.toast('计时已结束，任务仍未完成');}
+          else if(m.isConnected){m.querySelector('[role="alert"]').textContent=App.memoActions.busy()?'结束操作尚未保存，请重试保存':'计时操作失败，请重试';b.textContent=App.memoActions.busy()?'重试保存':'确认结束';}
+        }catch(e){if(m.isConnected)m.querySelector('[role="alert"]').textContent=e.message;}
+        finally{submitting=false;b.disabled=false;}
+      }});
   }
   function startUI(ref, itemId = null) {
     const run = () => perform(() => startRef(ref, Date.now(), itemId));
@@ -500,11 +546,12 @@
       try {
         const ref = JSON.parse(button.dataset.scheduleRef), act = button.dataset.scheduleCommand;
         if (act === 'plan') return arrange(ref, ref.day || M().userDay());
+        if (act === 'end') return confirmEnd(ref, button.dataset.sessionId || null);
         const previousText = button.textContent; button.disabled = true; button.textContent = '保存中…';
         let ok = false;
         try {
           if (act === 'retry') ok = await perform(() => {}, true);
-          else if (act === 'pause' || act === 'end') ok = await perform(() => state().sessions.filter(s => key(s.ref) === key(ref) && s.status !== 'ended').forEach(s => act === 'pause' ? pauseCore(s, Date.now()) : stopSession(s, Date.now())));
+          else if (act === 'pause') ok = await perform(() => state().sessions.filter(s => key(s.ref) === key(ref) && s.status === 'running').forEach(s => pauseCore(s, Date.now())));
           else { const session = state().sessions.find(s => s.id === button.dataset.sessionId); ok = await startUI(ref, session?.itemId || null); }
         } finally {
           if (button.isConnected) { button.disabled = false; button.textContent = previousText;
@@ -517,5 +564,5 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } }); window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();
   }
-  App.memoSchedule = { invalidate:()=>{summaryCache=null;},meterTiming,meterState,setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
+  App.memoSchedule = { invalidate:()=>{summaryCache=null;},meterTiming,meterState,planWindow,windowMeter,setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
 })();
