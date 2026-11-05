@@ -14,6 +14,8 @@
       const normalScale = !viewport || Math.abs(viewport.scale - 1) < .01;
       const inset = normalScale && viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
       nav.style.setProperty('--nav-inset', inset + 'px');
+      document.documentElement.style.setProperty('--app-visible-height', (normalScale && viewport ? viewport.height : window.innerHeight) + 'px');
+      document.documentElement.style.setProperty('--app-visible-top', (normalScale && viewport ? viewport.offsetTop : 0) + 'px');
       const height = nav.getBoundingClientRect().height;
       document.body.style.setProperty('--app-nav-room', height + inset + 16 + 'px');
       // Repair stale horizontal offsets after a resize / an old version update.
