@@ -16,7 +16,7 @@ const note=v=>bounded(v??'',4000);
 const number=(v,max)=>{const n=Number(v??0);if(!Number.isFinite(n)||n<0||n>max)throw Error('数值字段不合法');return n;};
 const validDay=x=>typeof x==='string'&&M().validDate(x);
 const safeKey=(value,mod,row)=>{
- if(value!=null){const key=bounded(value,220).trim();if(!key)throw Error('externalKey 无效');return mod+':'+key;}
+ if(value!=null){const key=bounded(value,220).trim();if(!key)throw Error('externalKey 无效');return key.startsWith(mod+':')?key:mod+':'+key;}
  const str=JSON.stringify([mod,row]);let n=2166136261;for(let i=0;i<str.length;i++)n=Math.imul(n^str.charCodeAt(i),16777619);
  return mod+':auto-'+(n>>>0).toString(16)+':'+str.length;
 };
@@ -203,6 +203,13 @@ function open(){
  };
  A.ui.bindActions({cancel:()=>{if(!saving&&!pendingSave)A.ui.closeModal();},save:async()=>{
   if(saving)return;
+  if(pendingSave){
+   saving=true;
+   try{if(await A.memoActions.commit(()=>{})){pendingSave=false;A.ui.closeModal();A.memoWorkspace.render();A.ui.toast('之前导入的数据已成功保存');}}
+   catch(error){q('#mx-error').textContent=error.message;}
+   finally{saving=false;}
+   return;
+  }
   try{
    const names=selected();if(!names.length)throw Error('请至少选择一个模块');
    if(mode==='export'){download(exportData(names));A.ui.toast('所选模块已导出');return;}
@@ -219,14 +226,6 @@ function open(){
    if(pendingSave){q('[data-act="save"]').textContent='重试保存';q('[data-act="save"]').disabled=false;}
   }finally{saving=false;if(!pendingSave)q('[data-act="save"]').disabled=false;}
  }});
- // Retry persistence must not execute import mutations twice.
- q('[data-act="save"]').addEventListener('click',async e=>{
-  if(!pendingSave||saving)return;
-  e.stopImmediatePropagation();saving=true;
-  try{if(await A.memoActions.commit(()=>{})){pendingSave=false;A.ui.closeModal();A.memoWorkspace.render();A.ui.toast('之前导入的数据已成功保存');}}
-  catch(error){q('#mx-error').textContent=error.message;}
-  finally{saving=false;}
- },true);
  picker();
 }
 A.memoTransfer={open,collect,exportData,parse,preview,applyCore,specs};
