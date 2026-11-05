@@ -23,15 +23,21 @@ const safeKey=(value,mod,row)=>{
 function mapExport(name,rows){
  return rows.map((r,i)=>({externalKey:r.memoImportKey||'focus-plan:'+name+':'+(r.id||i),sourceId:r.id||null,text:r.text||r.name||'',note:r.note||'',points:r.points??1,estimatedMinutes:r.estimatedMinutes||0}));
 }
+
+function ganttMeta(t,d){
+ return {memoGroup:t.memoGroup||'',memoGroupName:(d.memoTaskGroups||[]).find(g=>g.id===t.memoGroup)?.name||'',
+ memoGanttStart:t.memoGanttStart||'',memoGanttEnd:t.memoGanttEnd||'',
+ memoGanttDependencies:clone(t.memoGanttDependencies||[])};
+}
 function collect(){
  const d=S().data(),out={required:[],ideal:[],extra:[],queue:[],review:[],recurrence:[],projects:[],wishlist:[],schedule:[],checkins:[],ledger:[]};
  for(const [day,value] of Object.entries(d.days||{}))for(const list of ['required','ideal','extra']){
   for(const t of value.tasks?.[list]||[]){
    if(t.fromQueue||t.fromDaily||t.memoProjectId||t.memoMovedTo||t.memoDismissed||t.memoReviewRoundId||t.memoOccurrenceId)continue;
-   out[list].push({externalKey:t.memoImportKey||'focus-plan:'+list+':'+day+':'+t.id,sourceId:t.id,day,text:t.text,note:t.note||'',points:t.points??1,estimatedMinutes:t.estimatedMinutes||0,priorityWeight:t.priorityWeight??3});
+   out[list].push({externalKey:t.memoImportKey||'focus-plan:'+list+':'+day+':'+t.id,sourceId:t.id,day,text:t.text,note:t.note||'',points:t.points??1,estimatedMinutes:t.estimatedMinutes||0,priorityWeight:t.priorityWeight??3,...ganttMeta(t,d)});
   }
  }
- out.queue=(d.queue||[]).filter(t=>!t.memoDismissed&&!t.doneAt).map(t=>({externalKey:t.memoImportKey||'focus-plan:queue:'+t.id,sourceId:t.id,text:t.text,note:t.note||'',points:t.points??1,estimatedMinutes:t.estimatedMinutes||0,day:t.assignment?.day||null,list:t.assignment?.list||null}));
+ out.queue=(d.queue||[]).filter(t=>!t.memoDismissed&&!t.doneAt).map(t=>({externalKey:t.memoImportKey||'focus-plan:queue:'+t.id,sourceId:t.id,text:t.text,note:t.note||'',points:t.points??1,estimatedMinutes:t.estimatedMinutes||0,day:t.assignment?.day||null,list:t.assignment?.list||null,...ganttMeta(t,d)}));
  out.review=(d.memoReview?.series||[]).filter(s=>!s.stoppedAt).map(s=>{
   const r=(d.memoReview?.rounds||[]).filter(r=>r.seriesId===s.id&&r.status==='pending').sort((a,b)=>a.due-b.due)[0];
   return {externalKey:s.memoImportKey||'focus-plan:review:'+s.id,sourceId:s.id,text:s.text,note:s.note||'',points:s.points??1,estimatedMinutes:s.estimatedMinutes||0,list:s.list||'ideal',intervals:clone(s.intervals||[]),due:r?.due||null};
@@ -40,7 +46,7 @@ function collect(){
   const c=A.memoRecurrence.config(s,M().userDay())||s.revisions?.at(-1);
   return c?{externalKey:s.memoImportKey||'focus-plan:recurrence:'+s.id,sourceId:s.id,text:c.text,note:c.note||'',points:c.points??1,estimatedMinutes:c.estimatedMinutes||0,list:c.list||'ideal',rule:clone(c.rule),reviewMode:!!s.reviewMode,end:s.end||null}:null;
  }).filter(Boolean);
- out.projects=(d.memoProjects||[]).filter(p=>!p.archived).map(p=>({externalKey:p.memoImportKey||'focus-plan:projects:'+p.id,sourceId:p.id,text:p.text,note:p.note||'',memoGroup:p.memoGroup||'',memoGroupName:(d.memoTaskGroups||[]).find(g=>g.id===p.memoGroup)?.name||'',memoGanttStart:p.memoGanttStart||'',memoGanttEnd:p.memoGanttEnd||'',memoGanttDependencies:clone(p.memoGanttDependencies||[]),dependencyKeys:(p.memoGanttDependencies||[]).map(id=>{const dep=(d.memoProjects||[]).find(x=>x.id===id);return dep?.memoImportKey||'focus-plan:projects:'+id;})}));
+ out.projects=(d.memoProjects||[]).filter(p=>!p.archived).map(p=>({externalKey:p.memoImportKey||'focus-plan:projects:'+p.id,sourceId:p.id,text:p.text,note:p.note||'',memoGroup:p.memoGroup||'',memoGroupName:(d.memoTaskGroups||[]).find(g=>g.id===p.memoGroup)?.name||'',memoGanttStart:p.memoGanttStart||'',memoGanttEnd:p.memoGanttEnd||'',memoGanttDependencies:clone(p.memoGanttDependencies||[]),dependencyKeys:(p.memoGanttDependencies||[]).some(id=>id.startsWith('once:'))?[]:(p.memoGanttDependencies||[]).map(id=>{const dep=(d.memoProjects||[]).find(x=>x.id===id);return dep?.memoImportKey||'focus-plan:projects:'+id;})}));
  out.wishlist=(d.memoWishes||[]).filter(w=>!w.hidden&&!w.purchase).map(w=>({externalKey:w.memoImportKey||'focus-plan:wishlist:'+w.id,sourceId:w.id,name:w.name,cents:w.cents}));
  out.schedule=clone(d.memoSchedule?.items||[]);
  out.checkins=clone(d.checkins||[]);
@@ -103,14 +109,14 @@ function prepareOne(mod,raw){
   item.reviewMode=!!raw.reviewMode;item.end=item.reviewMode?null:raw.end||null;
   if(item.end&&!validDay(item.end))throw Error('周期结束日期无效');
  }
- if(mod==='projects'){
+ if(['required','ideal','extra','queue','projects'].includes(mod)){
   item.memoGanttStart=raw.memoGanttStart||'';item.memoGanttEnd=raw.memoGanttEnd||'';
   A.memoGantt.validate(null,item.memoGanttStart,item.memoGanttEnd,[]);
   item.memoGroupName=bounded(raw.memoGroupName||'',100).trim();
   item.memoGroup=bounded(raw.memoGroup||'',220);
   item.memoGanttDependencies=raw.memoGanttDependencies||[];
   item.dependencyKeys=raw.dependencyKeys||[];
-  if(!Array.isArray(item.memoGanttDependencies)||!Array.isArray(item.dependencyKeys)||item.memoGanttDependencies.length>20||item.dependencyKeys.length>20||item.memoGanttDependencies.some(x=>typeof x!=='string'||x.length>220)||item.dependencyKeys.some(x=>typeof x!=='string'||x.length>220))throw Error('长期项目依赖引用无效');
+  if(!Array.isArray(item.memoGanttDependencies)||!Array.isArray(item.dependencyKeys)||item.memoGanttDependencies.length>20||item.dependencyKeys.length>20||item.memoGanttDependencies.some(x=>typeof x!=='string'||x.length>220)||item.dependencyKeys.some(x=>typeof x!=='string'||x.length>220))throw Error('甘特图依赖引用无效');
  }
  return item;
 }
@@ -128,14 +134,21 @@ function preview(data,names){
    if(isDuplicate)out.skip++;else out.create++;
   }
  }
- // A module import is never allowed to silently discard dependency edges.
- const planned=out.rows.filter(r=>r.mod==='projects');
- const allExisting=existing('projects');
- const available=new Set([...allExisting.flatMap(p=>[p.id,p.memoImportKey,'focus-plan:projects:'+p.id].filter(Boolean)),...planned.flatMap(r=>[r.sourceId,r.key,r.key.replace(/^projects:/,''),'focus-plan:projects:'+r.sourceId].filter(Boolean))]);
- for(const row of planned){
+ // Validate references across all task modules before mutating stored data.
+ const linked=out.rows.filter(r=>['required','ideal','extra','queue','projects'].includes(r.mod));
+ const existingOnce=Object.values(S().data().days||{}).flatMap(d=>Object.values(d.tasks||{}).flat()).concat(S().data().queue||[],S().data().queueDone||[]);
+ const availableProject=new Set([...(S().data().memoProjects||[]).map(t=>t.id),...linked.filter(r=>r.mod==='projects').map(r=>r.sourceId)]);
+ const availableOnce=new Set([...existingOnce.map(t=>t.id),...linked.filter(r=>r.mod!=='projects').map(r=>r.sourceId)]);
+ const availableKeys=new Set([...linked.flatMap(r=>[r.key,r.sourceId,r.sourceId?'focus-plan:projects:'+r.sourceId:''].filter(Boolean)),...(S().data().memoProjects||[]).flatMap(p=>[p.memoImportKey,'focus-plan:projects:'+p.id].filter(Boolean))]);
+ for(const row of linked){
+  if(row.skip)continue;
   const refs=row.item.dependencyKeys.length?row.item.dependencyKeys:row.item.memoGanttDependencies;
-  const missing=refs.filter(ref=>!available.has(ref)&&!available.has(ref.startsWith('projects:')?ref:'projects:'+ref));
-  if(missing.length)throw Error('项目「'+row.item.text+'」存在缺失前置依赖：'+missing.join('、')+'。请一同导入依赖项目或从源文件中明确移除该关系。');
+  const missing=refs.filter(ref=>{
+   if(ref.startsWith('once:'))return !availableOnce.has(ref.slice(5));
+   if(ref.startsWith('project:'))return !availableProject.has(ref.slice(8));
+   return !availableProject.has(ref)&&!availableKeys.has(ref)&&!availableKeys.has(ref.startsWith('projects:')?ref:'projects:'+ref);
+  });
+  if(missing.length)throw Error('任务「'+row.item.text+'」存在缺失前置依赖：'+missing.join('、')+'。请同时导入依赖任务或显式移除关系。');
  }
  return out;
 }
@@ -164,19 +177,40 @@ function applyCore(plan){
    d.memoWishes=d.memoWishes||[];d.memoWishes.push({id:S().uid(),name:item.name,cents:item.cents,memoImportKey:key});
   }
  }
- // Resolve newly generated project IDs only after all projects are created.
- const imported=plan.rows.filter(r=>r.mod==='projects');
- const locate=ref=>{
-  const r=imported.find(x=>x.sourceId===ref||x.key===ref||x.key==='projects:'+ref||x.key.replace(/^projects:/,'')===ref);
-  if(r){const p=(d.memoProjects||[]).find(p=>p.memoImportKey===r.key||p.id===r.sourceId);if(p)return p;}
-  return (d.memoProjects||[]).find(p=>p.id===ref||p.memoImportKey===ref||p.memoImportKey==='projects:'+ref||'focus-plan:projects:'+p.id===ref)||null;
- };
- for(const row of imported){
+ // Restore category and planning metadata for all task types; keep the original task entity.
+ const linked=plan.rows.filter(r=>['required','ideal','extra','queue','projects'].includes(r.mod));
+ const locateRow=row=>existing(row.mod).find(x=>x.memoImportKey===row.key||row.sourceId&&x.id===row.sourceId);
+ for(const row of linked){
   if(row.skip)continue;
-  const target=(d.memoProjects||[]).find(p=>p.memoImportKey===row.key);
-  if(!target)throw Error('无法定位已导入项目：'+row.item.text);
+  const task=locateRow(row);if(!task)throw Error('无法定位导入任务：'+row.item.text);
+  const item=row.item,defined=d.memoTaskGroups||(d.memoTaskGroups=[]);
+  let group=defined.find(g=>g.id===item.memoGroup);
+  if(!group&&item.memoGroupName){group=defined.find(g=>g.name===item.memoGroupName);if(!group){group={id:S().uid(),name:item.memoGroupName};defined.push(group);}}
+  if(group)task.memoGroup=group.id;
+  if(item.memoGanttStart)task.memoGanttStart=item.memoGanttStart;
+  if(item.memoGanttEnd)task.memoGanttEnd=item.memoGanttEnd;
+ }
+ function resolveDependency(value){
+  let kind='project',ref=value;
+  if(ref.startsWith('once:')){kind='once';ref=ref.slice(5);}
+  else if(ref.startsWith('project:'))ref=ref.slice(8);
+  const matched=linked.find(row=>(kind==='once'?row.mod!=='projects':row.mod==='projects')&&
+   (row.sourceId===ref||row.key===ref||row.key==='projects:'+ref||row.key.endsWith(':'+ref)));
+  if(matched){const task=locateRow(matched);if(task)return kind==='once'?'once:'+task.id:task.id;}
+  if(kind==='once'){
+   const tasks=Object.values(d.days||{}).flatMap(day=>Object.values(day.tasks||{}).flat()).concat(d.queue||[],d.queueDone||[]);
+   const task=tasks.find(x=>x.id===ref);if(task)return 'once:'+task.id;
+  }else{
+   const task=(d.memoProjects||[]).find(x=>x.id===ref||x.memoImportKey===value||'focus-plan:projects:'+x.id===value||x.memoImportKey==='projects:'+value);
+   if(task)return task.id;
+  }
+  throw Error('前置依赖丢失：'+value);
+ }
+ for(const row of linked){
+  if(row.skip)continue;
+  const target=locateRow(row);if(!target)throw Error('无法定位导入任务：'+row.item.text);
   const refs=row.item.dependencyKeys.length?row.item.dependencyKeys:row.item.memoGanttDependencies;
-  const deps=refs.map(ref=>{const found=locate(ref);if(!found)throw Error('前置项目丢失：'+ref);return found.id});
+  const deps=refs.map(resolveDependency);
   target.memoGanttDependencies=A.memoGantt.validate(target,target.memoGanttStart||'',target.memoGanttEnd||'',deps).dependencies;
  }
  A.memoSchedule.invalidate?.();
