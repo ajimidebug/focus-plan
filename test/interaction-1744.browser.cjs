@@ -48,7 +48,8 @@ const server=http.createServer((req,res)=>{
    assert((await bar.getAttribute('aria-label')).includes('2026-11-02 — 2026-11-12'));
    const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
    assert(overflow<=1,'no page-wide overflow '+width);
-   await page.getByRole('button',{name:'编辑任务'}).first().click();
+   await page.locator('[data-gantt-quick="project:gantt-a"]').click();
+   await page.getByRole('button',{name:'编辑任务',exact:true}).click();
    await page.locator('#memo-gantt-start').waitFor({state:'attached'});
    assert.equal(await page.locator('#memo-gantt-start').inputValue(),'2026-11-02');
    await page.evaluate(()=>{const input=document.querySelector('#memo-gantt-end');input.value='2026-11-19';input.dispatchEvent(new Event('change',{bubbles:true}))});

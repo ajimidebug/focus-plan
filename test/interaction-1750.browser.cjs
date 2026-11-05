@@ -32,7 +32,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   assert.equal(await page.locator('.framework-overview .mw-completed .overview-habit').filter({hasText:'重置！'}).count(),0,'continuing habit not folded');
   assert.equal(await page.locator('.memo-gantt .gantt-group').count(),3,'one-off tasks appear in ungrouped Gantt');
   assert.equal(await page.locator('.memo-gantt .gantt-group[data-gantt-group=""]').evaluate(el=>el.open),false,'ungrouped defaults collapsed');
-  await page.locator('[data-gantt-filter="g-study"]').click();
+  await page.locator('[data-gantt-filter-select]').selectOption('g-study');
   assert.equal(await page.locator('.memo-gantt [data-gantt-row]').count(),2,'category filter returns only study projects');
   await page.locator('[data-gantt-quick="project:p-two"]').click();
   await page.evaluate(()=>{document.querySelector('#gq-end').value='2026-12-05'});

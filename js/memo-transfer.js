@@ -172,7 +172,7 @@ function applyCore(plan){
    const defined=d.memoTaskGroups||(d.memoTaskGroups=[]);
    let category=defined.find(g=>g.id===item.memoGroup);
    if(!category&&item.memoGroupName){category=defined.find(g=>g.name===item.memoGroupName);if(!category){category={id:S().uid(),name:item.memoGroupName};defined.push(category);}}
-   d.memoProjects.push({id:S().uid(),text:item.text,note:item.note,days:{},createdDay:today,memoImportKey:key,...(category?{memoGroup:category.id}:{}),...(item.memoGanttStart?{memoGanttStart:item.memoGanttStart,memoGanttEnd:item.memoGanttEnd}:{})});
+   d.memoProjects.push({id:S().uid(),text:item.text,note:item.note,days:{},createdDay:today,memoImportKey:key,...(category?{memoGroup:category.id}:{}),...(item.memoGanttStart?{memoGanttStart:item.memoGanttStart}:{}),...(item.memoGanttEnd?{memoGanttEnd:item.memoGanttEnd}:{})});
   }else if(mod==='wishlist'){
    d.memoWishes=d.memoWishes||[];d.memoWishes.push({id:S().uid(),name:item.name,cents:item.cents,memoImportKey:key});
   }

@@ -1,5 +1,7 @@
 import { createApp, h, markRaw, ref } from 'vue'
 import { Quasar, QDialog, QBtn, QDate, Notify } from 'quasar'
+import zhCN from 'quasar/lang/zh-CN'
+import baseIcons from 'quasar/icon-set/material-icons'
 import { Chart, registerables } from 'chart.js'
 import Papa from 'papaparse'
 import { z } from 'zod'
@@ -9,13 +11,18 @@ import interactionPlugin from '@fullcalendar/interaction'
 import zh from '@fullcalendar/core/locales/zh-cn'
 import TaskOverview from '../components/TaskOverview.vue'
 
+const leftIcon='M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z'
+const rightIcon='M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z'
+const downIcon='M7 10l5 5 5-5z'
+// Local SVG paths avoid downloading a Material Icons webfont for QDate.
+const dateIcons={...baseIcons,chevron:{...baseIcons.chevron,left:leftIcon,right:rightIcon},datetime:{...baseIcons.datetime,arrowLeft:leftIcon,arrowRight:rightIcon},arrow:{...baseIcons.arrow,dropdown:downIcon}}
 Chart.register(...registerables)
 const instances=new Map<Element,()=>void>()
 let screen:any, router:any, modalApp:any=null, modalRoot:HTMLElement|null=null, priorFocus:HTMLElement|null=null
 const A=()=>window.App
 const mount=(node:Element, component:any, props:any={})=>{
   instances.get(node)?.()
-  const app=createApp({render:()=>h(component,props)}).use(Quasar)
+  const app=createApp({render:()=>h(component,props)}).use(Quasar,{lang:zhCN,iconSet:dateIcons})
   app.mount(node)
   const dispose=()=>{app.unmount();instances.delete(node)}
   instances.set(node,dispose)
@@ -91,7 +98,7 @@ function openModal(title:string,bodyHTML:string,actionsHTML:string,opts:any={}) 
   screen.modalCount=1
   // The returned DOM is synchronous for existing domain form handlers. Quasar
   // takes ownership of placement, focus trapping and scroll locking on mount.
-  modalApp=createApp({render:()=>h(QDialog,{modelValue:true,persistent:true,noShake:true,noFocus:true,noRefocus:true,transitionShow:'fade',transitionHide:'fade',transitionDuration:0,onShow:focusInitial,role:'presentation','aria-modal':undefined},()=>h('div',{class:'framework-dialog-layer legacy-host',ref:(el:any)=>{if(el&&root.parentNode!==el){const focused=root.contains(document.activeElement)?document.activeElement as HTMLElement:null;el.append(root);focused?.focus({preventScroll:true})}}}))}).use(Quasar)
+  modalApp=createApp({render:()=>h(QDialog,{modelValue:true,persistent:true,noShake:true,noFocus:true,noRefocus:true,transitionShow:'fade',transitionHide:'fade',transitionDuration:0,onShow:focusInitial,role:'presentation','aria-modal':undefined},()=>h('div',{class:'framework-dialog-layer legacy-host',ref:(el:any)=>{if(el&&root.parentNode!==el){const focused=root.contains(document.activeElement)?document.activeElement as HTMLElement:null;el.append(root);focused?.focus({preventScroll:true})}}}))}).use(Quasar,{lang:zhCN,iconSet:dateIcons})
   const mountPoint=document.createElement('div');mountPoint.className='framework-dialog-mount';document.body.append(mountPoint)
   const app=modalApp,unmount=app.unmount.bind(app);let mounted=false
   app.unmount=()=>{if(mounted)unmount();mountPoint.remove()}

@@ -37,28 +37,28 @@ function optionsHtml(task,group,selected=[],cross=false){
 }
 function selectedDeps(modal){return [...modal.querySelectorAll('[data-gantt-dep]:checked')].map(x=>x.value)}
 function bindDeps(modal,task,groupSelector,container){
- const cross=modal.querySelector('[data-gantt-cross]');
+ const cross=modal.querySelector('[data-gantt-cross]'),counter=modal.querySelector('[data-gantt-dep-count]');
  let chosen=dependencies(task).slice();
- const update=()=>{chosen=[...new Set([...chosen,...selectedDeps(modal)])];container.innerHTML=optionsHtml(task,groupSelector.value,chosen,cross.checked);};
- container.addEventListener('change',e=>{if(e.target.matches('[data-gantt-dep]'))chosen=selectedDeps(modal)});
- groupSelector.addEventListener('change',update);cross.addEventListener('change',update);update();
+ const repaint=()=>{chosen=[...new Set([...chosen,...selectedDeps(modal)])];container.innerHTML=optionsHtml(task,groupSelector.value,chosen,cross.checked);if(counter)counter.textContent=chosen.length?chosen.length+' 项':'无';};
+ container.addEventListener('change',e=>{if(e.target.matches('[data-gantt-dep]')){chosen=selectedDeps(modal);if(counter)counter.textContent=chosen.length?chosen.length+' 项':'无';}});
+ groupSelector.addEventListener('change',repaint);cross.addEventListener('change',repaint);repaint();
  return ()=>selectedDeps(modal);
 }
 function dateFields(prefix,start,end){
- return '<div class="gantt-range-wrap"><p class="hint">第一次选开始，第二次选截止，再次点击重新选择。同日可作为一天；仅截止日可显示为里程碑。</p><div class="gantt-range-picker" data-gantt-picker="'+E(prefix)+'"></div><div class="memo-gantt-dates gantt-native-date"><label>开始日期<input type="date" id="'+E(prefix)+'-start" value="'+E(start||'')+'"></label><label>截止日期<input type="date" id="'+E(prefix)+'-end" value="'+E(end||'')+'"></label></div><p class="gantt-range-status" role="status"></p><div class="gantt-range-actions"><button class="btn btn-small" type="button" data-range-one>设为单日</button><button class="btn btn-small" type="button" data-range-deadline>仅截止日</button><button class="btn btn-small" type="button" data-range-clear>清空</button></div></div>';
+ const label=start&&end?start+' — '+end:end?'仅截止：'+end:'选择计划日期';
+ return '<div class="gantt-range-wrap"><details class="gantt-calendar-details"><summary><span class="gantt-date-label">'+E(label)+'</span><span aria-hidden="true">▾</span></summary><div class="gantt-range-picker" data-gantt-picker="'+E(prefix)+'"></div><div class="memo-gantt-dates gantt-native-date"><label>开始日期<input type="date" id="'+E(prefix)+'-start" value="'+E(start||'')+'"></label><label>截止日期<input type="date" id="'+E(prefix)+'-end" value="'+E(end||'')+'"></label></div><p class="gantt-range-status" role="status"></p><div class="gantt-range-actions"><button class="btn btn-small" type="button" data-range-one>设为单日</button><button class="btn btn-small" type="button" data-range-deadline>仅截止日</button><button class="btn btn-small" type="button" data-range-clear>清空</button></div></details></div>';
 }
 function bindDates(modal,prefix){
  const st=modal.querySelector('#'+prefix+'-start'),ed=modal.querySelector('#'+prefix+'-end');
- const wrap=st.closest('.gantt-range-wrap'),status=wrap.querySelector('.gantt-range-status'),picker=wrap.querySelector('[data-gantt-picker]');
- const label=()=>{status.textContent=st.value&&ed.value?st.value+' — '+ed.value:ed.value?'截止日：'+ed.value:st.value?'开始日：'+st.value+'（请选择截止日）':'未设定计划日期';};
+ const wrap=st.closest('.gantt-range-wrap'),status=wrap.querySelector('.gantt-range-status'),picker=wrap.querySelector('[data-gantt-picker]'),title=wrap.querySelector('.gantt-date-label');
+ const label=()=>{title.textContent=st.value&&ed.value?st.value+' — '+ed.value:ed.value?'仅截止：'+ed.value:st.value?'开始：'+st.value+'（请选截止）':'选择计划日期';status.textContent=st.value&&!ed.value?'继续选择截止日期；再选新日期可重设范围':'';};
  const set=(from,to)=>{st.value=from||'';ed.value=to||'';label()};
  wrap.querySelector('[data-range-one]').onclick=()=>{const day=st.value||ed.value||M().naturalDay();set(day,day);picker._ganttSet?.(day,day)};
  wrap.querySelector('[data-range-deadline]').onclick=()=>{const day=ed.value||st.value||M().naturalDay();set('',day);picker._ganttSet?.('',day)};
  wrap.querySelector('[data-range-clear]').onclick=()=>{set('','');picker._ganttSet?.('','')};
  st.onchange=ed.onchange=label;label();
- if(A.framework?.ganttRange){wrap.querySelector('.gantt-native-date').hidden=true;A.framework.ganttRange(picker,st.value,ed.value,set);}
+ if(A.framework?.ganttRange){wrap.querySelector('.gantt-native-date').hidden=true;A.framework.ganttRange(picker,st.value,ed.value,set)}
 }
-
 function validate(task,from,to,deps=[]){
  const start=from?dayNumber(from):null,end=to?dayNumber(to):null;
  if((from&&start===null)||(to&&end===null))throw Error('甘特图日期无效');
@@ -79,9 +79,9 @@ function validate(task,from,to,deps=[]){
 }
 function editor(modal,task,kind,list){
  const field=document.createElement('details');field.id='memo-gantt-fields';
- field.open=kind==='project'||!!(task?.memoGanttStart||task?.memoGanttEnd||(task?.memoGanttDependencies||[]).length);
+ field.open=false;
  field.innerHTML='<summary>甘特图计划与依赖（可选）</summary><label>甘特图分组<select id="memo-gantt-group"><option value="">未分组</option>'+groups().map(g=>'<option value="'+E(g.id)+'">'+E(g.name)+'</option>').join('')+'</select></label>'+dateFields('memo-gantt',task?.memoGanttStart,task?.memoGanttEnd)+
- '<label class="gantt-cross-label"><input type="checkbox" data-gantt-cross> 显示其他分组项目</label><div class="gantt-dependency-list" id="memo-gantt-dependency-list"></div><p class="hint">依赖只提示，不会自动调整安排、积分或计时。</p>';
+ '<details class="gantt-dependency-picker"><summary>前置任务 <span data-gantt-dep-count>无</span></summary><label class="gantt-cross-label"><input type="checkbox" data-gantt-cross> 显示其他分组项目</label><div class="gantt-dependency-list" id="memo-gantt-dependency-list"></div></details><p class="hint">依赖仅作提醒，不自动调整安排与积分。</p>';
  modal.querySelector('#mw-form-error').before(field);
  const group=field.querySelector('#memo-gantt-group');group.value=category(task||{});
  const outer=modal.querySelector('#task-group');if(outer){group.closest('label').hidden=true;group.value=outer.value;outer.addEventListener('change',()=>{group.value=outer.value;group.dispatchEvent(new Event('change'));});}
@@ -100,89 +100,83 @@ function apply(task,modal){
  task.memoGroup=modal.querySelector('#memo-gantt-group').value;
 }
 
+function monthDay(n,offset){
+ const d=new Date(n*DAY);return Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+offset,1)/DAY;
+}
 function model(now=Date.now()){
- const today=dayNumber(M().naturalDay(now)),all=nodes(),byKey=new Map(all.map(x=>[x.key,x]));
- const zoom=['month','quarter','year','all'].includes(pref('zoom','quarter'))?pref('zoom','quarter'):'quarter';
- const focus=dayNumber(pref('focus',M().naturalDay(now)))??today;
+ const today=dayNumber(M().naturalDay(now)),all=nodes();
+ const zoom=['month','quarter','year','all'].includes(pref('zoom-compact','month'))?pref('zoom-compact','month'):'month';
+ const focus=dayNumber(pref('focus-compact',M().naturalDay(now)))??today;
  const rows=all.map(n=>{
-  const explicitStart=dayNumber(n.task.memoGanttStart),explicitEnd=dayNumber(n.task.memoGanttEnd);
-  const inherited=dayNumber(n.day);
-  const start=explicitEnd!==null?explicitStart:inherited,end=explicitEnd!==null?explicitEnd:inherited;
+  const a=dayNumber(n.task.memoGanttStart),b=dayNumber(n.task.memoGanttEnd),inherited=dayNumber(n.day);
+  const start=b!==null?a:inherited,end=b!==null?b:inherited,valid=end!==null;
   const achieved=n.kind==='project'?!!n.task.memoGanttCompletedAt:!!(n.task.done||n.task.doneAt||n.task.doneDay);
   const completed=n.kind==='project'?Object.keys(n.task.days||{}).filter(day=>(n.task.days||{})[day]&&start!==null&&end!==null&&dayNumber(day)>=start&&dayNumber(day)<=end).length:0;
-  return {...n,start,end,valid:end!==null,point:start===null&&end!==null,achieved,completed,dependencies:dependencies(n.task),conflicts:[]};
+  return {...n,start,end,valid,point:start===null&&valid,inferred:b===null&&inherited!==null,achieved,completed,dependencies:dependencies(n.task),conflicts:[]};
  });
  const map=new Map(rows.map(x=>[x.key,x]));
- rows.forEach(n=>{n.conflicts=n.dependencies.map(normalizeKey).filter(key=>{const p=map.get(key);return !p||!p.achieved||(p.end!==null&&n.start!==null&&p.end>n.start);});});
+ for(const n of rows)n.conflicts=n.dependencies.map(normalizeKey).filter(key=>{const p=map.get(key);return !p||!p.achieved||(p.end!==null&&n.start!==null&&p.end>n.start)});
  rows.sort((a,b)=>Number(a.achieved)-Number(b.achieved)||(a.end??Infinity)-(b.end??Infinity)||a.title.localeCompare(b.title));
- const planned=rows.filter(x=>x.valid);
- const from=zoom==='all'?(planned.length?Math.min(today,...planned.map(p=>p.start??p.end)):today-7):focus-(zoom==='month'?10:zoom==='quarter'?30:120);
- const to=zoom==='all'?(planned.length?Math.max(today,...planned.map(p=>p.end)):today+30):focus+(zoom==='month'?50:zoom==='quarter'?180:730);
- return {from,to,now:today,focus,zoom,rows};
+ const months=zoom==='month'?1:zoom==='quarter'?6:zoom==='year'?24:0,planned=rows.filter(r=>r.valid);
+ const from=zoom==='all'?(planned.length?Math.min(today,...planned.map(x=>x.start??x.end))-7:today-7):monthDay(focus,0);
+ const to=zoom==='all'?(planned.length?Math.max(today,...planned.map(x=>x.end))+7:today+30):monthDay(focus,months)-1;
+ return {now:today,focus,zoom,from,to,rows};
 }
 function rowHtml(p,m,width){
- const total=Math.max(1,m.to-m.from+1),lo=p.valid?Math.max(m.from,p.start??p.end):null,hi=p.valid?Math.min(m.to,p.end):null;
- const visible=p.valid&&lo<=hi,left=visible?(lo-m.from)/total*100:0,bar=visible?(hi-lo+1)/total*100:0;
- const progress=p.valid&&p.start!==null?Math.max(0,Math.min(100,(m.now-p.start+1)/(p.end-p.start+1)*100)):0;
- const deps=p.dependencies.map(id=>{const n=locate(id);return n?(n.title+(n.group!==p.group?'（'+groupTitle(n.group)+'）':'')):'已删除的前置项目';});
- const label=p.valid?(p.point?'截止：'+dayString(p.end):dayString(p.start)+' — '+dayString(p.end))+(p.kind==='project'?' · 期间打卡 '+p.completed+' 次':' · 一次性'): '尚未设定计划日期';
- return '<div class="memo-gantt-item" data-gantt-row="'+E(p.key)+'"><div class="memo-gantt-name"><strong>'+E(p.title)+'</strong><div class="gantt-row-actions"><button class="btn btn-small" data-gantt-quick="'+E(p.key)+'">日期/依赖</button><button class="btn btn-small" data-gantt-edit="'+E(p.key)+'">编辑任务</button></div></div>'+
- '<div class="memo-gantt-lane" style="width:'+width+'px">'+(visible?'<span class="memo-gantt-bar'+(p.point?' gantt-milestone':'')+(p.achieved?' gantt-achieved':'')+'" data-gantt-bar-id="'+E(p.key)+'" style="left:'+left+'%;width:'+(p.point?'12px':bar+'%')+'" role="img" aria-label="计划 '+E(label)+'"><i style="width:'+progress+'%"></i></span>':'<span class="memo-gantt-unscheduled">'+(p.valid?'不在当前时间范围':'未设定日期')+'</span>')+'</div>'+
- '<small>'+E(label)+(p.achieved?' · 已完成':'')+(deps.length?' · 前置：'+E(deps.join('、')):'')+(p.conflicts.length?' · ⚠ 前置未完成或日期冲突':'')+'</small></div>';
+ const total=m.to-m.from+1,lo=p.valid?Math.max(p.start??p.end,m.from):null,hi=p.valid?Math.min(p.end,m.to):null;
+ const visible=p.valid&&lo<=hi,left=visible?(lo-m.from)/total*100:0,w=visible?(hi-lo+1)/total*100:0;
+ const label=p.point?'仅截止：'+dayString(p.end):p.valid?dayString(p.start)+' — '+dayString(p.end):'未排期';
+ const state=(p.inferred?'安排日':p.kind==='project'?'每日推进':'一次性')+(p.conflicts.length?' · ⚠ 前置异常':'')+(p.achieved?' · 已达成':'');
+ return '<div class="memo-gantt-item" data-gantt-row="'+E(p.key)+'"><button type="button" class="memo-gantt-name gantt-fixed" data-gantt-quick="'+E(p.key)+'" title="'+E(p.title)+'" aria-label="编辑 '+E(p.title)+'"><span class="gantt-task-title">'+E(p.title)+'</span><span class="gantt-task-meta">'+E(state)+'</span></button><div class="memo-gantt-lane" style="width:'+width+'px">'+
+  (visible?'<button type="button" class="memo-gantt-bar'+(p.point?' gantt-milestone':'')+(p.inferred?' gantt-inherited':'')+(p.achieved?' gantt-achieved':'')+'" data-gantt-bar-id="'+E(p.key)+'" data-gantt-bar-quick="'+E(p.key)+'" style="left:'+left+'%;width:'+(p.point?'12px':w+'%')+'" title="'+E(label)+'" aria-label="编辑 '+E(p.title)+' · '+E(label)+'"></button>':'<span class="memo-gantt-unscheduled">'+(p.valid?'不在本期':'未排期')+'</span>')+'</div></div>';
 }
 function overlay(m,width){
- const total=Math.max(1,m.to-m.from+1),x=day=>(day-m.from)/total*width;
+ const total=m.to-m.from+1,x=d=>(d-m.from)/total*width;
  let h='<div class="gantt-time-overlay" aria-hidden="true">';
  if(m.now>m.from)h+='<span class="gantt-past" style="width:'+Math.max(0,Math.min(width,x(m.now)))+'px"></span>';
  if(m.now>=m.from&&m.now<=m.to)h+='<span class="gantt-today-line" style="left:'+x(m.now)+'px"><small>今日</small></span>';
- const ms=A.ms?.list?.()||[],byDay=new Map();
- for(const item of ms){const date=item.due||item.end||item.start,d=dayNumber(date);if(d===null||d<m.from||d>m.to)continue;const values=byDay.get(d)||[];values.push(item.name);byDay.set(d,values);}
- for(const [day,titles] of byDay)h+='<span class="gantt-deadline-line" style="left:'+x(day)+'px" title="'+E(dayString(day)+' · '+titles.join('、'))+'"><small>'+E(titles.length===1?titles[0]:titles.length+'个截止日')+'</small></span>';
+ const byDay=new Map();
+ for(const item of A.ms?.list?.()||[]){const date=item.due||item.end||item.start,d=dayNumber(date);if(d===null||d<m.from||d>m.to)continue;const v=byDay.get(d)||[];v.push(item.name);byDay.set(d,v)}
+ let last=-Infinity;
+ for(const [day,names] of [...byDay].sort((a,b)=>a[0]-b[0])){const pos=x(day),show=pos-last>105;if(show)last=pos;h+='<span class="gantt-deadline-line" style="left:'+pos+'px" title="'+E(dayString(day)+' · '+names.join('、'))+'">'+(show?'<small>'+E(names.length===1?names[0]:names.length+'个截止日')+'</small>':'')+'</span>'}
  return h+'</div>';
 }
+let scrollPosition=null,selectedKey=null;
 function html(now=Date.now()){
- const m=model(now),selected=pref('filter','all'),allowed=new Set(['all','',...groups().map(g=>g.id)]);
- const filter=selected==='uncategorized'?'':allowed.has(selected)?selected:'all';
+ const m=model(now),raw=pref('filter','all'),allowed=new Set(['all','',...groups().map(g=>g.id)]),filter=raw==='uncategorized'?'':allowed.has(raw)?raw:'all';
  const categories=[{id:'',name:'未分组'},...groups().map(g=>({id:g.id,name:g.name}))];
- const width=Math.max(580,Math.min(11000,Math.max(1,m.to-m.from+1)*(m.zoom==='month'?20:m.zoom==='quarter'?9:m.zoom==='year'?2.8:3.1)));
- const nav='<div class="gantt-controls"><div class="gantt-filters"><button class="btn btn-small'+(filter==='all'?' btn-primary':'')+'" data-gantt-filter="all">全部</button>'+categories.filter(g=>m.rows.some(p=>p.group===g.id)).map(g=>'<button class="btn btn-small'+(filter===g.id?' btn-primary':'')+'" data-gantt-filter="'+E(g.id||'uncategorized')+'">'+E(g.name)+' ('+m.rows.filter(p=>p.group===g.id).length+')</button>').join('')+'</div>'+
- '<div class="gantt-timeline-controls"><label>范围 <select data-gantt-zoom><option value="month"'+(m.zoom==='month'?' selected':'')+'>月</option><option value="quarter"'+(m.zoom==='quarter'?' selected':'')+'>半年</option><option value="year"'+(m.zoom==='year'?' selected':'')+'>两年</option><option value="all"'+(m.zoom==='all'?' selected':'')+'>全部</option></select></label><button class="btn btn-small" data-gantt-navigate="-1">◀</button><button class="btn btn-small" data-gantt-navigate="0">今天</button><button class="btn btn-small" data-gantt-navigate="1">▶</button><button class="btn btn-small" data-gantt-create>＋ 项目</button><button class="btn btn-small" data-gantt-manage>管理分组</button></div></div>';
- const blocks=categories.filter(g=>(filter==='all'||filter===g.id)&&m.rows.some(p=>p.group===g.id)).map((g,index)=>{
-  const all=m.rows.filter(p=>p.group===g.id),k='group:'+g.id;
-  const open=pref(k,g.id===''?'closed':(filter!=='all'||index===1)?'open':'closed')==='open';
+ const dayPx=m.zoom==='month'?28:m.zoom==='quarter'?5:m.zoom==='year'?1.6:Math.max(.8,Math.min(8,750/(m.to-m.from+1)));
+ const width=Math.max(580,Math.min(11000,Math.ceil((m.to-m.from+1)*dayPx))),total=m.to-m.from+1;
+ const ticks=[];for(let d=m.from;d<=m.to;d++){const date=new Date(d*DAY),day=date.getUTCDate(),month=date.getUTCMonth()+1;let title='';if(m.zoom==='month'){if(day===1||day%3===0)title=day+'日'}else if(m.zoom==='quarter'){if(day===1)title=month+'月'}else if(day===1&&(m.zoom==='all'||month%2===1))title=month+'月';if(title)ticks.push('<span class="gantt-axis-tick" style="left:'+((d-m.from)/total*100)+'%">'+E(title)+'</span>')}
+ const selector='<select data-gantt-filter-select aria-label="选择甘特图分组"><option value="all"'+(filter==='all'?' selected':'')+'>全部 · '+m.rows.length+' 项</option>'+categories.filter(g=>m.rows.some(x=>x.group===g.id)).map(g=>'<option value="'+E(g.id||'uncategorized')+'"'+(filter===g.id?' selected':'')+'>'+E(g.name)+' · '+m.rows.filter(x=>x.group===g.id).length+' 项</option>').join('')+'</select>';
+ const menu='<details class="gantt-settings"><summary title="视图设置" aria-label="视图设置">⋯</summary><div class="gantt-settings-body"><label>范围<select data-gantt-zoom><option value="month"'+(m.zoom==='month'?' selected':'')+'>月</option><option value="quarter"'+(m.zoom==='quarter'?' selected':'')+'>半年</option><option value="year"'+(m.zoom==='year'?' selected':'')+'>两年</option><option value="all"'+(m.zoom==='all'?' selected':'')+'>全部</option></select></label><button class="btn btn-small" data-gantt-manage>管理分组</button></div></details>';
+ const nav='<div class="gantt-controls"><div class="gantt-topbar"><label class="gantt-select-wrap">'+selector+'</label><button class="btn btn-small" data-gantt-create aria-label="新建项目">＋</button>'+menu+'</div><div class="gantt-timeline-controls"><button class="btn btn-small" data-gantt-navigate="-1" aria-label="上一时间段">‹</button><span class="gantt-current-range">'+E(new Date(m.focus*DAY).getUTCFullYear()+'年'+(new Date(m.focus*DAY).getUTCMonth()+1)+'月')+'</span><button class="btn btn-small" data-gantt-navigate="1" aria-label="下一时间段">›</button><button class="btn btn-small" data-gantt-navigate="0">今天</button></div></div>';
+ const blocks=categories.filter(g=>(filter==='all'||filter===g.id)&&m.rows.some(x=>x.group===g.id)).map((g,index)=>{
+  const all=m.rows.filter(x=>x.group===g.id);
+  const open=pref('group:'+g.id,g.id===''?'closed':(filter!=='all'||index===1)?'open':'closed')==='open';
   const expanded=pref('all:'+g.id,'closed')==='open';
-  const visible=all.length>8&&!expanded?all.slice(0,5):all;
-  return '<details class="gantt-group" data-gantt-group="'+E(g.id)+'" '+(open?'open':'')+'><summary>'+E(g.name)+' · '+all.length+'项'+(all.length>8&&!expanded?'（显示前5项）':'')+'</summary><div class="gantt-group-body">'+visible.map(p=>rowHtml(p,m,width)).join('')+(all.length>8?'<button class="btn btn-small gantt-expand" data-gantt-expand="'+E(g.id||'uncategorized')+'">'+(expanded?'只显示前5项':'展开其余 '+(all.length-5)+' 项')+'</button>':'')+'</div></details>';
+  const active=all.filter(x=>!x.achieved&&x.valid&&x.end>=m.from&&(x.start??x.end)<=m.to);
+  const outside=all.filter(x=>!x.achieved&&x.valid&&(x.end<m.from||(x.start??x.end)>m.to));
+  const unplanned=all.filter(x=>!x.achieved&&!x.valid),achieved=all.filter(x=>x.achieved);
+  const visible=active.length>8&&!expanded?active.slice(0,5):active;
+  const fold=(title,items)=>items.length?'<details class="gantt-folded"><summary>'+title+' · '+items.length+' 项</summary>'+items.map(x=>rowHtml(x,m,width)).join('')+'</details>':'';
+  return '<details class="gantt-group" data-gantt-group="'+E(g.id)+'" '+(open?'open':'')+'><summary class="gantt-group-heading gantt-fixed">'+E(g.name)+' · '+all.length+' 项</summary><div class="gantt-group-body">'+visible.map(x=>rowHtml(x,m,width)).join('')+(active.length>8?'<button class="btn btn-small gantt-expand" data-gantt-expand="'+E(g.id||'uncategorized')+'">'+(expanded?'收起':'再显示 '+(active.length-5)+' 项')+'</button>':'')+fold('其他日期',outside)+fold('未排期',unplanned)+fold('已达成',achieved)+'</div></details>';
  }).join('');
  const open=pref('root','open')==='open';
- const result='<details class="card memo-gantt" data-gantt-root '+(open?'open':'')+'><summary>长期任务计划 · '+m.rows.length+' 项</summary>'+nav+'<p class="hint">红线：自然日今天；灰色：已经过去的日历；虚线：全局截止日期。依赖仅作提醒。</p>'+
- '<div class="memo-gantt-scroller" role="region" tabindex="0" aria-label="长期任务甘特时间轴"><div class="memo-gantt-track" style="position:relative;min-width:'+width+'px">'+overlay(m,width)+'<div class="memo-gantt-scale" style="width:'+width+'px"><span>'+E(dayString(m.from))+'</span><span>今天 '+E(dayString(m.now))+'</span><span>'+E(dayString(m.to))+'</span></div>'+blocks+'<svg class="memo-gantt-edges" aria-hidden="true" style="position:absolute;top:0;left:0;pointer-events:none;z-index:1;overflow:visible"></svg></div></div></details>';
- requestAnimationFrame(syncEdges);return result;
+ const result='<details class="card memo-gantt" data-gantt-root '+(open?'open':'')+'><summary>长期任务计划 · '+m.rows.length+' 项</summary>'+nav+'<div class="memo-gantt-scroller" role="region" tabindex="0" aria-label="长期任务甘特时间轴"><div class="memo-gantt-track" style="--gantt-axis-width:'+width+'px;--gantt-track-width:calc(var(--gantt-label-width) + '+width+'px)">'+overlay(m,width)+'<div class="memo-gantt-scale"><div class="gantt-scale-title gantt-fixed">任务</div><div class="gantt-axis-head">'+ticks.join('')+'</div></div>'+blocks+'<svg class="memo-gantt-edges" aria-hidden="true"></svg></div></div></details>';
+ requestAnimationFrame(()=>{const el=document.querySelector('#mw-today .memo-gantt-scroller');if(el){const at=(m.now>=m.from&&m.now<=m.to?m.now:m.focus)-m.from;el.scrollLeft=scrollPosition===null?Math.max(0,at/total*width-110):scrollPosition}syncEdges()});
+ return result;
 }
 function syncEdges(){
- const root=document.querySelector('#mw-today .memo-gantt[data-gantt-root]');
- if(!root||!root.open)return;
+ const root=document.querySelector('#mw-today .memo-gantt[data-gantt-root]');if(!root||!root.open)return;
  const track=root.querySelector('.memo-gantt-track'),svg=track?.querySelector('.memo-gantt-edges');if(!svg)return;
- const bounds=track.getBoundingClientRect();
  svg.setAttribute('width',String(track.scrollWidth));svg.setAttribute('height',String(track.scrollHeight));svg.textContent='';
- const defs=document.createElementNS('http://www.w3.org/2000/svg','defs'),marker=document.createElementNS('http://www.w3.org/2000/svg','marker'),tip=document.createElementNS('http://www.w3.org/2000/svg','path');
- marker.setAttribute('id','gantt-175-arrow');marker.setAttribute('markerWidth','7');marker.setAttribute('markerHeight','7');marker.setAttribute('refX','6');marker.setAttribute('refY','3');marker.setAttribute('orient','auto');
- tip.setAttribute('d','M0,0 L6,3 L0,6 Z');tip.setAttribute('fill','#bc903f');marker.appendChild(tip);defs.appendChild(marker);svg.appendChild(defs);
+ if(!selectedKey)return;
  const shown=new Map([...track.querySelectorAll('[data-gantt-row]')].filter(x=>x.getClientRects().length>0).map(x=>[x.dataset.ganttRow,x]));
- for(const [id,node] of shown){
-  const item=locate(id)?.task,bar=node.querySelector('.memo-gantt-bar');
-  if(!item||!bar)continue;
-  for(const preId of item.memoGanttDependencies||[]){
-   const previous=shown.get(normalizeKey(preId))?.querySelector('.memo-gantt-bar');if(!previous)continue;
-   const a=previous.getBoundingClientRect(),b=bar.getBoundingClientRect();
-   const x1=a.right-bounds.left,y1=a.top+a.height/2-bounds.top;
-   const x2=b.left-bounds.left,y2=b.top+b.height/2-bounds.top;
-   const mid=Math.max(x1+8,(x1+x2)/2);
-   const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-   path.setAttribute('d','M'+x1+','+y1+' H'+mid+' V'+y2+' H'+x2);
-   path.setAttribute('marker-end','url(#gantt-175-arrow)');path.setAttribute('fill','none');path.setAttribute('stroke','#bc903f');path.setAttribute('stroke-width','1.5');path.setAttribute('opacity','0.75');svg.appendChild(path);
-  }
- }
+ const task=locate(selectedKey)?.task,dest=shown.get(selectedKey)?.querySelector('.memo-gantt-bar');if(!task||!dest)return;
+ const bounds=track.getBoundingClientRect(),defs=document.createElementNS('http://www.w3.org/2000/svg','defs'),marker=document.createElementNS('http://www.w3.org/2000/svg','marker'),tip=document.createElementNS('http://www.w3.org/2000/svg','path');
+ marker.setAttribute('id','gantt-175-arrow');marker.setAttribute('markerWidth','7');marker.setAttribute('markerHeight','7');marker.setAttribute('refX','6');marker.setAttribute('refY','3');marker.setAttribute('orient','auto');tip.setAttribute('d','M0,0 L6,3 L0,6 Z');tip.setAttribute('fill','#bc903f');marker.appendChild(tip);defs.appendChild(marker);svg.appendChild(defs);
+ for(const id of task.memoGanttDependencies||[]){const old=shown.get(normalizeKey(id))?.querySelector('.memo-gantt-bar');if(!old)continue;const a=old.getBoundingClientRect(),b=dest.getBoundingClientRect(),x1=a.right-bounds.left,y1=a.top+a.height/2-bounds.top,x2=b.left-bounds.left,y2=b.top+b.height/2-bounds.top,mid=Math.max(x1+8,(x1+x2)/2);const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d','M'+x1+','+y1+' H'+mid+' V'+y2+' H'+x2);path.setAttribute('marker-end','url(#gantt-175-arrow)');path.setAttribute('fill','none');path.setAttribute('stroke','#bc903f');path.setAttribute('stroke-width','1.5');svg.appendChild(path)}
 }
 function createProject(){
  A.memoWorkspace.editor(null,'extra');
@@ -197,14 +191,14 @@ function quick(key){
  const modal=A.ui.openModal('甘特图计划 · '+task.text,
   '<label>所属分组<select id="gq-group">'+cats.map(g=>'<option value="'+E(g.id)+'"'+(n.group===g.id?' selected':'')+'>'+E(g.name)+'</option>').join('')+'</select></label>'+
   dateFields('gq',task.memoGanttStart,task.memoGanttEnd)+
-  '<label class="gantt-cross-label"><input type="checkbox" data-gantt-cross> 显示其他分组项目</label><div id="gq-dependency-list" class="gantt-dependency-list"></div>'+
+  '<details class="gantt-dependency-picker"><summary>前置任务 <span data-gantt-dep-count>无</span></summary><label class="gantt-cross-label"><input type="checkbox" data-gantt-cross> 显示其他分组项目</label><div id="gq-dependency-list" class="gantt-dependency-list"></div></details>'+
   (n.kind==='project'?'<label><input type="checkbox" id="gq-achieved"'+(task.memoGanttCompletedAt?' checked':'')+'> 长期项目已达成（独立于每日打卡）</label>':'<p class="hint">一次性任务的完成状态仍由三栏打卡控制。</p>')+
   '<p class="hint">计划日期不自动更改三栏安排和历史计时。</p><p id="gq-error" role="alert"></p>',
-  '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">保存计划</button>',{lock:true,wide:true});
+  '<button class="btn" data-act="cancel">取消</button><button class="btn" data-act="edit-full">编辑任务</button><button class="btn btn-primary" data-act="save">保存计划</button>',{lock:true,wide:true});
  const q=x=>modal.querySelector('#gq-'+x);
  bindDeps(modal,task,q('group'),q('dependency-list'));bindDates(modal,'gq');
  let saving=false;
- A.ui.bindActions({cancel:()=>{if(!saving&&!A.memoActions.busy())A.ui.closeModal();},save:async()=>{
+ A.ui.bindActions({cancel:()=>{if(!saving&&!A.memoActions.busy())A.ui.closeModal();},'edit-full':()=>{if(!saving&&!A.memoActions.busy())A.memoWorkspace.editor(n.ref,n.ref.list||'extra');},save:async()=>{
   if(saving)return;saving=true;
   try{
    const ok=await A.memoActions.commit(()=>{
@@ -223,7 +217,7 @@ function quick(key){
  }});
 }
 /* Pointer interactions only on mouse/pen; touch uses the accessible date editor. */
-let drag=null;
+let drag=null,lastDragFinish=0;
 function proposeDates(id,start,end,operation){
  const task=locate(id)?.task;if(!task)return;
  try{validate(task,start,end,task.memoGanttDependencies||[])}catch(e){return A.ui.toast(e.message)}
@@ -271,6 +265,7 @@ document.addEventListener('pointerup',e=>{
  if(from===null||to===null)return;
  const first=dayString(from+(current.mode==='end'?0:delta));
  const last=dayString(to+(current.mode==='start'?0:delta));
+ lastDragFinish=Date.now();
  proposeDates(current.id,first,last,current.mode==='start'?'调整开始日期':current.mode==='end'?'调整截止日期':'整体平移日期');
 });
 document.addEventListener('pointercancel',()=>{if(drag){drag.bar.style.outline='';drag=null}});
@@ -279,20 +274,17 @@ function refresh(){A.memoWorkspace.render();requestAnimationFrame(syncEdges);}
 document.addEventListener('click',e=>{
  const rootSummary=e.target.closest?.('.memo-gantt[data-gantt-root] > summary');
  if(rootSummary){const details=rootSummary.closest('[data-gantt-root]');if(details)setPref('root',details.open?'closed':'open');}
- const b=e.target.closest('[data-gantt-create],[data-gantt-manage],[data-gantt-quick],[data-gantt-filter],[data-gantt-navigate],[data-gantt-expand]');if(!b)return;
+ const b=e.target.closest('[data-gantt-create],[data-gantt-manage],[data-gantt-quick],[data-gantt-bar-quick],[data-gantt-filter],[data-gantt-navigate],[data-gantt-expand]');if(!b)return;
  e.preventDefault();e.stopPropagation();
  if(b.hasAttribute('data-gantt-create'))return createProject();
  if(b.hasAttribute('data-gantt-manage'))return A.memoOrganize?.openGroups?.();
- if(b.hasAttribute('data-gantt-quick'))return quick(b.dataset.ganttQuick);
+ if(b.hasAttribute('data-gantt-quick')||b.hasAttribute('data-gantt-bar-quick')){if(b.hasAttribute('data-gantt-bar-quick')&&Date.now()-lastDragFinish<750)return;selectedKey=b.dataset.ganttQuick||b.dataset.ganttBarQuick;requestAnimationFrame(syncEdges);return quick(selectedKey)}
  if(b.hasAttribute('data-gantt-filter')){setPref('filter',b.dataset.ganttFilter);return refresh();}
  if(b.hasAttribute('data-gantt-expand')){const id=b.dataset.ganttExpand==='uncategorized'?'':b.dataset.ganttExpand;setPref('all:'+id,pref('all:'+id,'closed')==='open'?'closed':'open');return refresh();}
- if(b.hasAttribute('data-gantt-navigate')){
-  const step=Number(b.dataset.ganttNavigate);
-  const m=model();const count=m.zoom==='month'?30:m.zoom==='quarter'?90:m.zoom==='year'?365:90;
-  setPref('focus',step===0?M().naturalDay():dayString(m.focus+step*count));return refresh();
- }
+ if(b.hasAttribute('data-gantt-navigate')){const step=Number(b.dataset.ganttNavigate),m=model(),months=m.zoom==='month'?1:m.zoom==='quarter'?6:m.zoom==='year'?24:6;setPref('focus-compact',step===0?M().naturalDay():dayString(monthDay(m.focus,step*months)));scrollPosition=null;return refresh();}
 });
-document.addEventListener('change',e=>{const input=e.target.closest('[data-gantt-zoom]');if(!input)return;setPref('zoom',input.value);refresh();});
+document.addEventListener('change',e=>{const x=e.target.closest('[data-gantt-zoom],[data-gantt-filter-select]');if(!x)return;if(x.matches('[data-gantt-zoom]')){setPref('zoom-compact',x.value);scrollPosition=null;}else setPref('filter',x.value);refresh();});
+document.addEventListener('scroll',e=>{if(e.target?.matches?.('#mw-today .memo-gantt-scroller'))scrollPosition=e.target.scrollLeft},true);
 document.addEventListener('toggle',e=>{const target=e.target;if(target.matches?.('.gantt-group')){setPref('group:'+target.dataset.ganttGroup,target.open?'open':'closed');requestAnimationFrame(syncEdges);}
  if(target.matches?.('.memo-gantt[data-gantt-root]')){setPref('root',target.open?'open':'closed');requestAnimationFrame(syncEdges);}
 },true);
