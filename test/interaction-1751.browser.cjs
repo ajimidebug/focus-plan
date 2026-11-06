@@ -30,6 +30,31 @@ const server=http.createServer((req,res)=>{
   assert(initial.some(n=>n.key==='once:once-ideal'&&n.group==='g-math'),'dated one-off shown in Gantt');
   assert(initial.some(n=>n.key==='once:once-queue'),'unscheduled queue item shown in Gantt');
   assert(initial.some(n=>n.key==='once:once-ungrouped'&&n.group===''),'ungrouped one-off shown');
+
+  // 175.6: one-screen overview, shared axis geometry, day/weekday markers and saved display mode.
+  assert.equal(await page.locator('[data-gantt-display="detail"]').getAttribute('aria-pressed'),'true','existing users start in detailed mode');
+  const ganttRecords=await page.evaluate(()=>JSON.stringify({projects:App.store.data().memoProjects,days:App.store.data().days,ledger:App.store.data().ledger}));
+  await page.locator('[data-gantt-display="overview"]').click();
+  for(const width of [320,360,390,430]){
+   await page.setViewportSize({width,height:844});
+   await page.waitForTimeout(100);
+   const geometry=await page.evaluate(()=>{
+    const root=document.querySelector('.memo-gantt'),scroller=root?.querySelector('.memo-gantt-scroller'),axis=root?.querySelector('.gantt-axis-head'),overlay=root?.querySelector('.gantt-time-overlay'),lane=root?.querySelector('[data-gantt-row="project:p-math"] .memo-gantt-lane'),band=root?.querySelector('.gantt-date-band');
+    if(!root||!scroller||!axis||!overlay||!lane||!band)return null;
+    const a=axis.getBoundingClientRect(),b=overlay.getBoundingClientRect(),c=lane.getBoundingClientRect();
+    return {mode:root.dataset.ganttMode,scroll:scroller.scrollWidth-scroller.clientWidth,documentOverflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,axisError:Math.max(Math.abs(a.left-b.left),Math.abs(c.left-b.left),Math.abs(a.width-b.width),Math.abs(c.width-b.width)),bands:root.querySelectorAll('.gantt-date-band').length,ticks:root.querySelectorAll('.gantt-axis-tick').length};
+   });
+   assert(geometry&&geometry.mode==='overview'&&geometry.scroll<=2&&geometry.documentOverflow<=2&&geometry.axisError<=2&&geometry.bands>1&&geometry.ticks>=2,'overview fits and lines up at '+width+': '+JSON.stringify(geometry));
+  }
+  await page.setViewportSize({width:390,height:844});
+  await page.evaluate(()=>App.memoWorkspace.render());
+  assert.equal(await page.locator('[data-gantt-display="overview"]').getAttribute('aria-pressed'),'true','overview preference survives workspace re-render');
+  assert.equal(await page.evaluate(()=>localStorage.getItem('gantt-175:display-mode')),'overview','overview stored locally');
+  assert.equal(await page.evaluate(()=>JSON.stringify({projects:App.store.data().memoProjects,days:App.store.data().days,ledger:App.store.data().ledger})),ganttRecords,'switching display mode does not modify task or ledger data');
+  await page.locator('[data-gantt-display="detail"]').click();
+  const detailScroll=await page.locator('.memo-gantt-scroller').evaluate(x=>({scroll:x.scrollWidth,client:x.clientWidth}));
+  assert(detailScroll.scroll>detailScroll.client+50,'detailed mode retains independent horizontal scrolling');
+  assert.equal(await page.locator('[data-gantt-display="detail"]').getAttribute('aria-pressed'),'true','detailed mode selected');
   assert.equal(await page.locator('.memo-gantt[data-gantt-root]').evaluate(x=>x.open),true,'Gantt initially open');
   assert.equal(await page.locator('.gantt-group[data-gantt-group=""]').evaluate(x=>x.open),false,'ungrouped collapsed by default');
   assert.equal(await page.locator('.gantt-today-line').count(),1,'today marker visible');
