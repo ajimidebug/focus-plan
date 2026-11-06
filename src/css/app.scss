@@ -425,3 +425,12 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .memo-gantt .gantt-axis-tick{bottom:5px;}
 .memo-gantt .gantt-date-band{position:absolute;top:0;bottom:0;pointer-events:none;border-right:1px solid color-mix(in srgb,var(--muted) 12%,transparent);background:color-mix(in srgb,var(--muted) 1.5%,transparent);}
 .memo-gantt .gantt-date-band.is-shaded{background:color-mix(in srgb,var(--muted) 9%,transparent);}
+
+/* 175.6 overview: no horizontal track overflow, preserve detail behavior. */
+.memo-gantt[data-gantt-mode="overview"] .memo-gantt-scroller{overflow-x:hidden;overscroll-behavior-x:none;}
+.memo-gantt[data-gantt-mode="overview"] .memo-gantt-track,.memo-gantt[data-gantt-mode="overview"] .gantt-group{width:100%;min-width:0;}
+.memo-gantt[data-gantt-mode="overview"] .memo-gantt-scale,.memo-gantt[data-gantt-mode="overview"] .memo-gantt-item{width:100%;min-width:0;grid-template-columns:var(--gantt-label-width) minmax(0,1fr);}
+.memo-gantt[data-gantt-mode="overview"] .gantt-axis-head,.memo-gantt[data-gantt-mode="overview"] .memo-gantt-lane{width:100%!important;min-width:0;}
+.memo-gantt[data-gantt-mode="overview"] .gantt-deadline-badge{transform:translateX(-50%);}
+.memo-gantt[data-gantt-mode="overview"] .memo-gantt-bar.gantt-compact-dot{width:6px!important;min-width:6px;height:10px;top:22px;border-radius:5px;}
+@media(max-width:360px){.memo-gantt .gantt-display-modes .gantt-display-option{min-width:52px;padding:5px 6px;}.memo-gantt .gantt-viewbar .gantt-timeline-controls{justify-content:flex-start;}}
