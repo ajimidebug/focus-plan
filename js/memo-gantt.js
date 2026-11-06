@@ -122,23 +122,30 @@ function model(now=Date.now()){
  const to=zoom==='all'?(planned.length?Math.max(today,...planned.map(x=>x.end))+7:today+30):monthDay(focus,months)-1;
  return {now:today,focus,zoom,from,to,rows};
 }
+function compactName(value){const letters=[...String(value||'')];return letters.length>5?letters.slice(0,5).join('')+'…':letters.join('');}
 function rowHtml(p,m,width){
  const total=m.to-m.from+1,lo=p.valid?Math.max(p.start??p.end,m.from):null,hi=p.valid?Math.min(p.end,m.to):null;
  const visible=p.valid&&lo<=hi,left=visible?(lo-m.from)/total*100:0,w=visible?(hi-lo+1)/total*100:0;
  const label=p.point?'仅截止：'+dayString(p.end):p.valid?dayString(p.start)+' — '+dayString(p.end):'未排期';
  const state=(p.inferred?'安排日':p.kind==='project'?'每日推进':'一次性')+(p.conflicts.length?' · ⚠ 前置异常':'')+(p.achieved?' · 已达成':'');
- return '<div class="memo-gantt-item" data-gantt-row="'+E(p.key)+'"><button type="button" class="memo-gantt-name gantt-fixed" data-gantt-quick="'+E(p.key)+'" title="'+E(p.title)+'" aria-label="编辑 '+E(p.title)+'"><span class="gantt-task-title">'+E(p.title)+'</span><span class="gantt-task-meta">'+E(state)+'</span></button><div class="memo-gantt-lane" style="width:'+width+'px">'+
+ return '<div class="memo-gantt-item" data-gantt-row="'+E(p.key)+'"><button type="button" class="memo-gantt-name gantt-fixed" data-gantt-quick="'+E(p.key)+'" title="'+E(p.title)+'" aria-label="编辑 '+E(p.title)+'"><span class="gantt-task-title">'+E(compactName(p.title))+'</span>'+(p.conflicts.length?'<span class="gantt-task-alert" aria-label="前置任务异常">!</span>':'')+'</button><div class="memo-gantt-lane" style="width:'+width+'px">'+
   (visible?'<button type="button" class="memo-gantt-bar'+(p.point?' gantt-milestone':'')+(p.inferred?' gantt-inherited':'')+(p.achieved?' gantt-achieved':'')+'" data-gantt-bar-id="'+E(p.key)+'" data-gantt-bar-quick="'+E(p.key)+'" style="left:'+left+'%;width:'+(p.point?'12px':w+'%')+'" title="'+E(label)+'" aria-label="编辑 '+E(p.title)+' · '+E(label)+'"></button>':'<span class="memo-gantt-unscheduled">'+(p.valid?'不在本期':'未排期')+'</span>')+'</div></div>';
 }
 function overlay(m,width){
  const total=m.to-m.from+1,x=d=>(d-m.from)/total*width;
- let h='<div class="gantt-time-overlay" aria-hidden="true">';
+ let h='<div class="gantt-time-overlay">';
  if(m.now>m.from)h+='<span class="gantt-past" style="width:'+Math.max(0,Math.min(width,x(m.now)))+'px"></span>';
  if(m.now>=m.from&&m.now<=m.to)h+='<span class="gantt-today-line" style="left:'+x(m.now)+'px"><small>今日</small></span>';
  const byDay=new Map();
- for(const item of A.ms?.list?.()||[]){const date=item.due||item.end||item.start,d=dayNumber(date);if(d===null||d<m.from||d>m.to)continue;const v=byDay.get(d)||[];v.push(item.name);byDay.set(d,v)}
+ for(const item of A.ms?.list?.()||[]){const date=item.due||item.end||item.start,d=dayNumber(date);if(d===null||d<m.from||d>m.to)continue;const v=byDay.get(d)||[];v.push(item);byDay.set(d,v)}
  let last=-Infinity;
- for(const [day,names] of [...byDay].sort((a,b)=>a[0]-b[0])){const pos=x(day),show=pos-last>105;if(show)last=pos;h+='<span class="gantt-deadline-line" style="left:'+pos+'px" title="'+E(dayString(day)+' · '+names.join('、'))+'">'+(show?'<small>'+E(names.length===1?names[0]:names.length+'个截止日')+'</small>':'')+'</span>'}
+ for(const [day,items] of [...byDay].sort((a,b)=>a[0]-b[0])){
+  const pos=x(day),show=pos-last>23;if(show)last=pos;
+  const title=dayString(day)+' · '+items.map(v=>v.name).join('、');
+  const initial=items.length>1?'多':String(items[0].name||'截').slice(0,1);
+  h+='<span class="gantt-deadline-line" style="left:'+pos+'px" title="'+E(title)+'">'+
+    (show?'<button type="button" class="gantt-deadline-badge" data-gantt-deadline="'+E(dayString(day))+'" aria-label="'+E(title)+'">'+E(initial)+'</button>':'')+'</span>';
+ }
  return h+'</div>';
 }
 let scrollPosition=null,selectedKey=null;
@@ -274,6 +281,8 @@ function refresh(){A.memoWorkspace.render();requestAnimationFrame(syncEdges);}
 document.addEventListener('click',e=>{
  const rootSummary=e.target.closest?.('.memo-gantt[data-gantt-root] > summary');
  if(rootSummary){const details=rootSummary.closest('[data-gantt-root]');if(details)setPref('root',details.open?'closed':'open');}
+ const marker=e.target.closest?.('[data-gantt-deadline]');
+ if(marker){e.preventDefault();e.stopPropagation();return A.ms?.openDay?.(marker.dataset.ganttDeadline);}
  const b=e.target.closest('[data-gantt-create],[data-gantt-manage],[data-gantt-quick],[data-gantt-bar-quick],[data-gantt-filter],[data-gantt-navigate],[data-gantt-expand]');if(!b)return;
  e.preventDefault();e.stopPropagation();
  if(b.hasAttribute('data-gantt-create'))return createProject();

@@ -213,6 +213,10 @@
       if (['__proto__', 'constructor', 'prototype'].indexOf(k) < 0) clean[k] = d[k];
     });
     clean.settings = Object.assign(defaultSettings(), d.settings);
+    if(clean.memoExecutionQueue!==undefined){
+      const q=clean.memoExecutionQueue;
+      if(!Array.isArray(q)||q.length>1000||q.some(x=>!x||!x.ref||!['task','queue','project','daily','checkin'].includes(x.ref.kind)||typeof x.ref.id!=='string'||!x.ref.id||(['task','project','daily','checkin'].includes(x.ref.kind)&&!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(x.ref.day||''))||(x.ref.kind==='task'&&!['required','ideal','extra'].includes(x.ref.list))||(x.pinned!==undefined&&typeof x.pinned!=='boolean')))throw Error('执行队列备份结构异常');
+    }
     if(d.memoIdealDefaultVersion!==undefined&&d.memoIdealDefaultVersion!==1)throw new Error('理想任务默认值版本不兼容');
     Object.keys(clean.days).forEach(function (key) {
       const old = clean.days[key];

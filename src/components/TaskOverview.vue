@@ -15,6 +15,7 @@ function visibleGroupRows(g:any){return g.rows.length>8&&!showAllGroup(g.id)?g.r
 function toggleGroup(id:string){const next=!showAllGroup(id);groupExpansion.value={...groupExpansion.value,[id]:next};try{localStorage.setItem('task-group:limit:'+id,next?'open':'closed')}catch{}}
 function choose(offset:number){const m=A().memoCore;A().memoWorkspace.setDay(m.shiftDay(m.userDay(),offset))}
 function dateChanged(e:Event){A().memoWorkspace.setDay((e.target as HTMLInputElement).value)}
+function milestoneClick(event:Event){const b=(event.target as HTMLElement).closest<HTMLElement>('[data-ms-edit]');if(b)A().ms?.edit?.(b.dataset.msEdit)}
 function pressed(offset:number){const m=A().memoCore;return props.day===m.shiftDay(m.userDay(),offset)}
 function habitRow(it:any,r:any,n:number,day:string){
  const mode=A().memoPenalty?.policy(it,day).mode||'reward'
@@ -40,6 +41,10 @@ const columns=computed(()=>{void props.revision;return lists.map(col=>{
 </script>
 <template>
   <section class="mw-overview framework-overview" aria-label="三栏任务概览">
+    <div class="ms-featured">
+      <div class="ms-featured-header"><strong>截止日期</strong><button type="button" class="btn btn-small" @click.stop="A().ms?.openList?.()">全部／管理</button></div>
+      <div class="ms-featured-items" v-html="A().ms?.featuredHTML?.()||'<small>暂无即将到期的截止日期</small>'" @click.stop="milestoneClick"></div>
+    </div>
     <div class="overview-heading"><h2>{{Number(day.slice(5,7))}}月{{Number(day.slice(8))}}日 周{{weekday}}</h2>
       <div class="mw-toolbar mw-date-header">
         <input id="mw-day" type="date" aria-label="任务日期" :value="day" @change="dateChanged" />
