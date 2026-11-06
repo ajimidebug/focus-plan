@@ -18,4 +18,5 @@ const labels=computed(()=>[A().tasks?.carryTagHTML?.(props.x.task),A().tasks?.le
     <template v-for="g in x.task.groups||[]" :key="g.id"><small class="t-ctx grp">{{g.name}} · {{(g.subs||[]).filter((s:any)=>s.done===true).length}}/{{(g.subs||[]).length}}</small><small v-for="sub in g.subs||[]" :key="sub.id" class="t-ctx sub">· {{sub.text}}{{sub.done===true?' ✓':sub.done===false?' ✗':''}}</small></template>
     <small v-for="sub in x.task.subs||[]" :key="sub.id" class="t-ctx sub">· {{sub.text}}（限{{sub.minutes}}分）{{sub.done===true?' ✓':sub.done===false?' ✗':''}}</small>
   </q-btn>
+  <button v-if="!done&&!x.deferred" type="button" class="overview-exec-add" aria-label="加入执行队列" @click.stop="A().memoExecutionQueue.add(x.ref)">＋队列</button>
 </template>
