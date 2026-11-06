@@ -42,12 +42,11 @@ function removeCore(ref){
 function reorderCore(ref,action){
  const q=state(),k=key(ref),i=q.findIndex(x=>x?.ref&&key(x.ref)===k);
  if(i<0)throw Error('任务已从队列移除');
- const x=q.splice(i,1)[0];
- if(action==='pin'){x.pinned=!x.pinned;q.splice(x.pinned?0:q.filter(y=>y.pinned).length,0,x);return;}
- if(action==='tail'){x.pinned=false;q.push(x);return;}
- const eligible=q.map((y,j)=>({y,j})).filter(v=>!!v.y.pinned===!!x.pinned);
- const target=action==='up'?eligible.filter(v=>v.j<i).at(-1):eligible.find(v=>v.j>=i);
- if(target){q.splice(target.j,0,x);}else q.splice(action==='up'?0:q.length,0,x);
+ const x=q[i];
+ if(action==='pin'){q.splice(i,1);x.pinned=!x.pinned;q.splice(x.pinned?0:q.filter(y=>y.pinned).length,0,x);return;}
+ if(action==='tail'){q.splice(i,1);x.pinned=false;q.push(x);return;}
+ const j=i+(action==='up'?-1:1);
+ if(j>=0&&j<q.length&&!!q[j].pinned===!!x.pinned)[q[i],q[j]]=[q[j],q[i]];
 }
 function onComplete(event){
  const ref={kind:event.kind,id:event.sourceId,day:event.sourceDay,list:event.sourceList};
