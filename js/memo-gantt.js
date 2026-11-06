@@ -172,7 +172,8 @@ function axisTicks(m,pixels){
  let upper='',lower='',lastUpper=-Infinity,lastLower=-Infinity;
  const mark=(level,day,label,gap)=>{
   const px=axisPercent(day,m)/100*pixels;
-  if(px-(level==='top'?lastUpper:lastLower)<gap)return;
+  const reserve=Math.min(88,Math.max(24,Array.from(label).length*9));
+  if(px<0||pixels-px<reserve||px-(level==='top'?lastUpper:lastLower)<gap)return;
   const h='<span class="'+(level==='top'?'gantt-axis-period':'gantt-axis-tick')+'" style="left:'+axisPercent(day,m)+'%" title="'+E(dayString(day))+'">'+E(label)+'</span>';
   if(level==='top'){upper+=h;lastUpper=px;}else{lower+=h;lastLower=px;}
  };
@@ -276,7 +277,7 @@ function html(now=Date.now()){
 function syncEdges(){
  const root=document.querySelector('#mw-today .memo-gantt[data-gantt-root]');if(!root||!root.open)return;
  const track=root.querySelector('.memo-gantt-track'),svg=track?.querySelector('.memo-gantt-edges');if(!svg)return;
- svg.setAttribute('width',String(track.scrollWidth));svg.setAttribute('height',String(track.scrollHeight));svg.textContent='';
+ svg.setAttribute('width',String(track.clientWidth));svg.setAttribute('height',String(track.scrollHeight));svg.textContent='';
  if(!selectedKey)return;
  const shown=new Map([...track.querySelectorAll('[data-gantt-row]')].filter(x=>x.getClientRects().length>0).map(x=>[x.dataset.ganttRow,x]));
  const task=locate(selectedKey)?.task,dest=shown.get(selectedKey)?.querySelector('.memo-gantt-bar');if(!task||!dest)return;
