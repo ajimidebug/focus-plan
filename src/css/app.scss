@@ -409,3 +409,37 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .memo-gantt .gantt-deadline-line{pointer-events:none;}
 .memo-gantt .gantt-deadline-badge{position:absolute;left:2px;top:13px;min-width:22px;height:22px;padding:1px 4px;border:1px solid #ad8140;border-radius:5px;background:var(--card);color:#986b24;font-size:12px;font-weight:700;cursor:pointer;pointer-events:auto;}
 @media(max-width:480px){.memo-gantt{--gantt-label-width:76px;}.mw-exec-info{flex-basis:135px;}.mw-exec-actions{margin-left:12px;}.mw-exec-item{align-items:start;}}
+
+/* 175.6 Gantt display modes and shared calendar geometry. */
+.memo-gantt .gantt-viewbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:7px;min-width:0;}
+.memo-gantt .gantt-display-modes{display:inline-flex;gap:2px;flex:none;padding:2px;border:1px solid var(--line);border-radius:9px;background:var(--card);}
+.memo-gantt .gantt-display-modes .gantt-display-option{min-height:40px;min-width:56px;border:0;border-radius:7px;background:transparent;color:var(--ink);font-size:13px;}
+.memo-gantt .gantt-display-modes .gantt-display-option.is-selected{background:color-mix(in srgb,var(--primary) 18%,var(--card));box-shadow:inset 0 0 0 1px var(--primary);}
+.memo-gantt .gantt-display-modes .gantt-display-option:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
+.memo-gantt .gantt-viewbar .gantt-timeline-controls{flex:1 1 185px;min-width:0;justify-content:flex-end;flex-wrap:wrap;}
+.memo-gantt .memo-gantt-scale,.memo-gantt .gantt-axis-head{height:52px;}
+.memo-gantt .gantt-scale-title{padding:18px 6px;}
+.memo-gantt .gantt-axis-head{overflow:hidden;}
+.memo-gantt .gantt-axis-period,.memo-gantt .gantt-axis-tick{position:absolute;display:block;white-space:nowrap;max-width:100%;line-height:16px;font-size:10px;pointer-events:none;color:var(--muted);transform:translateX(3px);}
+.memo-gantt .gantt-axis-period{top:4px;font-weight:650;}
+.memo-gantt .gantt-axis-tick{bottom:5px;}
+.memo-gantt .gantt-date-band{position:absolute;top:0;bottom:0;pointer-events:none;border-right:1px solid color-mix(in srgb,var(--muted) 12%,transparent);background:color-mix(in srgb,var(--muted) 1.5%,transparent);}
+.memo-gantt .gantt-date-band.is-shaded{background:color-mix(in srgb,var(--muted) 9%,transparent);}
+
+/* 175.6 overview: no horizontal track overflow, preserve detail behavior. */
+.memo-gantt[data-gantt-mode="overview"] .memo-gantt-scroller{overflow-x:hidden;overscroll-behavior-x:none;}
+.memo-gantt[data-gantt-mode="overview"] .memo-gantt-track,.memo-gantt[data-gantt-mode="overview"] .gantt-group{width:100%;min-width:0;}
+.memo-gantt[data-gantt-mode="overview"] .memo-gantt-scale,.memo-gantt[data-gantt-mode="overview"] .memo-gantt-item{width:100%;min-width:0;grid-template-columns:var(--gantt-label-width) minmax(0,1fr);}
+.memo-gantt[data-gantt-mode="overview"] .gantt-axis-head,.memo-gantt[data-gantt-mode="overview"] .memo-gantt-lane{width:100%!important;min-width:0;}
+.memo-gantt[data-gantt-mode="overview"] .gantt-deadline-badge{transform:translateX(-50%);}
+.memo-gantt[data-gantt-mode="overview"] .memo-gantt-bar.gantt-compact-dot{width:6px!important;min-width:6px;height:10px;top:22px;border-radius:5px;}
+@media(max-width:360px){.memo-gantt .gantt-display-modes .gantt-display-option{min-width:52px;padding:5px 6px;}.memo-gantt .gantt-viewbar .gantt-timeline-controls{justify-content:flex-start;}}
+
+/* 175.6 narrow overview: sticky group headings must never exceed track width. */
+.memo-gantt[data-gantt-mode="overview"] .gantt-group>summary,
+.memo-gantt[data-gantt-mode="overview"] .gantt-folded>summary{
+ width:100%;max-width:100%;min-width:0;box-sizing:border-box;
+}
+
+/* Prevent SVG intrinsic 300px width from expanding narrow overview tracks. */
+.memo-gantt .memo-gantt-edges{width:100%;max-width:100%;}
