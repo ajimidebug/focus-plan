@@ -47,7 +47,7 @@ const server=http.createServer((req,res)=>{
   assert(order1753,'execution queue between task columns and Gantt');
   assert.equal(await page.locator('.gantt-deadline-badge').count(),1,'global deadline initial rendered');
   assert.equal(await page.locator('.gantt-deadline-badge').first().textContent(),'考','global deadline first character');
-  assert(await page.locator('.overview-exec-add').count()>0,'three-column entry to queue exists');
+  assert.equal(await page.locator('.overview-exec-add').count(),0,'three-column cards have no permanent queue button');
   const beforeExec=await page.evaluate(()=>{
     const d=App.store.data();return {ledger:d.ledger.length,events:(d.memoEvents||[]).length,queue:d.queue.length};
   });
@@ -70,6 +70,39 @@ const server=http.createServer((req,res)=>{
   assert(afterSkip.task,'skip preserves original task');
   assert.equal(afterSkip.ledger,beforeExec.ledger,'skip creates no ledger entry');
   assert.equal(afterSkip.events,beforeExec.events,'skip creates no completion event');
+  // 175.4: habit in three-column plans becomes one execution, not a copied task.
+  await page.evaluate(()=>{
+    const A=App,d=A.store.data(),day='2026-11-06';
+    d.checkins.push({id:'habit-1754',text:'重置习惯',points:1,target:1,rewardLimit:99,days:{}});
+    (d.memoHabitPlans||(d.memoHabitPlans=[])).push({id:'hp-1754',habitId:'habit-1754',mode:'daily',from:day,list:'ideal',target:1});
+    A.memoWorkspace.render();
+  });
+  await page.locator('[data-mw="exec-pick"]').first().click();
+  assert.equal(await page.locator('.mw-exec-picker-column').count(),3,'picker contains compact three columns');
+  assert.equal(await page.locator('.mw-exec-candidate').filter({hasText:'重置习惯'}).count(),1,'planned habits are selectable');
+  await page.locator('.mw-exec-candidate').filter({hasText:'重置习惯'}).locator('input').check();
+  assert.match(await page.locator('#mw-exec-selected').textContent(),/1 项/);
+  await page.locator('[data-act="save"]').last().click();
+  await page.waitForFunction(()=>!App.memoActions.busy());
+  const beforeHabit=await page.evaluate(()=>{
+    const d=App.store.data(),e=d.memoExecutionQueue.find(x=>x.ref.kind==='checkin');
+    return {count:e?.habitCount,day:e?.ref.day,ledger:d.ledger.length};
+  });
+  assert.equal(beforeHabit.count,0,'habit count snapshot starts from zero');
+  assert.equal(beforeHabit.day,'2026-11-06','habit queue item has user-day');
+  // Simulate the authoritative checkin increment, then transaction pruning.
+  await page.evaluate(()=>{const A=App,d=A.store.data();d.checkins.find(x=>x.id==='habit-1754').days['2026-11-06']=1;A.memoWorkspace.pruneExec();A.memoWorkspace.render();});
+  assert.equal(await page.locator('.mw-exec-item').count(),0,'habit checkin removes only this execution');
+  assert.equal(await page.evaluate(()=>App.store.data().ledger.length),beforeHabit.ledger,'queue pruning never issues points');
+  // Reuse normal queue task to verify the actions dialog stays inside the viewport.
+  await page.evaluate(()=>App.memoWorkspace.execAdd({kind:'task',id:'once-ungrouped',day:'2026-11-06',list:'required'}));
+  await page.locator('.mw-exec-item [data-mw="exec-menu"]').click();
+  assert.equal(await page.locator('[data-exec-action="pin"]').count(),1,'queue actions use a modal rather than an overflow popup');
+  const menuRect=await page.locator('.mw-exec-menu-list').boundingBox();
+  assert(menuRect&&menuRect.x>=0&&menuRect.x+menuRect.width<=392,'menu stays inside the viewport');
+  await page.locator('[data-act="close"]').last().click();
+  await page.locator('.mw-exec-item [data-mw="exec-skip"]').click();
+  await page.waitForFunction(()=>!App.memoActions.busy());
   await page.waitForFunction(()=>!App.memoActions.busy());
   await page.evaluate(()=>App.ms.openList());
   await page.locator('[data-act="pin"][data-id="ddl-1"]').click();

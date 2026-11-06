@@ -290,6 +290,21 @@
     const detail=document.createElement('details');detail.className='execution-detail';const title=document.createElement('summary');title.textContent='查看执行时段（确认时更新）';const pre=document.createElement('pre');pre.textContent=timingSnapshot(spec,Date.parse(at)).executionText;detail.append(title,pre);m.querySelector('.action-passage').after(detail);
     const editButton=document.createElement('button');editButton.type='button';editButton.className='btn';editButton.textContent='编辑任务';editButton.onclick=()=>{if(textarea.value!==initialText||remark.value.trim())return App.ui.toast('请先完成本次记录，再编辑任务');App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list});};if(spec.kind!=='checkin')m.querySelector('.modal-actions').prepend(editButton);
     const ref={kind:spec.kind,id:spec.id,day:spec.day,list:spec.list};
+    if(spec.kind!=='checkin'||(spec.day===M().userDay()&&habitPlan)){
+      const enqueue=document.createElement('button');enqueue.type='button';enqueue.className='btn';
+      enqueue.classList.add('ma-enqueue');
+      enqueue.textContent=App.memoWorkspace.execHas(ref)?'已入队':'加入队列';
+      enqueue.disabled=App.memoWorkspace.execHas(ref);
+      enqueue.onclick=async()=>{
+        if(committing||unsettled||App.memoActions.busy())return;
+        remember();enqueue.disabled=true;
+        try{
+          if(await App.memoWorkspace.execAdd(ref)){enqueue.textContent='已入队';App.ui.toast('已加入执行队列');}
+          else if(!App.memoWorkspace.execHas(ref))enqueue.disabled=false;
+        }catch(e){m.querySelector('#memo-action-error').textContent=e.message;enqueue.disabled=false;}
+      };
+      m.querySelector('.action-task-title').after(enqueue);
+    }
     function saveEstimate(){const n=Number(m.querySelector('#ma-estimate').value)||0;if(n<0||n>1440)throw Error('预计用时应在0—1440分钟之间');const task=App.memoSchedule.find(ref);if(!task)throw Error('任务已移动或停用');if(['checkin','project','daily'].includes(spec.kind))(task.memoEstimatedDays||(task.memoEstimatedDays={}))[spec.day||M().userDay()]=n;else task.estimatedMinutes=n;}
     const timerButton=m.querySelector('#ma-timer');
     function timerState(){const t=App.memoSchedule.timing(ref),candidate=t.session,active=candidate?.status!=='ended'?candidate:null;
