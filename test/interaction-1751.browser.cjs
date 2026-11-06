@@ -77,6 +77,13 @@ const server=http.createServer((req,res)=>{
     (d.memoHabitPlans||(d.memoHabitPlans=[])).push({id:'hp-1754',habitId:'habit-1754',mode:'daily',from:day,list:'ideal',target:1});
     A.memoWorkspace.render();
   });
+  // Regression: opening a planned habit must initialize both modal actions.
+  const habitRow=page.locator('.framework-overview .overview-habit').filter({hasText:'重置习惯'});
+  await habitRow.click();
+  assert.equal(await page.locator('.task-action-modal [data-act="commit"]').count(),1,'planned habit confirmation opens');
+  await page.locator('.task-action-modal [data-act="cancel"]').click();
+  await page.locator('.task-action-modal').waitFor({state:'hidden'});
+  assert.equal(await page.evaluate(()=>Number(App.store.data().checkins.find(x=>x.id==='habit-1754').days['2026-11-06']||0)),0,'cancelling a habit confirmation leaves count unchanged');
   await page.locator('[data-mw="exec-pick"]').first().click();
   assert.equal(await page.locator('.mw-exec-picker-column').count(),3,'picker contains compact three columns');
   assert.equal(await page.locator('.mw-exec-candidate').filter({hasText:'重置习惯'}).count(),1,'planned habits are selectable');
@@ -90,10 +97,18 @@ const server=http.createServer((req,res)=>{
   });
   assert.equal(beforeHabit.count,0,'habit count snapshot starts from zero');
   assert.equal(beforeHabit.day,'2026-11-06','habit queue item has user-day');
-  // Simulate the authoritative checkin increment, then transaction pruning.
-  await page.evaluate(()=>{const A=App,d=A.store.data();d.checkins.find(x=>x.id==='habit-1754').days['2026-11-06']=1;A.memoWorkspace.pruneExec();A.memoWorkspace.render();});
+  // Real confirmation, not a simulated count increment, must succeed and prune the queue.
+  await habitRow.click();
+  await page.locator('.task-action-modal [data-act="commit"]').click();
+  await page.waitForFunction(()=>!App.memoActions.busy());
+  await page.locator('.task-action-modal').waitFor({state:'hidden'});
+  const afterHabit=await page.evaluate(()=>{
+    const d=App.store.data(),it=d.checkins.find(x=>x.id==='habit-1754');
+    return {count:Number(it.days['2026-11-06']||0),events:(d.memoEvents||[]).filter(x=>x.kind==='checkin'&&x.sourceId===it.id&&x.active).length};
+  });
+  assert.equal(afterHabit.count,1,'planned habit actually checks in');
+  assert.equal(afterHabit.events,1,'habit checkin writes an event');
   assert.equal(await page.locator('.mw-exec-item').count(),0,'habit checkin removes only this execution');
-  assert.equal(await page.evaluate(()=>App.store.data().ledger.length),beforeHabit.ledger,'queue pruning never issues points');
   // Reuse normal queue task to verify the actions dialog stays inside the viewport.
   await page.evaluate(()=>App.memoWorkspace.execAdd({kind:'task',id:'once-ungrouped',day:'2026-11-06',list:'required'}));
   await page.locator('.mw-exec-item [data-mw="exec-menu"]').click();
