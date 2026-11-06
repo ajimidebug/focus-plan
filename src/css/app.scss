@@ -369,6 +369,7 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .mw-exec-candidate.is-added{opacity:.63;cursor:default;}
 .mw-exec-picker-empty{font-size:11px;color:var(--muted);padding:6px 2px;}
 .mw-exec-picker-tabs{display:none;}
+.task-action-modal .ma-enqueue{display:inline-flex;align-items:center;min-height:36px;margin:4px 0 8px;max-width:100%;white-space:normal;}
 .mw-exec-menu-list{display:grid;gap:6px;}
 .mw-exec-menu-action{width:100%;min-height:44px;justify-content:flex-start;text-align:left;white-space:normal;overflow-wrap:anywhere;}
 .mw-exec-menu-action.is-danger{color:var(--danger,#b64040);}
