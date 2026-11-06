@@ -73,6 +73,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>App.ms.openList());
   await page.locator('[data-act="pin"][data-id="ddl-1"]').click();
   assert.equal(await page.evaluate(()=>App.store.data().milestones[0].pinned),true,'global deadline pins without changing due date');
+  await page.locator('#mw-deadlines .is-pinned').waitFor({state:'visible',timeout:5000});
   assert.equal(await page.locator('#mw-deadlines .is-pinned').count(),1,'pinned deadline appears above three columns');
   await page.locator('[data-act="close"]').last().click();
   await page.evaluate(()=>App.memoWorkspace.assignmentEditor({kind:'task',id:'once-ungrouped',day:'2026-11-06',list:'required'}));
