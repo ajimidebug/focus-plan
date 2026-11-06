@@ -39,6 +39,48 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('.mw-inline-waiting').getByText('待安排的原始任务').count(),1);
   const order=await page.evaluate(()=>{const a=document.querySelector('.memo-gantt'),b=document.querySelector('.mw-inline-waiting');return !!(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING)});
   assert(order,'waiting area follows Gantt');
+
+  const order1753=await page.evaluate(()=>{
+    const a=document.querySelector('.mw-exec-board'),b=document.querySelector('.memo-gantt'),c=document.querySelector('.framework-overview');
+    return !!(a&&b&&c&&(c.compareDocumentPosition(a)&Node.DOCUMENT_POSITION_FOLLOWING)&&(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING));
+  });
+  assert(order1753,'execution queue between task columns and Gantt');
+  assert.equal(await page.locator('.gantt-deadline-badge').count(),1,'global deadline initial rendered');
+  assert.equal(await page.locator('.gantt-deadline-badge').first().textContent(),'考','global deadline first character');
+  assert(await page.locator('.overview-exec-add').count()>0,'three-column entry to queue exists');
+  const beforeExec=await page.evaluate(()=>{
+    const d=App.store.data();return {ledger:d.ledger.length,events:(d.memoEvents||[]).length,queue:d.queue.length};
+  });
+  await page.evaluate(async()=>{
+    await App.memoWorkspace.execAdd({kind:'task',id:'once-ungrouped',day:'2026-11-06',list:'required'});
+  });
+  const afterAdd=await page.evaluate(()=>{
+    const d=App.store.data();
+    return {rows:d.memoExecutionQueue,stillInThreeCols:!!d.days['2026-11-06'].tasks.required.find(t=>t.id==='once-ungrouped'),queue:d.queue.length};
+  });
+  assert.equal(afterAdd.rows.length,1,'reference queue has one entry');
+  assert(afterAdd.stillInThreeCols,'adding to execution queue keeps authoritative task');
+  assert.equal(afterAdd.queue,beforeExec.queue,'adding does not create old queue task');
+  assert.equal(await page.locator('.mw-exec-item').count(),1,'execution queue card appears');
+  await page.locator('.mw-exec-item [data-mw="exec-skip"]').click();
+  const afterSkip=await page.evaluate(()=>{
+    const d=App.store.data();return {length:(d.memoExecutionQueue||[]).length,task:!!d.days['2026-11-06'].tasks.required.find(t=>t.id==='once-ungrouped'),ledger:d.ledger.length,events:(d.memoEvents||[]).length};
+  });
+  assert.equal(afterSkip.length,0,'skip removes reference');
+  assert(afterSkip.task,'skip preserves original task');
+  assert.equal(afterSkip.ledger,beforeExec.ledger,'skip creates no ledger entry');
+  assert.equal(afterSkip.events,beforeExec.events,'skip creates no completion event');
+  await page.evaluate(()=>App.ms.openList());
+  await page.locator('[data-act="pin"][data-id="ddl-1"]').click();
+  assert.equal(await page.evaluate(()=>App.store.data().milestones[0].pinned),true,'global deadline pins without changing due date');
+  assert.equal(await page.locator('#mw-deadlines .is-pinned').count(),1,'pinned deadline appears above three columns');
+  await page.locator('[data-act="close"]').last().click();
+  await page.evaluate(()=>App.memoWorkspace.assignmentEditor({kind:'task',id:'once-ungrouped',day:'2026-11-06',list:'required'}));
+  assert.equal(await page.locator('.mw-assign-week [data-ma-pick-day]').count(),7,'weekly assignment is directly visible');
+  await page.locator('[data-ma-pick-day="2026-11-08"]').click();
+  assert.equal(await page.locator('#ma-day').inputValue(),'2026-11-08','date shortcut selects day');
+  await page.locator('[data-act="cancel"]').last().click();
+
   const geo=await page.evaluate(()=>{const row=document.querySelector('[data-gantt-row="project:p-math"]'),overlay=document.querySelector('.gantt-time-overlay'),lane=row?.querySelector('.memo-gantt-lane'),label=row?.querySelector('.memo-gantt-name');if(!row||!overlay||!lane||!label)return null;const a=overlay.getBoundingClientRect(),b=lane.getBoundingClientRect(),c=label.getBoundingClientRect();return {delta:Math.abs(a.left-b.left),sameRow:Math.abs(c.top-b.top)<1,uncovered:c.left>=document.querySelector('.memo-gantt-scroller').getBoundingClientRect().left-2}});
   assert(geo&&geo.delta<2&&geo.sameRow&&geo.uncovered,'fixed task column aligns with shared date axis: '+JSON.stringify(geo));
   await page.locator('[data-gantt-quick="once:once-ideal"]').click();
