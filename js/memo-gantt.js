@@ -127,6 +127,7 @@ function customRange(now=Date.now()){
 function model(now=Date.now()){
  const today=dayNumber(M().naturalDay(now)),all=nodes();
  const zoom=['month','quarter','year','all','custom'].includes(pref('zoom-compact','month'))?pref('zoom-compact','month'):'month';
+ const display=['overview','detail'].includes(pref('display-mode','detail'))?pref('display-mode','detail'):'detail';
  const focus=dayNumber(pref('focus-compact',M().naturalDay(now)))??today;
  const rows=all.map(n=>{
   const a=dayNumber(n.task.memoGanttStart),b=dayNumber(n.task.memoGanttEnd),inherited=dayNumber(n.day);
@@ -142,25 +143,90 @@ function model(now=Date.now()){
  const custom=zoom==='custom'?customRange(now):null;
  const from=custom?custom.from:zoom==='all'?(planned.length?Math.min(today,...planned.map(x=>x.start??x.end))-7:today-7):monthDay(focus,0);
  const to=custom?custom.to:zoom==='all'?(planned.length?Math.max(today,...planned.map(x=>x.end))+7:today+30):monthDay(focus,months)-1;
- return {now:today,focus,zoom,from,to,rows,custom};
+ return {now:today,focus,zoom,display,from,to,rows,custom};
+}
+// All layers share UTC natural-day boundaries. Day N starts at N / total, not its center.
+function axisPercent(day,m){return (day-m.from)/(m.to-m.from+1)*100;}
+function axisNext(day,unit){
+ const d=new Date(day*DAY),y=d.getUTCFullYear(),month=d.getUTCMonth();
+ if(unit==='day')return day+1;
+ if(unit==='week')return day+7-(d.getUTCDay()+6)%7;
+ if(unit==='month')return Date.UTC(y,month+1,1)/DAY;
+ return Date.UTC(y+1,0,1)/DAY;
+}
+function axisBands(m,pixels){
+ const total=m.to-m.from+1;
+ const unit=total<=62&&pixels/total>=5?'day':total<=400&&pixels*7/total>=6?'week':total<=3650&&pixels*30/total>=6?'month':'year';
+ let result='',i=0;
+ for(let day=m.from;day<=m.to&&i<400;i++){
+  const next=Math.min(axisNext(day,unit),m.to+1);
+  if(next<=day)break;
+  const left=axisPercent(day,m),size=(next-day)/total*100;
+  result+='<span class="gantt-date-band'+(i%2?' is-shaded':'')+'" style="left:'+left+'%;width:'+size+'%" aria-hidden="true"></span>';
+  day=next;
+ }
+ return result;
+}
+function axisTicks(m,pixels){
+ const total=m.to-m.from+1,pxDay=pixels/total,weekdays=['日','一','二','三','四','五','六'];
+ let upper='',lower='',lastUpper=-Infinity,lastLower=-Infinity;
+ const mark=(level,day,label,gap)=>{
+  const px=axisPercent(day,m)/100*pixels;
+  if(px-(level==='top'?lastUpper:lastLower)<gap)return;
+  const h='<span class="'+(level==='top'?'gantt-axis-period':'gantt-axis-tick')+'" style="left:'+axisPercent(day,m)+'%" title="'+E(dayString(day))+'">'+E(label)+'</span>';
+  if(level==='top'){upper+=h;lastUpper=px;}else{lower+=h;lastLower=px;}
+ };
+ for(let day=m.from;day<=m.to;day=axisNext(day,'month')){
+  const d=new Date(day*DAY),month=d.getUTCMonth()+1;
+  mark('top',day,(day===m.from||month===1?d.getUTCFullYear()+'年':'')+month+'月',64);
+ }
+ if(total<=45&&pxDay>=23){
+  const step=Math.max(1,Math.ceil(46/pxDay));
+  for(let day=m.from;day<=m.to;day+=step){
+   const d=new Date(day*DAY);
+   mark('bottom',day,(d.getUTCMonth()+1)+'/'+d.getUTCDate()+' 周'+weekdays[d.getUTCDay()],40);
+  }
+ }else if(total<=200&&pixels*7/total>=26){
+  mark('bottom',m.from,'起 '+dayString(m.from).slice(5).replace('-','/'),45);
+  const first=m.from+(8-new Date(m.from*DAY).getUTCDay())%7;
+  for(let day=first;day<=m.to;day+=7){
+   const d=new Date(day*DAY);
+   mark('bottom',day,(d.getUTCMonth()+1)+'/'+d.getUTCDate()+' 周一',45);
+  }
+ }else if(total<=7300){
+  for(let day=m.from;day<=m.to;day=axisNext(day,'month')){
+   const d=new Date(day*DAY),month=d.getUTCMonth()+1;
+   mark('bottom',day,month+'月',38);
+  }
+ }else{
+  for(let day=m.from;day<=m.to;day=axisNext(day,'year')){
+   mark('bottom',day,new Date(day*DAY).getUTCFullYear()+'年',45);
+  }
+ }
+ return upper+lower;
 }
 function rowHtml(p,m,width){
  const total=m.to-m.from+1,lo=p.valid?Math.max(p.start??p.end,m.from):null,hi=p.valid?Math.min(p.end,m.to):null;
- const visible=p.valid&&lo<=hi,left=visible?(lo-m.from)/total*100:0,w=visible?(hi-lo+1)/total*100:0;
+ const visible=p.valid&&lo<=hi,left=visible?axisPercent(lo,m):0,w=visible?(hi-lo+1)/total*100:0;
  const label=p.point?'仅截止：'+dayString(p.end):p.valid?dayString(p.start)+' — '+dayString(p.end):'未排期';
  const state=(p.inferred?'安排日':p.kind==='project'?'每日推进':'一次性')+(p.conflicts.length?' · ⚠ 前置异常':'')+(p.achieved?' · 已达成':'');
+ const tiny=visible&&!p.point&&m.display==='overview'&&w*m.axisPixels/100<6;
  return '<div class="memo-gantt-item" data-gantt-row="'+E(p.key)+'"><button type="button" class="memo-gantt-name gantt-fixed" data-gantt-quick="'+E(p.key)+'" title="'+E(p.title)+'" aria-label="编辑 '+E(p.title)+'"><span class="gantt-task-title">'+E(Array.from(p.title).slice(0,5).join('')+(Array.from(p.title).length>5?'…':''))+'</span>'+(p.conflicts.length?'<span class="gantt-task-warning" aria-label="前置依赖异常">⚠</span>':'')+'</button><div class="memo-gantt-lane" style="width:'+width+'px">'+
-  (visible?'<button type="button" class="memo-gantt-bar'+(p.point?' gantt-milestone':'')+(p.inferred?' gantt-inherited':'')+(p.achieved?' gantt-achieved':'')+'" data-gantt-bar-id="'+E(p.key)+'" data-gantt-bar-quick="'+E(p.key)+'" style="left:'+left+'%;width:'+(p.point?'12px':w+'%')+'" title="'+E(label)+'" aria-label="编辑 '+E(p.title)+' · '+E(label)+'"></button>':'<span class="memo-gantt-unscheduled">'+(p.valid?'不在本期':'未排期')+'</span>')+'</div></div>';
+  (visible?'<button type="button" class="memo-gantt-bar'+(p.point?' gantt-milestone':'')+(p.inferred?' gantt-inherited':'')+(p.achieved?' gantt-achieved':'')+(tiny?' gantt-compact-dot':'')+'" data-gantt-bar-id="'+E(p.key)+'" data-gantt-bar-quick="'+E(p.key)+'" style="left:'+left+'%;width:'+(p.point?'12px':w+'%')+'" title="'+E(label)+'" aria-label="编辑 '+E(p.title)+' · '+E(label)+'"></button>':'<span class="memo-gantt-unscheduled">'+(p.valid?'不在本期':'未排期')+'</span>')+'</div></div>';
 }
-function overlay(m,width){
- const total=m.to-m.from+1,x=d=>(d-m.from)/total*width;
- let h='<div class="gantt-time-overlay">';
- if(m.now>m.from)h+='<span class="gantt-past" style="width:'+Math.max(0,Math.min(width,x(m.now)))+'px"></span>';
- if(m.now>=m.from&&m.now<=m.to)h+='<span class="gantt-today-line" style="left:'+x(m.now)+'px"><small>今日</small></span>';
+function overlay(m,pixels){
+ const x=d=>axisPercent(d,m);
+ let h='<div class="gantt-time-overlay">'+axisBands(m,pixels);
+ if(m.now>m.from)h+='<span class="gantt-past" style="width:'+Math.max(0,Math.min(100,x(m.now)))+'%"></span>';
+ if(m.now>=m.from&&m.now<=m.to)h+='<span class="gantt-today-line" style="left:'+x(m.now)+'%"><small>今日</small></span>';
  const byDay=new Map();
  for(const item of A.ms?.list?.()||[]){const date=item.due||item.end||item.start,d=dayNumber(date);if(d===null||d<m.from||d>m.to)continue;const v=byDay.get(d)||[];v.push(item.name);byDay.set(d,v)}
  let last=-Infinity;
- for(const [day,names] of [...byDay].sort((a,b)=>a[0]-b[0])){const pos=x(day),show=pos-last>105;if(show)last=pos;h+='<span class="gantt-deadline-line" style="left:'+pos+'px" title="'+E(dayString(day)+' · '+names.join('、'))+'">'+(show?'<button type="button" class="gantt-deadline-badge" data-gantt-deadline="'+dayString(day)+'" title="'+E(names.join('、')+' · '+dayString(day))+'" aria-label="查看截止日期：'+E(names.join('、'))+'">'+E(Array.from(names[0])[0]||'期')+'</button>':'')+'</span>'}
+ for(const [day,names] of [...byDay].sort((a,b)=>a[0]-b[0])){
+  const pos=x(day),show=(pos-last)*pixels/100>(m.display==='overview'?45:105);
+  if(show)last=pos;
+  h+='<span class="gantt-deadline-line" style="left:'+pos+'%" title="'+E(dayString(day)+' · '+names.join('、'))+'">'+(show?'<button type="button" class="gantt-deadline-badge" data-gantt-deadline="'+dayString(day)+'" title="'+E(names.join('、')+' · '+dayString(day))+'" aria-label="查看截止日期：'+E(names.join('、'))+'">'+E(Array.from(names[0])[0]||'期')+'</button>':'')+'</span>';
+ }
  return h+'</div>';
 }
 let scrollPosition=null,selectedKey=null;
@@ -168,8 +234,13 @@ function html(now=Date.now()){
  const m=model(now),raw=pref('filter','all'),allowed=new Set(['all','',...groups().map(g=>g.id)]),filter=raw==='uncategorized'?'':allowed.has(raw)?raw:'all';
  const categories=[{id:'',name:'未分组'},...groups().map(g=>({id:g.id,name:g.name}))];
  const dayPx=m.zoom==='month'?28:m.zoom==='custom'?Math.max(1.5,Math.min(28,900/(m.to-m.from+1))):m.zoom==='quarter'?5:m.zoom==='year'?1.6:Math.max(.8,Math.min(8,750/(m.to-m.from+1)));
- const width=Math.max(580,Math.min(11000,Math.ceil((m.to-m.from+1)*dayPx))),total=m.to-m.from+1;
- const ticks=[];for(let d=m.from;d<=m.to;d++){const date=new Date(d*DAY),day=date.getUTCDate(),month=date.getUTCMonth()+1;let title='';if(m.zoom==='month'){if(day===1||day%3===0)title=day+'日'}else if(m.zoom==='quarter'){if(day===1)title=month+'月'}else if(day===1&&(m.zoom==='all'||month%2===1))title=month+'月';if(title)ticks.push('<span class="gantt-axis-tick" style="left:'+((d-m.from)/total*100)+'%">'+E(title)+'</span>')}
+ const width=Math.max(580,Math.min(11000,Math.ceil((m.to-m.from+1)*(m.zoom==='month'?28:m.zoom==='custom'?Math.max(1.5,Math.min(28,900/(m.to-m.from+1))):m.zoom==='quarter'?5:m.zoom==='year'?1.6:Math.max(.8,Math.min(8,750/(m.to-m.from+1)))))));
+ const scroller=document.querySelector('#mw-today .memo-gantt-scroller'),host=document.querySelector('#mw-today .memo-gantt')||document.querySelector('#mw-today');
+ const available=scroller?.clientWidth||host?.clientWidth||Math.max(280,window.innerWidth-32);
+ const labelWidth=window.innerWidth<=480?76:Math.max(112,Math.min(180,available*.34));
+ const axisPixels=m.display==='overview'?Math.max(1,available-labelWidth-2):width;
+ m.axisPixels=axisPixels;
+ const total=m.to-m.from+1,ticks=axisTicks(m,axisPixels);
  const selector='<select data-gantt-filter-select aria-label="选择甘特图分组"><option value="all"'+(filter==='all'?' selected':'')+'>全部 · '+m.rows.length+' 项</option>'+categories.filter(g=>m.rows.some(x=>x.group===g.id)).map(g=>'<option value="'+E(g.id||'uncategorized')+'"'+(filter===g.id?' selected':'')+'>'+E(g.name)+' · '+m.rows.filter(x=>x.group===g.id).length+' 项</option>').join('')+'</select>';
  const c=m.custom||customRange(now),opt=(v,label,selected)=>'<option value="'+E(v)+'"'+(v===selected?' selected':'')+'>'+E(label)+'</option>';
  const ddlOptions=(c.deadlineId&&!c.deadlines.some(x=>x.id===c.deadlineId)?'<option value="" selected>原截止日期已删除</option>':'')+
@@ -183,7 +254,8 @@ function html(now=Date.now()){
    (c.error?'<p role="alert" class="gantt-custom-error">'+E(c.error)+'</p>':'')+
    '</div>';
  const menu='<details class="gantt-settings"'+(pref('settings-open','closed')==='open'?' open':'')+'><summary title="视图设置" aria-label="视图设置">⋯</summary><div class="gantt-settings-body"><label>范围<select data-gantt-zoom><option value="month"'+(m.zoom==='month'?' selected':'')+'>月</option><option value="quarter"'+(m.zoom==='quarter'?' selected':'')+'>半年</option><option value="year"'+(m.zoom==='year'?' selected':'')+'>两年</option><option value="all"'+(m.zoom==='all'?' selected':'')+'>全部</option><option value="custom"'+(m.zoom==='custom'?' selected':'')+'>自定义日期</option></select></label>'+customFields+'<button class="btn btn-small" data-gantt-manage>管理分组</button></div></details>';
- const nav='<div class="gantt-controls"><div class="gantt-topbar"><label class="gantt-select-wrap">'+selector+'</label><button class="btn btn-small" data-gantt-create aria-label="新建项目">＋</button>'+menu+'</div><div class="gantt-timeline-controls">'+(m.zoom==='custom'?'<span class="gantt-current-range">'+E(dayString(m.from)+' ～ '+dayString(m.to))+'</span>':'<button class="btn btn-small" data-gantt-navigate="-1" aria-label="上一时间段">‹</button><span class="gantt-current-range">'+E(new Date(m.focus*DAY).getUTCFullYear()+'年'+(new Date(m.focus*DAY).getUTCMonth()+1)+'月')+'</span><button class="btn btn-small" data-gantt-navigate="1" aria-label="下一时间段">›</button><button class="btn btn-small" data-gantt-navigate="0">今天</button>')+'</div></div>';
+ const displayControl='<div class="gantt-display-modes" role="group" aria-label="甘特图显示模式">'+[['overview','概览'],['detail','详细']].map(([key,name])=>'<button type="button" class="btn gantt-display-option'+(m.display===key?' is-selected':'')+'" data-gantt-display="'+key+'" aria-pressed="'+(m.display===key?'true':'false')+'">'+name+'</button>').join('')+'</div>';
+ const nav='<div class="gantt-controls"><div class="gantt-topbar"><label class="gantt-select-wrap">'+selector+'</label><button class="btn btn-small" data-gantt-create aria-label="新建项目">＋</button>'+menu+'</div><div class="gantt-viewbar">'+displayControl+'<div class="gantt-timeline-controls">'+(m.zoom==='custom'?'<span class="gantt-current-range">'+E(dayString(m.from)+' ～ '+dayString(m.to))+'</span>':'<button class="btn btn-small" data-gantt-navigate="-1" aria-label="上一时间段">‹</button><span class="gantt-current-range">'+E(new Date(m.focus*DAY).getUTCFullYear()+'年'+(new Date(m.focus*DAY).getUTCMonth()+1)+'月')+'</span><button class="btn btn-small" data-gantt-navigate="1" aria-label="下一时间段">›</button><button class="btn btn-small" data-gantt-navigate="0">今天</button>')+'</div></div></div>';
  const blocks=categories.filter(g=>(filter==='all'||filter===g.id)&&m.rows.some(x=>x.group===g.id)).map((g,index)=>{
   const all=m.rows.filter(x=>x.group===g.id);
   const open=pref('group:'+g.id,g.id===''?'closed':(filter!=='all'||index===1)?'open':'closed')==='open';
@@ -196,8 +268,9 @@ function html(now=Date.now()){
   return '<details class="gantt-group" data-gantt-group="'+E(g.id)+'" '+(open?'open':'')+'><summary class="gantt-group-heading gantt-fixed">'+E(g.name)+' · '+all.length+' 项</summary><div class="gantt-group-body">'+visible.map(x=>rowHtml(x,m,width)).join('')+(active.length>8?'<button class="btn btn-small gantt-expand" data-gantt-expand="'+E(g.id||'uncategorized')+'">'+(expanded?'收起':'再显示 '+(active.length-5)+' 项')+'</button>':'')+fold('其他日期',outside)+fold('未排期',unplanned)+fold('已达成',achieved)+'</div></details>';
  }).join('');
  const open=pref('root','open')==='open';
- const result='<details class="card memo-gantt" data-gantt-root '+(open?'open':'')+'><summary>长期任务计划 · '+m.rows.length+' 项</summary>'+nav+'<div class="memo-gantt-scroller" role="region" tabindex="0" aria-label="长期任务甘特时间轴"><div class="memo-gantt-track" style="--gantt-axis-width:'+width+'px;--gantt-track-width:calc(var(--gantt-label-width) + '+width+'px)">'+overlay(m,width)+'<div class="memo-gantt-scale"><div class="gantt-scale-title gantt-fixed">任务</div><div class="gantt-axis-head">'+ticks.join('')+'</div></div>'+blocks+'<svg class="memo-gantt-edges" aria-hidden="true"></svg></div></div></details>';
- requestAnimationFrame(()=>{const el=document.querySelector('#mw-today .memo-gantt-scroller');if(el){const at=(m.now>=m.from&&m.now<=m.to?m.now:m.focus)-m.from;el.scrollLeft=scrollPosition===null?Math.max(0,at/total*width-110):scrollPosition}syncEdges()});
+ const trackStyle=m.display==='overview'?'--gantt-axis-width:calc(100% - var(--gantt-label-width));--gantt-track-width:100%':'--gantt-axis-width:'+width+'px;--gantt-track-width:calc(var(--gantt-label-width) + '+width+'px)';
+ const result='<details class="card memo-gantt" data-gantt-root data-gantt-mode="'+m.display+'" '+(open?'open':'')+'><summary>长期任务计划 · '+m.rows.length+' 项</summary>'+nav+'<div class="memo-gantt-scroller" role="region" tabindex="0" aria-label="长期任务甘特时间轴"><div class="memo-gantt-track" style="'+trackStyle+'">'+overlay(m,axisPixels)+'<div class="memo-gantt-scale"><div class="gantt-scale-title gantt-fixed">任务</div><div class="gantt-axis-head">'+ticks+'</div></div>'+blocks+'<svg class="memo-gantt-edges" aria-hidden="true"></svg></div></div></details>';
+ requestAnimationFrame(()=>{const el=document.querySelector('#mw-today .memo-gantt-scroller');if(el){const at=(m.now>=m.from&&m.now<=m.to?m.now:m.focus)-m.from;el.scrollLeft=m.display==='overview'?0:scrollPosition===null?Math.max(0,at/total*width-110):scrollPosition}syncEdges()});
  return result;
 }
 function syncEdges(){
@@ -270,7 +343,7 @@ function proposeDates(id,start,end,operation){
  }});
 }
 document.addEventListener('pointerdown',e=>{
- if(e.button!==0||e.pointerType==='touch')return;
+ if(e.button!==0||e.pointerType==='touch'||pref('display-mode','detail')==='overview')return;
  const bar=e.target.closest?.('#mw-today .memo-gantt-bar');if(!bar)return;
  const row=bar.closest('[data-gantt-row]'),task=locate(row?.dataset.ganttRow)?.task;
  if(!task?.memoGanttStart||!task?.memoGanttEnd)return;
@@ -307,8 +380,9 @@ function refresh(){A.memoWorkspace.render();requestAnimationFrame(syncEdges);}
 document.addEventListener('click',e=>{
  const rootSummary=e.target.closest?.('.memo-gantt[data-gantt-root] > summary');
  if(rootSummary){const details=rootSummary.closest('[data-gantt-root]');if(details)setPref('root',details.open?'closed':'open');}
- const b=e.target.closest('[data-gantt-create],[data-gantt-manage],[data-gantt-quick],[data-gantt-bar-quick],[data-gantt-filter],[data-gantt-navigate],[data-gantt-expand],[data-gantt-deadline]');if(!b)return;
+ const b=e.target.closest('[data-gantt-display],[data-gantt-create],[data-gantt-manage],[data-gantt-quick],[data-gantt-bar-quick],[data-gantt-filter],[data-gantt-navigate],[data-gantt-expand],[data-gantt-deadline]');if(!b)return;
  e.preventDefault();e.stopPropagation();
+ if(b.hasAttribute('data-gantt-display')){if(b.dataset.ganttDisplay!==pref('display-mode','detail')){setPref('display-mode',b.dataset.ganttDisplay);scrollPosition=null;refresh();}return;}
  if(b.hasAttribute('data-gantt-create'))return createProject();
  if(b.hasAttribute('data-gantt-manage'))return A.memoOrganize?.openGroups?.();
  if(b.hasAttribute('data-gantt-quick')||b.hasAttribute('data-gantt-bar-quick')){if(b.hasAttribute('data-gantt-bar-quick')&&Date.now()-lastDragFinish<750)return;selectedKey=b.dataset.ganttQuick||b.dataset.ganttBarQuick;requestAnimationFrame(syncEdges);return quick(selectedKey)}
@@ -335,6 +409,7 @@ document.addEventListener('toggle',e=>{const target=e.target;if(target.matches?.
  if(target.matches?.('.memo-gantt[data-gantt-root]')){setPref('root',target.open?'open':'closed');requestAnimationFrame(syncEdges);}
  if(target.matches?.('.gantt-settings')&&target.isConnected)setPref('settings-open',target.open?'open':'closed');
 },true);
-window.addEventListener('resize',()=>requestAnimationFrame(syncEdges));
+let resizeQueued=false;
+window.addEventListener('resize',()=>{if(resizeQueued)return;resizeQueued=true;requestAnimationFrame(()=>{resizeQueued=false;if(pref('display-mode','detail')==='overview')refresh();else syncEdges();});});
 A.memoGantt={validate,model,html,editor,apply,quick,syncEdges,locate,nodes,normalizeKey};
 })();
