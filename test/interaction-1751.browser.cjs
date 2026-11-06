@@ -35,6 +35,40 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('.gantt-today-line').count(),1,'today marker visible');
   assert.equal(await page.locator('.gantt-past').count(),1,'past region visible');
   assert.equal(await page.locator('.gantt-deadline-line').count(),1,'global deadline shown');
+
+  assert.equal(await page.locator('.gantt-deadline-badge').innerText(),'考','global deadline labeled by initial');
+  assert.equal(await page.locator('.ms-featured-item').count(),1,'deadline visible above three columns');
+  assert.equal(await page.locator('.exec-queue').count(),1,'execution queue displayed');
+  assert.equal(await page.locator('.overview-exec-add').count()>0,true,'three-column queue shortcuts available');
+  const queueState=await page.evaluate(async()=>{
+    const A=App,d=A.store.data(),ref={kind:'task',id:'once-ideal',day:'2026-11-06',list:'ideal'},orig=d.days['2026-11-06'].tasks.ideal.length;
+    if(!await A.memoActions.commit(()=>A.memoExecutionQueue.addCore([ref])))throw Error('queue add did not save');
+    A.memoWorkspace.render();
+    return {queued:A.memoExecutionQueue.rows().length,originals:d.days['2026-11-06'].tasks.ideal.length,baseline:orig,oldQueue:d.queue.length};
+  });
+  assert.equal(queueState.queued,1,'new queue contains an original task reference');
+  assert.equal(queueState.originals,queueState.baseline,'queue must not move original task');
+  assert.equal(queueState.oldQueue,1,'legacy waiting queue unchanged');
+  assert.equal(await page.locator('.exec-queue-row').count(),1,'queue item rendered');
+  const queueOrder=await page.evaluate(()=>{const q=document.querySelector('.exec-queue'),g=document.querySelector('.memo-gantt');return !!(q.compareDocumentPosition(g)&Node.DOCUMENT_POSITION_FOLLOWING)});
+  assert(queueOrder,'execution queue precedes Gantt');
+  await page.locator('.exec-queue-row [data-exec="skip"]').click();
+  await page.waitForFunction(()=>App.memoExecutionQueue.rows().length===0);
+  assert.equal(await page.evaluate(()=>App.store.data().days['2026-11-06'].tasks.ideal.find(t=>t.id==='once-ideal')?.done),false,'skip preserves task state');
+  assert.equal(await page.locator('.exec-queue-row').count(),0,'skip is visually immediate');
+  await page.evaluate(async()=>{
+    const A=App,d=A.store.data();d.milestones[0].pinned=true;
+    d.milestones.push({id:'ddl-2',name:'另一个截止',due:'2026-11-10'},{id:'ddl-3',name:'截止第三',due:'2026-11-12'});
+    A.memoWorkspace.render();A.ms.refresh();
+  });
+  assert.equal(await page.locator('.ms-featured-item').count(),3,'pinned plus two upcoming deadlines are visible');
+  await page.locator('.gantt-deadline-badge').first().click();
+  assert.equal(await page.getByText('全局截止日期 · 2026-11-08').count()>0,true,'global deadline details open on click');
+  await page.locator('[data-act="close"]').last().click();
+  await page.evaluate(()=>App.ms.edit('ddl-1'));
+  assert.equal(await page.locator('#ms-pinned').isChecked(),true,'milestone pin switch persisted');
+  await page.locator('[data-act="back"]').last().click();
+
   assert.equal(await page.locator('.mw-inline-waiting').count(),1,'waiting tasks under Gantt');
   assert.equal(await page.locator('.mw-inline-waiting').getByText('待安排的原始任务').count(),1);
   const order=await page.evaluate(()=>{const a=document.querySelector('.memo-gantt'),b=document.querySelector('.mw-inline-waiting');return !!(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING)});
