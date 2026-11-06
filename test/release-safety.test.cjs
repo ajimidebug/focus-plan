@@ -357,8 +357,8 @@ test('cancelled task withdraws only newly linked dependent rewards and cannot fa
   const b = browser(); await b.S.load(); const { A } = actionHarness(b), day = b.S.getDay('2026-10-19');
   day.tasks.required = [{ id: 'r', text: '必须' }]; day.tasks.ideal = [{ id: 'i', text: '理想',points:10 }]; day.tasks.extra = [{ id: 'x', text: '拓展' }];
   const r = A.completeCore({ kind: 'task', id: 'r', list: 'required', day: '2026-10-19', title: '必须' }, '必须', actionAt, [{ kind: 'base', points: 10 }]);
-  A.completeCore({ kind: 'task', id: 'i', list: 'ideal', day: '2026-10-19', title: '理想' }, '理想', actionAt);
-  A.completeCore({ kind: 'task', id: 'x', list: 'extra', day: '2026-10-19', title: '拓展' }, '拓展', actionAt, [{ kind: 'perfect', points: 20 }]);
+  A.completeCore({ kind: 'task', id: 'i', list: 'ideal', day: '2026-10-19', title: '理想' }, '理想', actionAt, [{ kind: 'perfect', points: 20 }]);
+  A.completeCore({ kind: 'task', id: 'x', list: 'extra', day: '2026-10-19', title: '拓展' }, '拓展', actionAt);
   assert.equal(b.S.pointsTotal(), 45);
   b.S.data().ledger.push({ id: 'other-reward', points: 8, type: 'reward-base', date: '2026-10-18' });
   A.undoCore(r.id, '', actionAt); assert.equal(b.S.pointsTotal(), 23); assert.equal(day.rewards.length, 0);
@@ -1103,8 +1103,34 @@ test('wishlist refund restores removed item and keeps original cents exactly onc
  const b=browser();await b.S.load();const {C}=flowHarness(b);const w={id:'wish',name:'书',cents:3001};C.spendCore(C.spendQuote('money','30.01','书'),'wish-buy');const e=b.S.data().ledger.find(x=>x.operationId==='wish-buy');e.wishId=w.id;e.wishSnapshot=copy(w);b.S.data().memoWishes=[{...w,purchase:e.id,paid:60.02,hidden:true}];assert.equal(b.S.pointsTotal(),-60.02);C.refundCore(e.id);C.refundCore(e.id);assert.equal(b.S.pointsTotal(),0);assert.deepEqual(copy(b.S.data().memoWishes),[w]);assert.equal(b.S.data().ledger.filter(x=>x.refundOf===e.id).length,1);
 });
 
+
+test('175.5 reward ignores long-term tasks, counts scheduled habit targets, and reverses only actual dependencies',async()=>{
+ const b=browser();await b.S.load();const {A,M}=flowHarness(b);financeHarness(b);
+ const d=b.S.data(),day='2026-10-20',at=day+'T12:00:00+08:00';
+ b.S.getDay(day).tasks.required=[{id:'r1755',text:'必做'}];
+ b.S.getDay(day).tasks.ideal=[{id:'i1755',text:'理想',points:3}];
+ b.S.getDay(day).tasks.extra=[{id:'x1755',text:'长期拓展',points:5}];
+ d.checkins=[{id:'h1755',text:'复习习惯',points:2,target:2,rewardLimit:2,days:{}}];
+ d.memoHabitPlans=[{id:'hp1755',habitId:'h1755',mode:'daily',from:day,list:'ideal',target:2}];
+ A.completeCore({kind:'task',id:'r1755',list:'required',day,title:'必做'},'',at,[{kind:'base',points:10}]);
+ A.completeCore({kind:'task',id:'i1755',list:'ideal',day,title:'理想'},'',at,[{kind:'perfect',points:20}]);
+ assert.equal(d.ledger.filter(x=>x.type==='reward-perfect').length,0,'incomplete scheduled habit blocks the bonus');
+ A.completeCore({kind:'checkin',id:'h1755',day,title:'复习习惯'},'',at,[{kind:'perfect',points:20}]);
+ assert.equal(d.ledger.filter(x=>x.type==='reward-perfect').length,0,'first habit repetition does not qualify');
+ const last=A.completeCore({kind:'checkin',id:'h1755',day,title:'复习习惯'},'',at,[{kind:'perfect',points:20}]);
+ const bonus=d.ledger.find(x=>x.type==='reward-perfect');assert(bonus,'last habit completion qualifies with extra unfinished');
+ const record=b.S.getDay(day).rewards.find(x=>x.kind==='perfect');
+ assert(record.dependencies.includes('habit:h1755'));assert(!record.dependencies.includes('x1755'));
+ A.undoCore(last.id,'',at);
+ assert.equal(d.ledger.filter(x=>x.type==='reward-perfect').length,0,'undoing required habit removes bonus');
+ assert(!b.S.getDay(day).rewards.some(x=>x.kind==='perfect'));
+ const again=A.completeCore({kind:'checkin',id:'h1755',day,title:'复习习惯'},'',at,[{kind:'perfect',points:20}]);
+ assert.equal(d.ledger.filter(x=>x.type==='reward-perfect').length,1,'requalifying creates exactly one bonus');
+ A.completeCore({kind:'task',id:'x1755',list:'extra',day,title:'长期拓展'},'',at);
+ assert.equal(d.ledger.filter(x=>x.type==='reward-perfect').length,1,'long term completion does not duplicate');
+});
 test('bounty threshold is inclusive and grouping has independent stable regions',async()=>{
- const b=browser();await b.S.load();flowHarness(b);b.ctx.document={addEventListener(){}};vm.runInContext(source('js/memo-organize.js'),b.ctx);const O=b.ctx.App.memoOrganize;assert(!O.bounty(10.99));assert(O.bounty(11));assert(O.bounty(30));assert(O.bounty(31));assert(!O.bounty(null));assert.equal(O.bountyTier(10),'none');assert.equal(O.bountyTier(11),'basic');assert.equal(O.bountyTier(30),'basic');assert.equal(O.bountyTier(31),'high');b.S.settings().memoBountyThreshold=50;assert(O.bounty(11),'new fixed threshold is independent of obsolete setting');b.S.data().memoTaskGroups=[{id:'g',name:'组'}];const rows=[{task:{id:'a',memoGroup:'g'}}],render=rows=>rows.map(x=>x.task.id).join('');let full=O.grouped(rows,render),mini=O.grouped(rows,render,true);assert.match(full,/data-family="full:g"/);assert.match(mini,/data-family="overview:g"/);b.ctx.localStorage.setItem('task-group:overview:g','closed');mini=O.grouped(rows,render,true);assert.doesNotMatch(mini,/data-family-id="g" open/);assert.match(O.grouped(rows,render),/data-family-id="g" open/);assert.deepEqual(copy(rows),[{task:{id:'a',memoGroup:'g'}}]);
+ const b=browser();await b.S.load();flowHarness(b);b.ctx.document={addEventListener(){}};vm.runInContext(source('js/memo-organize.js'),b.ctx);const O=b.ctx.App.memoOrganize;assert(!O.bounty(10.99));assert(!O.bounty(11));assert(O.bounty(30));assert(O.bounty(31));assert(!O.bounty(null));assert.equal(O.bountyTier(10),'none');assert.equal(O.bountyTier(11),'none');assert.equal(O.bountyTier(30),'basic');assert.equal(O.bountyTier(31),'high');b.S.settings().memoBountyThreshold=25;assert(!O.bounty(11));assert(O.bounty(25));assert.equal(O.bountyTier(25),'basic');b.S.settings().memoBountyThreshold=50;assert(!O.bounty(49));assert(O.bounty(50));b.S.data().memoTaskGroups=[{id:'g',name:'组'}];const rows=[{task:{id:'a',memoGroup:'g'}}],render=rows=>rows.map(x=>x.task.id).join('');let full=O.grouped(rows,render),mini=O.grouped(rows,render,true);assert.match(full,/data-family="full:g"/);assert.match(mini,/data-family="overview:g"/);b.ctx.localStorage.setItem('task-group:overview:g','closed');mini=O.grouped(rows,render,true);assert.doesNotMatch(mini,/data-family-id="g" open/);assert.match(O.grouped(rows,render),/data-family-id="g" open/);assert.deepEqual(copy(rows),[{task:{id:'a',memoGroup:'g'}}]);
 });
 test('dense timeline groups collision details without mutating records or totals',async()=>{
  const b=browser();await b.S.load();const {P}=scheduleHarness(b);const rows=Array.from({length:8},(_,i)=>({id:String(i),card:'c-'+i,title:'任务'+i,start:10+i*.1,end:10+i*.1+.001,realEnd:10+i*.1,completed:true,type:'point'})),old=JSON.stringify(rows),out=P.denseLayout(rows,3,1,true);assert.equal(out.length,1);assert.equal(out[0].members.length,8);assert.equal(JSON.stringify(rows),old);assert.equal(out[0].title,'完成 8 项');const spans=[{id:'a',start:0,end:60,realEnd:60},{id:'b',start:1,end:50,realEnd:50},{id:'c',start:2,end:40,realEnd:40}];assert.equal(P.denseLayout(spans,1,2)[0].members.length,3);assert.equal(P.denseLayout([{id:'x',start:90,end:95,realEnd:95}],1,1)[0].realEnd,95);
