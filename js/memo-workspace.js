@@ -20,7 +20,21 @@
   let execExpanded=false;
   function execEntries(){const x=S().data().memoExecutionQueue;if(x===undefined)return [];if(!Array.isArray(x))throw Error('执行队列数据异常，请下载备份');return x;}
   const execKey=ref=>A.memoSchedule.key(ref);
-  function execResolve(entry){if(!entry?.ref||typeof entry.ref!=='object')return null;const x=A.memoSchedule.resolve(entry.ref);return x&&!x.task.archived&&!x.task.memoDismissed?x:null;}
+  function execResolve(entry){
+    if(!entry?.ref||typeof entry.ref!=='object')return null;
+    const x=A.memoSchedule.resolve(entry.ref);
+    if(!x||x.task.archived||x.task.memoDismissed)return null;
+    if(x.ref.kind==='checkin'){
+      const day=x.ref.day;
+      if(day!==M().userDay()||!A.memoFinance?.plans(day).some(p=>p.it.id===x.ref.id))return null;
+      if(!Number.isSafeInteger(entry.habitCount)||entry.habitCount<0||Number(x.task.days?.[day]||0)>entry.habitCount)return null;
+    }
+    return x;
+  }
+  function execHas(ref){
+    const key=execKey(ref);
+    return execEntries().some(entry=>{const x=execResolve(entry);return x&&execKey(x.ref)===key;});
+  }
   function pruneExec(){
     if(S().data().memoExecutionQueue===undefined)return;
     const seen=new Set();
@@ -34,14 +48,14 @@
     for(const ref of refs){
       const x=A.memoSchedule.resolve(ref);
       if(!x||x.task.archived||x.task.memoDismissed||doneFor(x.task,x.ref))throw Error('只能加入有效的未完成任务');
+      if(x.ref.kind==='checkin'&&(x.ref.day!==M().userDay()||!A.memoFinance?.plans(x.ref.day).some(p=>p.it.id===x.ref.id)))throw Error('只能把今天已安排的习惯加入队列');
       const key=execKey(x.ref);
-      if(!existing.has(key)){(S().data().memoExecutionQueue||(S().data().memoExecutionQueue=[])).push({ref:x.ref,pinned:false});existing.add(key);}
+      if(!existing.has(key)){const entry={ref:x.ref,pinned:false};if(x.ref.kind==='checkin')entry.habitCount=Number(x.task.days?.[x.ref.day])||0;(S().data().memoExecutionQueue||(S().data().memoExecutionQueue=[])).push(entry);existing.add(key);}
     }
   }
   function execAdd(ref){
     if(A.memoActions.busy())return A.ui.toast('请先重试保存');
-    const key=execKey(ref);
-    if(execEntries().some(e=>{const x=execResolve(e);return x&&execKey(x.ref)===key;}))return A.ui.toast('已经在执行队列中');
+    if(execHas(ref))return A.ui.toast('已经在执行队列中');
     return commit(()=>execAppend([ref]));
   }
   function execMove(ref,act){
@@ -56,16 +70,34 @@
     });
   }
   function execPick(){
-    const seen=new Set(),types=['required','ideal','extra'];
-    const rows=types.flatMap(list=>A.memoSchedule.columnItems(taskDay,list).filter(x=>{
-      const key=execKey(x.ref);if(seen.has(key)||x.done||x.task.archived)return false;seen.add(key);return true;
-    }).map(x=>({...x,list})));
-    const chosen=new Set(execEntries().map(execResolve).filter(Boolean).map(x=>execKey(x.ref)));
-    const html=rows.length?rows.map(x=>{
-      const already=chosen.has(execKey(x.ref));
-      return '<label class="mw-exec-candidate" data-category="'+x.list+'"><input type="checkbox" data-exec-pick value="'+esc(JSON.stringify(x.ref))+'"'+(already?' disabled':'')+'><span>'+esc(x.task.text)+'</span><small>'+names[x.list]+(already?' · 已加入':'')+'</small></label>';
-    }).join(''):'<p class="hint">所选日期没有可加入的未完成任务</p>';
-    const modal=A.ui.openModal('添加到执行队列','<p class="hint">从 '+esc(taskDay)+' 的三栏选择任务；原安排不变。</p><div class="mw-exec-picker">'+html+'</div><p id="mw-exec-error" role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">加入选中任务</button>',{lock:true});
+    const seen=new Set(),types=['required','ideal','extra'],today=M().userDay();
+    const plans=taskDay===today?A.memoFinance?.plans(taskDay)||[]:[];
+    const selected=new Set(execEntries().map(execResolve).filter(Boolean).map(x=>execKey(x.ref)));
+    const groups=types.map(list=>{
+      const normal=A.memoSchedule.columnItems(taskDay,list).filter(x=>!x.done&&!x.task.archived&&!x.task.memoDismissed);
+      const habits=plans.filter(x=>x.r.list===list&&!x.r.hidden&&!x.it.archived).map(x=>({
+        ref:{kind:'checkin',id:x.it.id,day:taskDay},task:x.it,habit:{count:x.n,target:x.r.target}
+      }));
+      const rows=normal.concat(habits).filter(x=>{
+        const key=execKey(x.ref);if(seen.has(key))return false;seen.add(key);return true;
+      });
+      return {list,rows};
+    });
+    const html='<div class="mw-exec-picker-tabs" role="group" aria-label="任务栏目">'+groups.map((g,i)=>'<button type="button" class="btn" data-exec-tab="'+g.list+'" aria-pressed="'+(i===0)+'">'+esc(names[g.list])+'</button>').join('')+'</div>'+
+      '<div class="mw-exec-picker-grid">'+groups.map((g,i)=>
+        '<section class="mw-exec-picker-column'+(i===0?' is-active':'')+'" data-exec-column="'+g.list+'" data-category="'+g.list+'"><h3>'+esc(names[g.list])+' <small>'+g.rows.length+'</small></h3>'+
+        (g.rows.map(x=>{
+          const already=selected.has(execKey(x.ref)),isHabit=x.ref.kind==='checkin';
+          const subtitle=isHabit?'习惯 · '+x.habit.count+'/'+x.habit.target+' 次':x.ref.kind==='project'?'每日推进':x.ref.kind==='daily'?'基础任务':'任务';
+          return '<label class="mw-exec-candidate'+(already?' is-added':'')+'" title="'+esc(x.task.text)+'"><input type="checkbox" data-exec-pick value="'+esc(JSON.stringify(x.ref))+'" aria-label="选择：'+esc(x.task.text)+'"'+(already?' disabled':'')+'><span class="mw-exec-candidate-body"><strong>'+esc(x.task.text)+'</strong><small>'+esc(already?'已入队':subtitle)+'</small></span></label>';
+        }).join('')||'<p class="mw-exec-picker-empty">暂无可加入项目</p>')+'</section>').join('')+'</div>';
+    const modal=A.ui.openModal('添加到执行队列','<p class="hint">从 '+esc(taskDay)+' 的三栏选择。习惯按本用户日加入，原安排和积分不变。</p><div class="mw-exec-picker">'+html+'</div><p id="mw-exec-selected" role="status">已选择 0 项</p><p id="mw-exec-error" role="alert"></p>','<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">加入选中任务</button>',{lock:true});
+    const count=()=>modal.querySelector('#mw-exec-selected').textContent='已选择 '+modal.querySelectorAll('[data-exec-pick]:checked').length+' 项';
+    modal.addEventListener('change',count);count();
+    modal.querySelectorAll('[data-exec-tab]').forEach(tab=>tab.onclick=()=>{
+      modal.querySelectorAll('[data-exec-tab]').forEach(x=>x.setAttribute('aria-pressed',String(x===tab)));
+      modal.querySelectorAll('[data-exec-column]').forEach(x=>x.classList.toggle('is-active',x.dataset.execColumn===tab.dataset.execTab));
+    });
     A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();},save:async b=>{
       const refs=[...modal.querySelectorAll('[data-exec-pick]:checked')].map(el=>JSON.parse(el.value));
       if(!refs.length){modal.querySelector('#mw-exec-error').textContent='请至少选择一项';return;}
@@ -75,14 +107,36 @@
       finally{if(b.isConnected)b.disabled=A.memoActions.busy();}
     }});
   }
+  function execMenu(ref){
+    const current=execEntries().find(e=>{const x=execResolve(e);return x&&execKey(x.ref)===execKey(ref);});
+    const found=current&&execResolve(current);if(!found)return A.ui.toast('该任务已移出队列');
+    const habit=ref.kind==='checkin',actions=[
+      ['pin',current.pinned?'取消置顶':'置顶'],['up','上移'],['down','下移'],['tail','移至队尾'],
+      ['edit',habit?'调整习惯安排':'编辑任务'],['delete',habit?'':'删除原任务']
+    ].filter(x=>x[1]);
+    const modal=A.ui.openModal('队列操作 · '+found.task.text,
+      '<div class="mw-exec-menu-list">'+actions.map(([act,label])=>'<button type="button" class="btn mw-exec-menu-action'+(act==='delete'?' is-danger':'')+'" data-exec-action="'+act+'">'+esc(label)+'</button>').join('')+'</div><p id="mw-exec-menu-error" role="alert"></p>',
+      '<button class="btn" data-act="close">关闭</button>',{lock:true});
+    A.ui.bindActions({close:()=>{if(!A.memoActions.busy())A.ui.closeModal();}});
+    modal.querySelectorAll('[data-exec-action]').forEach(b=>b.onclick=async()=>{
+      if(A.memoActions.busy())return;b.disabled=true;
+      const act=b.dataset.execAction;
+      try{
+        if(['pin','up','down','tail'].includes(act)){if(await execMove(ref,act))A.ui.closeModal();}
+        else {A.ui.closeModal();if(habit)A.memoFinance.arrange(ref.id);else if(act==='edit')editor(ref);else A.memoActions.deleteTask(ref);}
+      }catch(e){if(modal.isConnected)modal.querySelector('#mw-exec-menu-error').textContent=e.message;else A.ui.toast(e.message);}
+      finally{if(b.isConnected)b.disabled=false;}
+    });
+  }
   function execHTML(){
     const rows=execEntries().map(e=>({entry:e,found:execResolve(e)})).filter(x=>x.found&&!doneFor(x.found.task,x.found.ref));
     const visible=execExpanded?rows:rows.slice(0,5);
     const renderItem=({entry,found},i)=>{
-      const ref=found.ref,attr=refAttrs(ref),category=ref.list||found.task.assignment?.list||((ref.kind==='project'||ref.kind==='daily')?found.task.memoCategoryDays?.[ref.day]||'extra':'queue');
+      const ref=found.ref,attr=refAttrs(ref),isHabit=ref.kind==='checkin';
+      const category=isHabit?(A.memoFinance?.plans(ref.day).find(p=>p.it.id===ref.id)?.r.list||'extra'):ref.list||found.task.assignment?.list||((ref.kind==='project'||ref.kind==='daily')?found.task.memoCategoryDays?.[ref.day]||'extra':'queue');
       const session=A.memoSchedule.timing(ref).session;
       const live=session?.status==='running'?' · 执行中':session?.status==='paused'?' · 暂停中':'';
-      return '<div class="mw-exec-item" data-category="'+esc(category)+'"><i class="mw-exec-color" aria-hidden="true"></i><div class="mw-exec-info"><strong>'+(entry.pinned?'📌 ':'')+(i+1)+'. '+esc(found.task.text)+'</strong><small>'+esc(names[category]||'待安排')+(i===0?' · 当前':'')+live+(ref.day?' · '+esc(ref.day):'')+'</small></div><div class="mw-exec-actions"><button type="button" class="btn btn-small" data-schedule-command="start" data-schedule-ref="'+esc(JSON.stringify(ref))+'"'+(session?.status==='paused'?' data-session-id="'+esc(session.id)+'"':'')+'>▶ 开始／继续</button>'+button('exec-skip','跳过',attr)+'</div><details class="mw-exec-more"><summary>⋯</summary><div class="mw-exec-more-actions">'+button('exec-pin',entry.pinned?'取消置顶':'置顶',attr)+button('exec-up','上移',attr)+button('exec-down','下移',attr)+button('exec-tail','移至队尾',attr)+button('exec-edit','编辑任务',attr)+button('exec-delete',ref.kind==='project'||ref.kind==='daily'?'停用项目':'删除原任务',attr)+'</div></details></div>';
+      return '<div class="mw-exec-item" data-category="'+esc(category)+'"><i class="mw-exec-color" aria-hidden="true"></i><div class="mw-exec-info"><strong>'+(entry.pinned?'📌 ':'')+(i+1)+'. '+esc(found.task.text)+'</strong><small>'+esc(names[category]||'待安排')+(isHabit?' · 习惯':'')+(i===0?' · 当前':'')+live+(ref.day?' · '+esc(ref.day):'')+'</small></div><div class="mw-exec-actions"><button type="button" class="btn btn-small" data-schedule-command="start" data-schedule-ref="'+esc(JSON.stringify(ref))+'"'+(session?.status==='paused'?' data-session-id="'+esc(session.id)+'"':'')+'>▶ 开始／继续</button>'+(isHabit?button('exec-checkin','打卡',attr):'')+button('exec-skip','跳过',attr)+'</div>'+button('exec-menu','⋯',attr+' aria-label="队列操作：'+esc(found.task.text)+'"')+'</div>';
     };
     return '<section class="card mw-exec-board" aria-label="执行队列"><div class="mw-exec-head"><h2>执行队列 <small>· '+rows.length+' 项</small></h2>'+button('exec-pick','＋ 添加任务')+'</div>'+(rows.length?visible.map(renderItem).join(''):'<p class="hint">尚无执行队列任务。可从三栏加入，不改变原安排。</p>')+(rows.length>5?button('exec-expand',execExpanded?'收起':'展开其余 '+(rows.length-5)+' 项'):'')+'</section>';
   }
@@ -99,7 +153,7 @@
   function card(t, ref, options = {}) {
     const done = doneFor(t, ref), attrs = refAttrs(ref);
     const points = score(t,ref), category = ref.list || t.assignment?.list || (ref.kind === 'project' ? t.memoCategoryDays?.[ref.day]||'extra' : 'queue');
-    return '<article class="mw-task' + (done ? ' mw-done' : '') + '" data-mw-card data-carried="'+!!A.memoFlow.isCarried(t)+'" data-category="'+category+'" data-bounty="'+!!A.memoOrganize?.bounty(points)+'" data-score="'+scoreBand(points)+'" data-priority="'+(category==='required'?priorityWeight(t):'')+'" data-bounty-tier="'+(A.memoOrganize?.bountyTier(points)||'none')+'" ' + attrs + '><div class="mw-task-heading">' + button('complete', done ? '✓' : '○', attrs + ' aria-label="' + (done ? '取消完成：' : '完成：') + esc(t.text) + '" aria-pressed="' + done + '"') + '<div class="mw-task-title"><strong>' + esc(t.text) + '</strong>' + scoreHTML(points) + '<div class="mw-task-meta">' + (category==='required'&&priorityWeight(t)!==3?'<small class="mw-priority-note">优先 '+priorityWeight(t)+' · '+priorityLabel(t)+'</small>':'') + (ref.kind === 'queue' ? '<span>' + (t.pinned ? '置顶 · ' : '') + (options.number ? '第' + options.number + '项' : '已安排') + '</span>' : ref.kind === 'project' ? '<span>每日推进 · ' + esc(ref.day) + '</span>' : '') + (A.memoReview?.label(t)||'')+(A.memoRecurrence?.label(t)||'')+'</div></div>' + button('edit', '编辑', attrs + ' aria-label="编辑：' + esc(t.text) + '"') + (!done?button('exec-add','＋入队',attrs):'') + '</div><div class="mw-task-timing">' + A.memoSchedule.rowControls(ref) + '</div>' +
+    return '<article class="mw-task' + (done ? ' mw-done' : '') + '" data-mw-card data-carried="'+!!A.memoFlow.isCarried(t)+'" data-category="'+category+'" data-bounty="'+!!A.memoOrganize?.bounty(points)+'" data-score="'+scoreBand(points)+'" data-priority="'+(category==='required'?priorityWeight(t):'')+'" data-bounty-tier="'+(A.memoOrganize?.bountyTier(points)||'none')+'" ' + attrs + '><div class="mw-task-heading">' + button('complete', done ? '✓' : '○', attrs + ' aria-label="' + (done ? '取消完成：' : '完成：') + esc(t.text) + '" aria-pressed="' + done + '"') + '<div class="mw-task-title"><strong>' + esc(t.text) + '</strong>' + scoreHTML(points) + '<div class="mw-task-meta">' + (category==='required'&&priorityWeight(t)!==3?'<small class="mw-priority-note">优先 '+priorityWeight(t)+' · '+priorityLabel(t)+'</small>':'') + (ref.kind === 'queue' ? '<span>' + (t.pinned ? '置顶 · ' : '') + (options.number ? '第' + options.number + '项' : '已安排') + '</span>' : ref.kind === 'project' ? '<span>每日推进 · ' + esc(ref.day) + '</span>' : '') + (A.memoReview?.label(t)||'')+(A.memoRecurrence?.label(t)||'')+'</div></div>' + button('edit', '编辑', attrs + ' aria-label="编辑：' + esc(t.text) + '"') + '</div><div class="mw-task-timing">' + A.memoSchedule.rowControls(ref) + '</div>' +
       (true ? '<details class="mw-task-extras"><summary>更多操作</summary><div class="mw-task-secondary">' + (['task','queue'].includes(ref.kind) && (!done || t.overdueEventId) ? button('assign', done ? '安排与扣分记录' : ref.kind === 'queue' ? (t.assignment ? '调整今日安排' : '安排到今天') : '调整安排', attrs) : '') + (!done && ['task','queue'].includes(ref.kind) && (t.originalDay || (t.assignment?.day || ref.day) < M().userDay()) ? button('backfill', '补记完成', attrs) : '') + (A.memoFlow.isCarried(t) ? '<details class="mw-late-detail"><summary>顺延记录</summary><small>' + esc(A.memoFlow.lateLabel(t)) + '</small></details>' : '') + (t.assignment ? '<small>' + esc(t.assignment.day + ' · ' + names[t.assignment.list]) + '</small>' : '') + (done?A.memoSchedule.executionHTML((S().data().memoEvents||[]).find(e=>e.active&&e.kind===ref.kind&&e.sourceId===ref.id&&(ref.kind==='queue'||e.sourceDay===ref.day))?.timing):'') + (t.note ? '<details class="mw-note"><summary>备注</summary><p>' + esc(t.note) + '</p></details>' : '') + (options.reorder ? '<details class="mw-manage"><summary>更多操作</summary><div>' + button('pin', t.pinned ? '取消置顶' : '置顶', attrs) + button('up', '上移', attrs) + button('down', '下移', attrs) + '</div></details>' : '') + '</div></details>' : '') + '</article>';
   }
   function taskSection(items) {
@@ -388,6 +442,8 @@
         if(act==='open-queue')return showPane('queue');
         if(act==='exec-pick')return execPick();
         if(act==='exec-add')return execAdd(ref);
+        if(act==='exec-menu')return execMenu(ref);
+        if(act==='exec-checkin')return A.memoActions.checkin(ref.id,ref.day);
         if(act==='exec-expand'){execExpanded=!execExpanded;return renderTasks();}
         if(['exec-skip','exec-pin','exec-up','exec-down','exec-tail'].includes(act))return execMove(ref,act.slice(5));
         if(act==='exec-edit')return editor(ref);
@@ -419,5 +475,5 @@
     A.memoReview?.init();A.memoRecurrence?.init();
     render();
   }
-  A.memoWorkspace = { pruneExec, execAdd, execHTML, setDay, assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
+  A.memoWorkspace = { pruneExec, execAdd, execHas, execHTML, setDay, assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
 })();

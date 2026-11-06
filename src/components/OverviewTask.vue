@@ -17,5 +17,5 @@ const labels=computed(()=>[A().tasks?.carryTagHTML?.(props.x.task),A().tasks?.le
     <small v-if="x.task.standard" class="t-std">标准：{{x.task.standard}}</small>
     <template v-for="g in x.task.groups||[]" :key="g.id"><small class="t-ctx grp">{{g.name}} · {{(g.subs||[]).filter((s:any)=>s.done===true).length}}/{{(g.subs||[]).length}}</small><small v-for="sub in g.subs||[]" :key="sub.id" class="t-ctx sub">· {{sub.text}}{{sub.done===true?' ✓':sub.done===false?' ✗':''}}</small></template>
     <small v-for="sub in x.task.subs||[]" :key="sub.id" class="t-ctx sub">· {{sub.text}}（限{{sub.minutes}}分）{{sub.done===true?' ✓':sub.done===false?' ✗':''}}</small>
-  </q-btn><button v-if="!done" type="button" class="overview-exec-add" :data-ref="JSON.stringify(x.ref)" @click.stop="A().memoWorkspace.execAdd(x.ref)" aria-label="加入执行队列">＋入队</button></div>
+  </q-btn></div>
 </template>
