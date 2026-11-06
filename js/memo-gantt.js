@@ -128,7 +128,7 @@ function rowHtml(p,m,width){
  const visible=p.valid&&lo<=hi,left=visible?(lo-m.from)/total*100:0,w=visible?(hi-lo+1)/total*100:0;
  const label=p.point?'仅截止：'+dayString(p.end):p.valid?dayString(p.start)+' — '+dayString(p.end):'未排期';
  const state=(p.inferred?'安排日':p.kind==='project'?'每日推进':'一次性')+(p.conflicts.length?' · ⚠ 前置异常':'')+(p.achieved?' · 已达成':'');
- return '<div class="memo-gantt-item" data-gantt-row="'+E(p.key)+'"><button type="button" class="memo-gantt-name gantt-fixed" data-gantt-quick="'+E(p.key)+'" title="'+E(p.title)+'" aria-label="编辑 '+E(p.title)+'"><span class="gantt-task-title">'+E(compactName(p.title))+'</span>'+(p.conflicts.length?'<span class="gantt-task-alert" aria-label="前置任务异常">!</span>':'')</button><div class="memo-gantt-lane" style="width:'+width+'px">'+
+ return '<div class="memo-gantt-item" data-gantt-row="'+E(p.key)+'"><button type="button" class="memo-gantt-name gantt-fixed" data-gantt-quick="'+E(p.key)+'" title="'+E(p.title)+'" aria-label="编辑 '+E(p.title)+'"><span class="gantt-task-title">'+E(compactName(p.title))+'</span>'+(p.conflicts.length?'<span class="gantt-task-alert" aria-label="前置任务异常">!</span>':'')+'</button><div class="memo-gantt-lane" style="width:'+width+'px">'+
   (visible?'<button type="button" class="memo-gantt-bar'+(p.point?' gantt-milestone':'')+(p.inferred?' gantt-inherited':'')+(p.achieved?' gantt-achieved':'')+'" data-gantt-bar-id="'+E(p.key)+'" data-gantt-bar-quick="'+E(p.key)+'" style="left:'+left+'%;width:'+(p.point?'12px':w+'%')+'" title="'+E(label)+'" aria-label="编辑 '+E(p.title)+' · '+E(label)+'"></button>':'<span class="memo-gantt-unscheduled">'+(p.valid?'不在本期':'未排期')+'</span>')+'</div></div>';
 }
 function overlay(m,width){
