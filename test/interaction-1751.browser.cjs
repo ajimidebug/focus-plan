@@ -70,8 +70,10 @@ const server=http.createServer((req,res)=>{
   assert(afterSkip.task,'skip preserves original task');
   assert.equal(afterSkip.ledger,beforeExec.ledger,'skip creates no ledger entry');
   assert.equal(afterSkip.events,beforeExec.events,'skip creates no completion event');
+  await page.waitForFunction(()=>!App.memoActions.busy());
   await page.evaluate(()=>App.ms.openList());
   await page.locator('[data-act="pin"][data-id="ddl-1"]').click();
+  await page.waitForFunction(()=>!App.memoActions.busy());
   assert.equal(await page.evaluate(()=>App.store.data().milestones[0].pinned),true,'global deadline pins without changing due date');
   await page.locator('#mw-deadlines .is-pinned').waitFor({state:'visible',timeout:5000});
   assert.equal(await page.locator('#mw-deadlines .is-pinned').count(),1,'pinned deadline appears above three columns');
