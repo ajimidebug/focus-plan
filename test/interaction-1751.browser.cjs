@@ -68,6 +68,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>App.ms.edit('ddl-1'));
   assert.equal(await page.locator('#ms-pinned').isChecked(),true,'milestone pin switch persisted');
   await page.locator('[data-act="back"]').last().click();
+  await page.locator('[data-act="close"]').last().click();
 
   assert.equal(await page.locator('.mw-inline-waiting').count(),1,'waiting tasks under Gantt');
   assert.equal(await page.locator('.mw-inline-waiting').getByText('待安排的原始任务').count(),1);
