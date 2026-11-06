@@ -551,6 +551,7 @@
       withdrawLedger(l=>l.taskId === spec.id && l.date === (spec.day || payload.doneDay) && types.includes(l.type),'删除任务撤回旧积分',at);
     }
     App.memoReview?.onDelete(original);App.memoRecurrence?.onDelete(original);
+    App.memoExecutionQueue?.removeCore(canonical);
     App.memoSchedule?.stopRef(canonical, Date.parse(at), true);
     if (canonical.kind === 'queue') {
       d.queue = (d.queue || []).filter(t => t.id !== canonical.id); d.queueDone = (d.queueDone || []).filter(t => t.id !== canonical.id);
