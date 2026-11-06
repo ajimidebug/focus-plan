@@ -292,6 +292,7 @@
     const ref={kind:spec.kind,id:spec.id,day:spec.day,list:spec.list};
     if(spec.kind!=='checkin'||(spec.day===M().userDay()&&habitPlan)){
       const enqueue=document.createElement('button');enqueue.type='button';enqueue.className='btn';
+      enqueue.classList.add('ma-enqueue');
       enqueue.textContent=App.memoWorkspace.execHas(ref)?'已入队':'加入队列';
       enqueue.disabled=App.memoWorkspace.execHas(ref);
       enqueue.onclick=async()=>{
@@ -302,7 +303,7 @@
           else if(!App.memoWorkspace.execHas(ref))enqueue.disabled=false;
         }catch(e){m.querySelector('#memo-action-error').textContent=e.message;enqueue.disabled=false;}
       };
-      m.querySelector('.modal-actions').prepend(enqueue);
+      m.querySelector('.action-task-title').after(enqueue);
     }
     function saveEstimate(){const n=Number(m.querySelector('#ma-estimate').value)||0;if(n<0||n>1440)throw Error('预计用时应在0—1440分钟之间');const task=App.memoSchedule.find(ref);if(!task)throw Error('任务已移动或停用');if(['checkin','project','daily'].includes(spec.kind))(task.memoEstimatedDays||(task.memoEstimatedDays={}))[spec.day||M().userDay()]=n;else task.estimatedMinutes=n;}
     const timerButton=m.querySelector('#ma-timer');
