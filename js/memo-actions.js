@@ -39,7 +39,12 @@
     // Standalone legacy ledger imports and isolated recovery tests need only task
     // identities. The full app always uses the shared habit-aware projection.
     const day=S().getDay(dayKey),lists=taskLists(day);
-    return ['required','ideal'].map((list,i)=>lists[i].map(x=>({id:x.id,kind:'task',list,done:!!x.done,target:true})));
+    return ['required','ideal'].map((list,i)=>lists[i].map(x=>({
+      id:App.memoSchedule?.key?(x.assignment?.day===dayKey&&x.assignment?.list===list
+        ?App.memoSchedule.key({kind:'queue',id:x.id})
+        :App.memoSchedule.key({kind:'task',id:x.id,day:dayKey,list})):x.id,
+      kind:'task',list,done:!!x.done,target:true
+    })));
   }
   function rewardKey(spec){
     return spec.kind==='checkin'?'habit:'+spec.id:(App.memoSchedule?.key?.({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list})||spec.id);
