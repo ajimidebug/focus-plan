@@ -34,10 +34,15 @@
   // Reward targets reuse the three-column progress calculation and its habit rules.
   // "Perfect" covers Must and Ideal; Long-term is never an eligibility condition.
   function rewardTargets(dayKey){
-    return ['required','ideal'].map(list=>App.memoFinance.column(dayKey,list,true).items.filter(x=>x.target).map(x=>({...x,list})));
+    if(App.memoFinance?.column&&App.memoSchedule?.columnItems)
+      return ['required','ideal'].map(list=>App.memoFinance.column(dayKey,list,true).items.filter(x=>x.target).map(x=>({...x,list})));
+    // Standalone legacy ledger imports and isolated recovery tests need only task
+    // identities. The full app always uses the shared habit-aware projection.
+    const day=S().getDay(dayKey),lists=taskLists(day);
+    return ['required','ideal'].map((list,i)=>lists[i].map(x=>({id:x.id,kind:'task',list,done:!!x.done,target:true})));
   }
   function rewardKey(spec){
-    return spec.kind==='checkin'?'habit:'+spec.id:App.memoSchedule.key({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list});
+    return spec.kind==='checkin'?'habit:'+spec.id:(App.memoSchedule?.key?.({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list})||spec.id);
   }
   function rewardEligible(groups,kind){
     const targets=(kind==='base'?groups.slice(0,1):groups).flat();
@@ -92,7 +97,7 @@
   }
   function withdrawRewards(dayKey) {
     const day=S().data().days[dayKey];if(!day)return;
-    const current=rewardTargets(dayKey).flat();
+    const current=(day.rewards||[]).some(r=>r.scopeVersion===2)?rewardTargets(dayKey).flat():[];
     const lost=(day.rewards||[]).filter(r=>{
       if(!r.memoLedgerId)return false;
       if(r.scopeVersion===2){
