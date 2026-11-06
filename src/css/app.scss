@@ -434,3 +434,9 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .memo-gantt[data-gantt-mode="overview"] .gantt-deadline-badge{transform:translateX(-50%);}
 .memo-gantt[data-gantt-mode="overview"] .memo-gantt-bar.gantt-compact-dot{width:6px!important;min-width:6px;height:10px;top:22px;border-radius:5px;}
 @media(max-width:360px){.memo-gantt .gantt-display-modes .gantt-display-option{min-width:52px;padding:5px 6px;}.memo-gantt .gantt-viewbar .gantt-timeline-controls{justify-content:flex-start;}}
+
+/* 175.6 narrow overview: sticky group headings must never exceed track width. */
+.memo-gantt[data-gantt-mode="overview"] .gantt-group>summary,
+.memo-gantt[data-gantt-mode="overview"] .gantt-folded>summary{
+ width:100%;max-width:100%;min-width:0;box-sizing:border-box;
+}
