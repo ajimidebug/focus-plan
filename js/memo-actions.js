@@ -213,7 +213,7 @@
       }
       if (!await App.memo.flush()) throw new Error('笔记尚未安全保存，请先复制或下载');
       const d = S().data(), before = copy(d);
-      try { mutate(); } catch (e) { Object.keys(d).forEach(k => delete d[k]); Object.assign(d, before); throw e; }
+      try { mutate(); App.memoWorkspace?.pruneExec?.(); } catch (e) { Object.keys(d).forEach(k => delete d[k]); Object.assign(d, before); throw e; }
       if (!await S().save()) { unsettled = true; throw new Error('此次操作尚未保存；文字仍在，请点“重试保存”，不要刷新'); }
       return true;
     } finally { committing = false; }

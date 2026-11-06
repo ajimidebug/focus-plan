@@ -335,3 +335,51 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .gantt-dependency-picker .gantt-dependency-list { max-height:170px; overflow:auto; }
 .gantt-dependency-picker [data-gantt-dep-count] { font-size:12px; color:var(--muted); font-weight:400; }
 @media(max-width:480px){.memo-gantt { --gantt-label-width:clamp(110px,34vw,145px); }.memo-gantt .memo-gantt-name { max-width:none; flex-wrap:nowrap; }.memo-gantt .gantt-controls .btn { padding:4px 7px; }}
+
+
+/* 175.3: compact execution queue and global deadlines. */
+.mw-exec-board,.mw-deadlines{min-width:0;margin:12px 0;}
+.mw-exec-head,.mw-deadlines-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;}
+.mw-exec-head h2,.mw-deadlines-head strong{margin:0;font-size:15px;}
+.mw-exec-head small{font-size:12px;font-weight:400;color:var(--muted);}
+.mw-exec-item{display:flex;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--line);padding:9px 0;min-width:0;}
+.mw-exec-color{flex:none;align-self:stretch;width:4px;min-height:36px;border-radius:5px;background:var(--muted);}
+.mw-exec-item[data-category='required'] .mw-exec-color{background:#d94e5b;}
+.mw-exec-item[data-category='ideal'] .mw-exec-color{background:#d49b26;}
+.mw-exec-item[data-category='extra'] .mw-exec-color{background:#339879;}
+.mw-exec-info{flex:1 1 135px;min-width:0;display:flex;flex-direction:column;gap:3px;}
+.mw-exec-info strong{font-size:13px;overflow-wrap:anywhere;}
+.mw-exec-info small{font-size:11px;color:var(--muted);}
+.mw-exec-actions{display:flex;flex-wrap:wrap;gap:5px;}
+.mw-exec-actions .btn{min-height:36px;padding:5px 8px;}
+.mw-exec-more{position:relative;flex:none;}
+.mw-exec-more>summary{min-width:36px;min-height:36px;display:grid;place-items:center;border:1px solid var(--line);border-radius:6px;list-style:none;cursor:pointer;}
+.mw-exec-more>summary::-webkit-details-marker{display:none;}
+.mw-exec-more-actions{position:absolute;right:0;top:100%;z-index:25;width:170px;max-width:75vw;display:flex;flex-wrap:wrap;gap:5px;padding:8px;background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 12px #0002;}
+.mw-exec-picker{max-height:55vh;overflow:auto;}
+.mw-exec-candidate{display:flex;align-items:center;gap:9px;padding:9px 6px;border-bottom:1px solid var(--line);font-size:13px;}
+.mw-exec-candidate>span{flex:1;min-width:0;overflow-wrap:anywhere;}
+.mw-exec-candidate small{color:var(--muted);}
+.overview-task-frame{position:relative;min-width:0;padding-bottom:17px;}
+.overview-task-frame .overview-task{width:100%;}
+.overview-exec-add{position:absolute;right:4px;bottom:0;border:1px solid var(--line);border-radius:6px;font-size:11px;min-height:28px;padding:3px 7px;background:var(--card);color:var(--muted);cursor:pointer;}
+.mw-deadlines-list{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.ms-compact-item{flex:1 1 130px;min-width:0;max-width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);cursor:pointer;text-align:left;}
+.ms-compact-item.is-pinned{border-color:var(--primary);}
+.ms-compact-item>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600;}
+.ms-compact-item>small{font-size:10px;color:var(--muted);white-space:nowrap;}
+.mw-assign-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin:8px 0;}
+.mw-assign-day{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:0;min-height:49px;padding:4px 0;}
+.mw-assign-day small{font-size:10px;}
+.mw-assign-day strong{font-size:13px;}
+.mw-assign-day[aria-pressed='true']{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 13%,var(--card));}
+.mw-assign-choices,.mw-assign-options{display:flex;flex-wrap:wrap;gap:7px;margin:9px 0;}
+.mw-assign-choices>.btn{flex:1;min-width:70px;min-height:43px;}
+.memo-gantt{--gantt-label-width:76px;}
+.memo-gantt .gantt-task-title{display:block;font-size:13px;line-height:1.4;width:3em;max-width:3em;word-break:break-all;white-space:normal;}
+.memo-gantt .memo-gantt-name{padding:6px 4px;align-items:center;justify-content:center;}
+.memo-gantt .gantt-task-warning{font-size:9px;}
+.memo-gantt .gantt-time-overlay{z-index:7;pointer-events:none;overflow:visible;}
+.memo-gantt .gantt-deadline-line{pointer-events:none;}
+.memo-gantt .gantt-deadline-badge{position:absolute;left:2px;top:13px;min-width:22px;height:22px;padding:1px 4px;border:1px solid #ad8140;border-radius:5px;background:var(--card);color:#986b24;font-size:12px;font-weight:700;cursor:pointer;pointer-events:auto;}
+@media(max-width:480px){.memo-gantt{--gantt-label-width:76px;}.mw-exec-info{flex-basis:135px;}.mw-exec-actions{margin-left:12px;}.mw-exec-item{align-items:start;}}
