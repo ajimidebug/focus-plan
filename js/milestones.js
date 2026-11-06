@@ -11,7 +11,7 @@ function sorted(){return list().slice().sort((a,b)=>String(due(a)).localeCompare
 function compactHTML(){
  const pinned=sorted().filter(m=>m.pinned===true);
  const upcoming=sorted().filter(m=>!m.pinned&&daysLeft(m)!==null&&daysLeft(m)>=0).slice(0,Math.max(0,3-pinned.length));
- const arr=[...pinned,...upcoming].sort((a,b)=>String(due(a)).localeCompare(String(due(b)));
+ const arr=[...pinned,...upcoming].sort((a,b)=>String(due(a)).localeCompare(String(due(b))));
  const chip=m=>'<button type="button" class="ms-compact-item'+(m.pinned?' is-pinned':'')+'" data-ms-item="'+esc(m.id)+'" title="'+esc(m.name+' · '+due(m))+'"><span>'+(m.pinned?'📌 ':'')+esc(m.name)+'</span><small>'+esc(label(daysLeft(m)))+'</small></button>';
  return '<section id="mw-deadlines" class="mw-deadlines card" aria-label="全局截止日期"><div class="mw-deadlines-head"><strong>截止日期</strong><button type="button" class="btn btn-small" data-mw="ddl">全部／添加</button></div><div class="mw-deadlines-list">'+(arr.length?arr.map(chip).join(''):'<span class="hint">尚无待提醒的截止日期</span>')+'</div></section>';
 }
