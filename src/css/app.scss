@@ -300,6 +300,12 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .memo-gantt .gantt-settings-body { position:absolute; top:calc(100% + 5px); right:0; z-index:30; width:170px; padding:10px; background:var(--card); border:1px solid var(--line); border-radius:9px; box-shadow:0 6px 20px #0003; }
 .memo-gantt .gantt-settings-body label { font-size:12px; }
 .memo-gantt .gantt-settings-body select,.memo-gantt .gantt-settings-body .btn { width:100%; }
+.memo-gantt .gantt-settings-body:has(.gantt-custom-fields:not([hidden])) { width:min(300px,calc(100vw - 42px));max-height:min(70dvh,540px);overflow-y:auto; }
+.memo-gantt .gantt-custom-fields { display:grid;gap:7px;margin:9px 0; }
+.memo-gantt .gantt-custom-fields[hidden],.memo-gantt .gantt-custom-fields label[hidden] { display:none; }
+.memo-gantt .gantt-custom-fields input { width:100%;max-width:100%;min-width:0;min-height:38px; }
+.memo-gantt .gantt-custom-error { font-size:12px;color:var(--danger,#b64040);overflow-wrap:anywhere; }
+.memo-gantt .gantt-current-range { min-width:0;overflow-wrap:anywhere;white-space:normal; }
 .memo-gantt .memo-gantt-scroller { width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; border:1px solid var(--line); border-radius:9px; padding:0 0 8px; }
 .memo-gantt .memo-gantt-track { position:relative; width:var(--gantt-track-width); min-width:var(--gantt-track-width); }
 .memo-gantt .memo-gantt-scale,.memo-gantt .memo-gantt-item { width:var(--gantt-track-width); min-width:0; display:grid; grid-template-columns:var(--gantt-label-width) var(--gantt-axis-width); box-sizing:border-box; gap:0; }

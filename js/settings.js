@@ -144,8 +144,9 @@
       '<p class="hint">有些"还没到"的日期会不小心在数据里留下记录（点开过日历就会）。这里能一次看清楚：' +
       '<b>空白的</b>一键删掉；你<b>提前安排</b>了任务的未来日期会单独标出来，默认不动它。</p>' +
       '</div>' +
-      '<div class="set-group"><h4>🏆 当天任务全部完成奖励（每日推进不计入）</h4>' +
+      '<div class="set-group"><h4>🏆 必做与理想全部完成奖励</h4>' +
       numRow('set-perfect-points', '全部任务完成奖励积分（可自定义）', s.perfectRewardPoints, '分') +
+      '<p class="hint">仅需必做与理想两栏全部达标；长期拓展不计入。已安排的普通习惯按当日目标次数判断，监督类习惯不影响达标。</p>' +
       '</div>' +
       '<div class="set-group"><h4>⏱ 小时计划</h4>' +
       numRow('set-hour-min', '每个小时计划的默认时长', s.hourPlanDefaultMin, '分钟') +

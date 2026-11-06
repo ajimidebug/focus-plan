@@ -103,9 +103,30 @@ function apply(task,modal){
 function monthDay(n,offset){
  const d=new Date(n*DAY);return Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+offset,1)/DAY;
 }
+// Relative start and linked deadline remain live after app restart or day rollover.
+function customRange(now=Date.now()){
+ const today=M().naturalDay(now),startKind=['before2','yesterday','today','date'].includes(pref('custom-start-kind','before2'))?pref('custom-start-kind','before2'):'before2';
+ const startDate=pref('custom-start-date',M().shiftDay(today,-2));
+ const startText=startKind==='before2'?M().shiftDay(today,-2):startKind==='yesterday'?M().shiftDay(today,-1):startKind==='today'?today:startDate;
+ const deadlines=(A.ms?.list?.()||[]).filter(x=>M().validDate(x.due||x.end||x.start)).slice().sort((a,b)=>String(a.due||a.end||a.start).localeCompare(String(b.due||b.end||b.start)));
+ const fallback=deadlines.find(x=>(x.due||x.end||x.start)>=today)||deadlines[0];
+ const endKind=['ddl','date'].includes(pref('custom-end-kind',fallback?'ddl':'date'))?pref('custom-end-kind',fallback?'ddl':'date'):(fallback?'ddl':'date');
+ const deadlineId=pref('custom-ddl-id',fallback?.id||''),selected=deadlines.find(x=>x.id===deadlineId);
+ const endDate=pref('custom-end-date',M().shiftDay(today,30));
+ const endText=endKind==='ddl'?(selected?.due||selected?.end||selected?.start||''):endDate;
+ const from=dayNumber(startText)??dayNumber(M().shiftDay(today,-2)),rawEnd=dayNumber(endText);
+ let error='',to=rawEnd;
+ if(startKind==='date'&&!M().validDate(startText))error='起点日期无效，请重新选择';
+ if(endKind==='ddl'&&!selected)error='所选截止日期不存在，请重新选择';
+ else if(endKind==='date'&&!M().validDate(endText))error='终点日期无效，请重新选择';
+ if(rawEnd===null)to=from+30;
+ if(to<from){error='截止日期早于起点，请调整日期';to=from;}
+ if(to-from>3650){error='自定义视图最长为10年，请缩短范围';to=from+3650;}
+ return {startKind,startDate,endKind,endDate,deadlineId,deadlines,from,to,error};
+}
 function model(now=Date.now()){
  const today=dayNumber(M().naturalDay(now)),all=nodes();
- const zoom=['month','quarter','year','all'].includes(pref('zoom-compact','month'))?pref('zoom-compact','month'):'month';
+ const zoom=['month','quarter','year','all','custom'].includes(pref('zoom-compact','month'))?pref('zoom-compact','month'):'month';
  const focus=dayNumber(pref('focus-compact',M().naturalDay(now)))??today;
  const rows=all.map(n=>{
   const a=dayNumber(n.task.memoGanttStart),b=dayNumber(n.task.memoGanttEnd),inherited=dayNumber(n.day);
@@ -118,9 +139,10 @@ function model(now=Date.now()){
  for(const n of rows)n.conflicts=n.dependencies.map(normalizeKey).filter(key=>{const p=map.get(key);return !p||!p.achieved||(p.end!==null&&n.start!==null&&p.end>n.start)});
  rows.sort((a,b)=>Number(a.achieved)-Number(b.achieved)||(a.end??Infinity)-(b.end??Infinity)||a.title.localeCompare(b.title));
  const months=zoom==='month'?1:zoom==='quarter'?6:zoom==='year'?24:0,planned=rows.filter(r=>r.valid);
- const from=zoom==='all'?(planned.length?Math.min(today,...planned.map(x=>x.start??x.end))-7:today-7):monthDay(focus,0);
- const to=zoom==='all'?(planned.length?Math.max(today,...planned.map(x=>x.end))+7:today+30):monthDay(focus,months)-1;
- return {now:today,focus,zoom,from,to,rows};
+ const custom=zoom==='custom'?customRange(now):null;
+ const from=custom?custom.from:zoom==='all'?(planned.length?Math.min(today,...planned.map(x=>x.start??x.end))-7:today-7):monthDay(focus,0);
+ const to=custom?custom.to:zoom==='all'?(planned.length?Math.max(today,...planned.map(x=>x.end))+7:today+30):monthDay(focus,months)-1;
+ return {now:today,focus,zoom,from,to,rows,custom};
 }
 function rowHtml(p,m,width){
  const total=m.to-m.from+1,lo=p.valid?Math.max(p.start??p.end,m.from):null,hi=p.valid?Math.min(p.end,m.to):null;
@@ -145,12 +167,23 @@ let scrollPosition=null,selectedKey=null;
 function html(now=Date.now()){
  const m=model(now),raw=pref('filter','all'),allowed=new Set(['all','',...groups().map(g=>g.id)]),filter=raw==='uncategorized'?'':allowed.has(raw)?raw:'all';
  const categories=[{id:'',name:'未分组'},...groups().map(g=>({id:g.id,name:g.name}))];
- const dayPx=m.zoom==='month'?28:m.zoom==='quarter'?5:m.zoom==='year'?1.6:Math.max(.8,Math.min(8,750/(m.to-m.from+1)));
+ const dayPx=m.zoom==='month'?28:m.zoom==='custom'?Math.max(1.5,Math.min(28,900/(m.to-m.from+1))):m.zoom==='quarter'?5:m.zoom==='year'?1.6:Math.max(.8,Math.min(8,750/(m.to-m.from+1)));
  const width=Math.max(580,Math.min(11000,Math.ceil((m.to-m.from+1)*dayPx))),total=m.to-m.from+1;
  const ticks=[];for(let d=m.from;d<=m.to;d++){const date=new Date(d*DAY),day=date.getUTCDate(),month=date.getUTCMonth()+1;let title='';if(m.zoom==='month'){if(day===1||day%3===0)title=day+'日'}else if(m.zoom==='quarter'){if(day===1)title=month+'月'}else if(day===1&&(m.zoom==='all'||month%2===1))title=month+'月';if(title)ticks.push('<span class="gantt-axis-tick" style="left:'+((d-m.from)/total*100)+'%">'+E(title)+'</span>')}
  const selector='<select data-gantt-filter-select aria-label="选择甘特图分组"><option value="all"'+(filter==='all'?' selected':'')+'>全部 · '+m.rows.length+' 项</option>'+categories.filter(g=>m.rows.some(x=>x.group===g.id)).map(g=>'<option value="'+E(g.id||'uncategorized')+'"'+(filter===g.id?' selected':'')+'>'+E(g.name)+' · '+m.rows.filter(x=>x.group===g.id).length+' 项</option>').join('')+'</select>';
- const menu='<details class="gantt-settings"><summary title="视图设置" aria-label="视图设置">⋯</summary><div class="gantt-settings-body"><label>范围<select data-gantt-zoom><option value="month"'+(m.zoom==='month'?' selected':'')+'>月</option><option value="quarter"'+(m.zoom==='quarter'?' selected':'')+'>半年</option><option value="year"'+(m.zoom==='year'?' selected':'')+'>两年</option><option value="all"'+(m.zoom==='all'?' selected':'')+'>全部</option></select></label><button class="btn btn-small" data-gantt-manage>管理分组</button></div></details>';
- const nav='<div class="gantt-controls"><div class="gantt-topbar"><label class="gantt-select-wrap">'+selector+'</label><button class="btn btn-small" data-gantt-create aria-label="新建项目">＋</button>'+menu+'</div><div class="gantt-timeline-controls"><button class="btn btn-small" data-gantt-navigate="-1" aria-label="上一时间段">‹</button><span class="gantt-current-range">'+E(new Date(m.focus*DAY).getUTCFullYear()+'年'+(new Date(m.focus*DAY).getUTCMonth()+1)+'月')+'</span><button class="btn btn-small" data-gantt-navigate="1" aria-label="下一时间段">›</button><button class="btn btn-small" data-gantt-navigate="0">今天</button></div></div>';
+ const c=m.custom||customRange(now),opt=(v,label,selected)=>'<option value="'+E(v)+'"'+(v===selected?' selected':'')+'>'+E(label)+'</option>';
+ const ddlOptions=(c.deadlineId&&!c.deadlines.some(x=>x.id===c.deadlineId)?'<option value="" selected>原截止日期已删除</option>':'')+
+   (c.deadlines.length?c.deadlines.map(x=>opt(x.id,x.name+' · '+(x.due||x.end||x.start),c.deadlineId)).join(''):'<option value="">暂无截止日期</option>');
+ const customFields='<div class="gantt-custom-fields"'+(m.zoom==='custom'?'':' hidden')+'>'+
+   '<label>起点<select data-gantt-custom-start-kind>'+[['before2','前天（每日更新）'],['yesterday','昨天（每日更新）'],['today','今天（每日更新）'],['date','指定日期']].map(x=>opt(x[0],x[1],c.startKind)).join('')+'</select></label>'+
+   '<label'+(c.startKind==='date'?'':' hidden')+'>起点日期<input type="date" data-gantt-custom-start-date value="'+E(c.startDate)+'"></label>'+
+   '<label>终点<select data-gantt-custom-end-kind>'+opt('ddl','已有截止日期',c.endKind)+opt('date','指定日期',c.endKind)+'</select></label>'+
+   '<label'+(c.endKind==='ddl'?'':' hidden')+'>选择截止日期<select data-gantt-custom-ddl>'+ddlOptions+'</select></label>'+
+   '<label'+(c.endKind==='date'?'':' hidden')+'>终点日期<input type="date" data-gantt-custom-end-date value="'+E(c.endDate)+'"></label>'+
+   (c.error?'<p role="alert" class="gantt-custom-error">'+E(c.error)+'</p>':'')+
+   '</div>';
+ const menu='<details class="gantt-settings"'+(pref('settings-open','closed')==='open'?' open':'')+'><summary title="视图设置" aria-label="视图设置">⋯</summary><div class="gantt-settings-body"><label>范围<select data-gantt-zoom><option value="month"'+(m.zoom==='month'?' selected':'')+'>月</option><option value="quarter"'+(m.zoom==='quarter'?' selected':'')+'>半年</option><option value="year"'+(m.zoom==='year'?' selected':'')+'>两年</option><option value="all"'+(m.zoom==='all'?' selected':'')+'>全部</option><option value="custom"'+(m.zoom==='custom'?' selected':'')+'>自定义日期</option></select></label>'+customFields+'<button class="btn btn-small" data-gantt-manage>管理分组</button></div></details>';
+ const nav='<div class="gantt-controls"><div class="gantt-topbar"><label class="gantt-select-wrap">'+selector+'</label><button class="btn btn-small" data-gantt-create aria-label="新建项目">＋</button>'+menu+'</div><div class="gantt-timeline-controls">'+(m.zoom==='custom'?'<span class="gantt-current-range">'+E(dayString(m.from)+' ～ '+dayString(m.to))+'</span>':'<button class="btn btn-small" data-gantt-navigate="-1" aria-label="上一时间段">‹</button><span class="gantt-current-range">'+E(new Date(m.focus*DAY).getUTCFullYear()+'年'+(new Date(m.focus*DAY).getUTCMonth()+1)+'月')+'</span><button class="btn btn-small" data-gantt-navigate="1" aria-label="下一时间段">›</button><button class="btn btn-small" data-gantt-navigate="0">今天</button>')+'</div></div>';
  const blocks=categories.filter(g=>(filter==='all'||filter===g.id)&&m.rows.some(x=>x.group===g.id)).map((g,index)=>{
   const all=m.rows.filter(x=>x.group===g.id);
   const open=pref('group:'+g.id,g.id===''?'closed':(filter!=='all'||index===1)?'open':'closed')==='open';
@@ -284,10 +317,23 @@ document.addEventListener('click',e=>{
  if(b.hasAttribute('data-gantt-expand')){const id=b.dataset.ganttExpand==='uncategorized'?'':b.dataset.ganttExpand;setPref('all:'+id,pref('all:'+id,'closed')==='open'?'closed':'open');return refresh();}
  if(b.hasAttribute('data-gantt-navigate')){const step=Number(b.dataset.ganttNavigate),m=model(),months=m.zoom==='month'?1:m.zoom==='quarter'?6:m.zoom==='year'?24:6;setPref('focus-compact',step===0?M().naturalDay():dayString(monthDay(m.focus,step*months)));scrollPosition=null;return refresh();}
 });
-document.addEventListener('change',e=>{const x=e.target.closest('[data-gantt-zoom],[data-gantt-filter-select]');if(!x)return;if(x.matches('[data-gantt-zoom]')){setPref('zoom-compact',x.value);scrollPosition=null;}else setPref('filter',x.value);refresh();});
+document.addEventListener('change',e=>{
+ const x=e.target.closest('[data-gantt-zoom],[data-gantt-filter-select],[data-gantt-custom-start-kind],[data-gantt-custom-start-date],[data-gantt-custom-end-kind],[data-gantt-custom-end-date],[data-gantt-custom-ddl]');
+ if(!x)return;
+ if(x.matches('[data-gantt-zoom]')){setPref('zoom-compact',x.value);scrollPosition=null;setPref('settings-open','open');}
+ else if(x.matches('[data-gantt-filter-select]'))setPref('filter',x.value);
+ else {
+  const choices=[['data-gantt-custom-start-kind','custom-start-kind'],['data-gantt-custom-start-date','custom-start-date'],['data-gantt-custom-end-kind','custom-end-kind'],['data-gantt-custom-end-date','custom-end-date'],['data-gantt-custom-ddl','custom-ddl-id']];
+  const chosen=choices.find(([attribute])=>x.hasAttribute(attribute));
+  if(chosen)setPref(chosen[1],x.value);
+  setPref('settings-open','open');scrollPosition=null;
+ }
+ refresh();
+});
 document.addEventListener('scroll',e=>{if(e.target?.matches?.('#mw-today .memo-gantt-scroller'))scrollPosition=e.target.scrollLeft},true);
 document.addEventListener('toggle',e=>{const target=e.target;if(target.matches?.('.gantt-group')){setPref('group:'+target.dataset.ganttGroup,target.open?'open':'closed');requestAnimationFrame(syncEdges);}
  if(target.matches?.('.memo-gantt[data-gantt-root]')){setPref('root',target.open?'open':'closed');requestAnimationFrame(syncEdges);}
+ if(target.matches?.('.gantt-settings')&&target.isConnected)setPref('settings-open',target.open?'open':'closed');
 },true);
 window.addEventListener('resize',()=>requestAnimationFrame(syncEdges));
 A.memoGantt={validate,model,html,editor,apply,quick,syncEdges,locate,nodes,normalizeKey};

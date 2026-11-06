@@ -204,6 +204,92 @@ const server=http.createServer((req,res)=>{
   assert(imported.created>=4,'mixed module imports created plans');
   assert.equal(imported.dep,imported.key,'cross-type dependency remaps to imported queue ID');
   assert.equal(imported.group,'g-life','project category still restored');
+
+  // 175.5: pinned DDLs are included for visibility and then date-sorted, with
+  // three default visible slots and no loss of additional pinned reminders.
+  const ddlOrder=await page.evaluate(()=>{
+    const A=App,d=A.store.data();
+    d.milestones=[
+      {id:'far',name:'远期置顶',due:'2026-12-12',pinned:true},
+      {id:'soon',name:'临近任务',due:'2026-11-08'},
+      {id:'earliest',name:'最早任务',due:'2026-11-07'},
+      {id:'fourth',name:'未置顶候选',due:'2026-11-09'}
+    ];
+    A.ms.refresh();
+    return [...document.querySelectorAll('#mw-deadlines .ms-compact-item')].map(x=>x.dataset.msItem);
+  });
+  assert.deepEqual(ddlOrder,['earliest','soon','far'],'pinned future DDL appears at the right by date');
+  const bounty=await page.evaluate(()=>{
+    const A=App;A.store.settings().memoBountyThreshold=25;
+    return [11,24,25,31].map(p=>({points:p,bounty:A.memoOrganize.bounty(p),tier:A.memoOrganize.bountyTier(p)}));
+  });
+  assert.deepEqual(bounty.map(x=>x.bounty),[false,false,true,true],'configured >=25 bounty threshold is honored');
+  assert.equal(bounty[2].tier,'basic','low tier starts at configured threshold');
+
+  // Save a relative start + linked deadline rule, not literal day boundaries.
+  await page.evaluate(()=>App.memoWorkspace.render());
+  if(!await page.locator('.gantt-settings').evaluate(x=>x.open))await page.locator('.gantt-settings > summary').click();
+  await page.locator('[data-gantt-zoom]').selectOption('custom');
+  await page.locator('[data-gantt-custom-end-kind]').selectOption('ddl');
+  await page.locator('[data-gantt-custom-ddl]').selectOption('far');
+  const readRange=()=>page.evaluate(()=>{
+    const m=App.memoGantt.model(),fmt=n=>new Date(n*86400000).toISOString().slice(0,10);
+    return {from:fmt(m.from),to:fmt(m.to),error:m.custom?.error||''};
+  });
+  assert.deepEqual(await readRange(),{from:'2026-11-04',to:'2026-12-12',error:''},'before yesterday to selected DDL');
+  assert.equal(await page.locator('[data-gantt-custom-start-kind]').inputValue(),'before2','relative start selected');
+  await page.evaluate(()=>App.store.save());
+  await page.reload();
+  await page.waitForFunction(()=>App?.app?.ready&&App?.memoGantt?.model);
+  assert.deepEqual(await readRange(),{from:'2026-11-04',to:'2026-12-12',error:''},'custom view survives reload');
+  await page.clock.setFixedTime(new Date('2026-11-07T12:00:00+08:00'));
+  assert.deepEqual(await readRange(),{from:'2026-11-05',to:'2026-12-12',error:''},'relative start advances on following day');
+  await page.evaluate(()=>{App.store.data().milestones.find(x=>x.id==='far').due='2026-12-20';App.memoWorkspace.render();});
+  assert.equal((await readRange()).to,'2026-12-20','linked deadline edits update visible end');
+  const deleted=await page.evaluate(()=>{
+    App.store.data().milestones=App.store.data().milestones.filter(x=>x.id!=='far');
+    App.memoWorkspace.render();
+    return App.memoGantt.model().custom.error;
+  });
+  assert.match(deleted,/不存在/,'deleted DDL prompts reselection without dropping saved rule');
+
+  // 175.5: use genuine completion events with long-term work left unfinished.
+  const rewardState=await page.evaluate(()=>{
+    const A=App,d=A.store.data(),day='2026-11-06',at='2026-11-06T04:00:00.000Z';
+    d.days[day].tasks={required:[{id:'req-1755',text:'必须完成',done:false}],ideal:[{id:'ideal-1755',text:'理想完成',done:false}],extra:[{id:'extra-1755',text:'未做的长期拓展',done:false}]};
+    d.days[day].rewards=[];d.ledger=[];d.memoEvents=[];d.queue=[];d.queueDone=[];d.memoProjects=[];d.daily=[];d.checkins=[];d.memoHabitPlans=[];
+    const task=(id,list)=>({kind:'task',id,day,list,title:id});
+    const first=A.memoActions.completeCore(task('req-1755','required'),'',at,[{kind:'perfect',points:20}]);
+    const premature=(d.days[day].rewards||[]).filter(r=>r.kind==='perfect').length;
+    const second=A.memoActions.completeCore(task('ideal-1755','ideal'),'',at,[{kind:'perfect',points:20}]);
+    const earned=d.days[day].rewards.find(r=>r.kind==='perfect');
+    const taskReward={premature,earned:!!earned,scope:earned?.scopeVersion,dependencies:earned?.dependencies?.map(x=>x.id),extraPending:!d.days[day].tasks.extra[0].done};
+    A.memoActions.undoCore(second.id,'',at);
+    const undoTask=d.days[day].rewards.some(r=>r.kind==='perfect');
+
+    d.days[day].tasks.ideal=[];
+    d.checkins=[{id:'habit-1755',text:'复习两轮',target:2,rewardLimit:99,points:1,days:{}}];
+    d.memoHabitPlans=[{id:'plan-1755',habitId:'habit-1755',mode:'daily',from:day,list:'ideal',target:2}];
+    const spec={kind:'checkin',id:'habit-1755',day,title:'复习两轮'};
+    A.memoActions.completeCore({...spec},'',at,[{kind:'perfect',points:20}]);
+    const earlyHabit=d.days[day].rewards.some(r=>r.kind==='perfect');
+    const last=A.memoActions.completeCore({...spec},'',at,[{kind:'perfect',points:20}]);
+    const habitAward=d.days[day].rewards.find(r=>r.kind==='perfect');
+    const habitGoal=habitAward?.dependencies.find(x=>x.id==='habit:habit-1755')?.goal;
+    A.memoActions.undoCore(last.id,'',at);
+    const undoneHabit=d.days[day].rewards.some(r=>r.kind==='perfect');
+    return {taskReward,undoTask,earlyHabit,habitAward:!!habitAward,habitGoal,undoneHabit};
+  });
+  assert.equal(rewardState.taskReward.premature,0,'cannot claim perfect before both daily columns are complete');
+  assert.equal(rewardState.taskReward.earned,true,'can claim perfect with long-term unfinished');
+  assert.equal(rewardState.taskReward.scope,2,'new reward scope version marked for historical compatibility');
+  assert(rewardState.taskReward.dependencies.includes('["task","req-1755","2026-11-06"]')&&rewardState.taskReward.dependencies.includes('["task","ideal-1755","2026-11-06"]'),'reward tracks two-column task identities');
+  assert(rewardState.taskReward.extraPending&&rewardState.taskReward.dependencies.length===2,'long-term third column excluded');
+  assert.equal(rewardState.undoTask,false,'undo task withdraws two-column reward');
+  assert.equal(rewardState.earlyHabit,false,'habit below target cannot claim perfect');
+  assert.equal(rewardState.habitAward,true,'habit reaching target grants perfect');
+  assert.equal(rewardState.habitGoal,2,'habit reward saves goal snapshot');
+  assert.equal(rewardState.undoneHabit,false,'undo habit checkin withdraws perfect reward');
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
   assert(overflow<=1,'no page-level horizontal overflow: '+overflow);
   assert.deepEqual(errors,[],'page errors');

@@ -31,27 +31,48 @@
     const key = Object.keys(S().data().days).find(k => S().data().days[k] === day);
     return ['required', 'ideal', 'extra'].map(k => (day.tasks[k] || []).filter(t => !t.fromQueue && !t.fromDaily && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed && !App.memoReview?.hidden(t,k)).concat((App.memoFlow?.assigned(key, k) || []).filter(t=>!App.memoReview?.hidden(t,k)).map(t => Object.assign({}, t, { done: !!t.doneAt })),(App.memoFlow?.deferred?.(key,k)||[]).filter(x=>!x.closed).map(x=>Object.assign({},x.task,{done:false}))));
   }
-  function rewardSpec(spec) { const a = spec.kind === 'queue' && App.memoFlow?.assignment(spec.id); return a ? Object.assign({}, spec, { kind: 'task', day: a.day, list: a.list }) : spec; }
-  function eligible(day, kind) {
-    const lists = taskLists(day), done = a => a.length > 0 && a.every(t => t.done);
-    return kind === 'base' ? done(lists[0]) : lists.some(a => a.length) && lists.every(a => !a.length || a.every(t => t.done));
+  // Reward targets reuse the three-column progress calculation and its habit rules.
+  // "Perfect" covers Must and Ideal; Long-term is never an eligibility condition.
+  function rewardTargets(dayKey){
+    return ['required','ideal'].map(list=>App.memoFinance.column(dayKey,list,true).items.filter(x=>x.target).map(x=>({...x,list})));
   }
-  function rewardChoices(spec) {
-    spec = rewardSpec(spec); if (spec.kind !== 'task') return [];
-    const day = S().getDay(spec.day), lists = taskLists(day).map(items => items.map(t => Object.assign({}, t, { done: t.id === spec.id || t.done })));
-    const done = items => items.length > 0 && items.every(t => t.done);
-    return ['base', 'perfect'].filter(kind => (kind === 'base' ? done(lists[0]) : lists.some(a=>a.length) && lists.every(a=>!a.length || done(a))) && !(day.rewards || []).some(r=>r.kind===kind));
+  function rewardKey(spec){
+    return spec.kind==='checkin'?'habit:'+spec.id:App.memoSchedule.key({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list});
   }
-  function grantRewards(event, choices) {
-    if (event.kind !== 'task' && !(event.kind === 'queue' && event.sourceList)) return;
-    const day = S().getDay(event.sourceDay); day.rewards = day.rewards || [];
-    choices.forEach(choice => {
-      if (!eligible(day, choice.kind) || day.rewards.some(r => r.kind === choice.kind)) return;
-      const id = S().uid(), points = Math.max(0, Number(choice.points) || 0);
-      if (!points) return;
-      const dependencies = taskLists(day).slice(0, choice.kind === 'base' ? 1 : 3).flat().map(t => t.id);
-      S().data().ledger.push({ id, date: event.sourceDay, type: 'reward-' + choice.kind, points, leisure: 0, taskId: event.sourceId, memoReward: true, at: event.at, note: choice.kind === 'base' ? '保底奖励' : '全部任务完成奖励' });
-      day.rewards.push({ kind: choice.kind, points, at: event.at, memoLedgerId: id, dependencies });
+  function rewardEligible(groups,kind){
+    const targets=(kind==='base'?groups.slice(0,1):groups).flat();
+    return targets.length>0&&targets.every(x=>x.done);
+  }
+  function eligible(dayKey,kind){return rewardEligible(rewardTargets(dayKey),kind);}
+  // Pre-v175.5 rewards retain their original three-column eligibility semantics.
+  function legacyEligible(day,kind){
+    const lists=taskLists(day),done=a=>a.length>0&&a.every(t=>t.done);
+    return kind==='base'?done(lists[0]):lists.some(a=>a.length)&&lists.every(a=>!a.length||a.every(t=>t.done));
+  }
+  function rewardChoices(spec){
+    const sourceDay=spec.day||(spec.kind==='queue'?App.memoFlow?.assignment(spec.id)?.day:null)||M().userDay();
+    const day=S().getDay(sourceDay),groups=rewardTargets(sourceDay),key=rewardKey(spec);
+    let newlyDone=false;
+    for(const item of groups.flat())if(item.id===key&&!item.done){
+      item.done=spec.kind==='checkin'?Number(item.count||0)+1>=Number(item.goal):true;
+      newlyDone=true;
+    }
+    if(!newlyDone)return [];
+    return ['base','perfect'].filter(kind=>rewardEligible(groups,kind)&&!(day.rewards||[]).some(r=>r.kind===kind));
+  }
+  function grantRewards(event,choices){
+    if(!choices.length)return;
+    const day=S().getDay(event.sourceDay),groups=rewardTargets(event.sourceDay),key=rewardKey({kind:event.kind,id:event.sourceId,day:event.sourceDay,list:event.sourceList});
+    if(!groups.flat().some(x=>x.id===key))return;
+    day.rewards=day.rewards||[];
+    choices.forEach(choice=>{
+      if(!['base','perfect'].includes(choice.kind)||!rewardEligible(groups,choice.kind)||day.rewards.some(r=>r.kind===choice.kind))return;
+      const id=S().uid(),points=Math.max(0,Number(choice.points)||0);
+      if(!points)return;
+      const targets=(choice.kind==='base'?groups.slice(0,1):groups).flat();
+      const dependencies=targets.map(x=>({id:x.id,kind:x.kind,...(x.kind==='checkin'?{goal:Number(x.goal)}:{})}));
+      S().data().ledger.push({id,date:event.sourceDay,type:'reward-'+choice.kind,points,leisure:0,taskId:event.sourceId,memoReward:true,at:event.at,note:choice.kind==='base'?'保底奖励':'全部任务完成奖励'});
+      day.rewards.push({kind:choice.kind,points,at:event.at,memoLedgerId:id,scopeVersion:2,dependencies});
     });
   }
   function withdrawLedger(predicate, reason, at = new Date().toISOString()) {
@@ -70,11 +91,28 @@
     });
   }
   function withdrawRewards(dayKey) {
-    const day = S().data().days[dayKey]; if (!day) return;
-    const lost = (day.rewards || []).filter(r => { if (!r.memoLedgerId) return false; if (!r.dependencies) return !eligible(day, r.kind); const all = taskLists(day).flat(); return r.dependencies.some(id => !all.some(t => t.id === id && t.done)); });
-    const ids = lost.map(r => r.memoLedgerId);
+    const day=S().data().days[dayKey];if(!day)return;
+    const current=rewardTargets(dayKey).flat();
+    const lost=(day.rewards||[]).filter(r=>{
+      if(!r.memoLedgerId)return false;
+      if(r.scopeVersion===2){
+        if(!Array.isArray(r.dependencies))return !eligible(dayKey,r.kind);
+        return r.dependencies.some(dep=>{
+          if(!dep||typeof dep.id!=='string')return true;
+          if(dep.kind==='checkin'){
+            const it=(S().data().checkins||[]).find(x=>'habit:'+x.id===dep.id);
+            return !it||Number(it.days?.[dayKey]||0)<Number(dep.goal||1);
+          }
+          return !current.some(item=>item.id===dep.id&&item.done);
+        });
+      }
+      if(!r.dependencies)return !legacyEligible(day,r.kind);
+      const all=taskLists(day).flat();
+      return r.dependencies.some(id=>!all.some(t=>t.id===id&&t.done));
+    });
+    const ids=lost.map(r=>r.memoLedgerId);
     withdrawLedger(l=>ids.includes(l.id),'关联整组奖励撤回');
-    day.rewards = (day.rewards || []).filter(r => !ids.includes(r.memoLedgerId));
+    day.rewards=(day.rewards||[]).filter(r=>!ids.includes(r.memoLedgerId));
   }
   function completeCore(spec, text, at = new Date().toISOString(), choices = []) {
     if (S().status().readOnly) throw new Error('记录保护中，暂不能勾选');
@@ -190,7 +228,7 @@
     });
     M().write(event.noteDay, kept.map(b => b.text).join(''), at, kept);
     event.active = false; event.undoneAt = at; event.reason = reason; App.memoReview?.onUndo(event); App.memoRecurrence?.onUndo(event); App.memoFlow?.restoreBackfillCore(event);
-    if (event.kind === 'task' || (event.kind === 'queue' && event.sourceList)) withdrawRewards(event.sourceDay);
+    if (['task','checkin','daily','project'].includes(event.kind) || (event.kind === 'queue' && event.sourceList)) withdrawRewards(event.sourceDay);
     if (reason.trim()) {
       const noteEvent = { id: S().uid(), kind: 'cancellation', noteDay: M().userDay(at), at };
       append(noteEvent, stamp(at, noteEvent.noteDay) + '【取消勾选】' + event.title + '：' + reason);
@@ -268,7 +306,7 @@
     const m = App.ui.openModal('确认' + (spec.kind === 'checkin' ? '打卡' : '完成'),
       '<p class="action-task-title">'+E(spec.title)+'</p><label for="ma-remark">本次备注（选填）</label><textarea id="ma-remark" rows="2" placeholder="记录这次完成的情况，可留空"></textarea><label>预计用时（分钟，选填）<input id="ma-estimate" type="number" min="0" max="1440" value="'+E(initialEstimate)+'"></label><button class="btn" id="ma-timer" type="button">开始计时</button><details class="action-passage" open><summary>完成说明（可编辑）</summary><p class="hint">时间只表示本次勾选时刻。可补充、改写或清空；清空后仍完成并记积分。</p>' +
       '<label for="memo-action-text">写入笔记的文段</label><textarea id="memo-action-text" class="memo-action-text"></textarea>' +
-      options.map(kind => '<div class="field"><label><input type="checkbox" data-reward="' + kind + '" checked> 同时领取' + (kind === 'base' ? '保底' : '额外全部完成（含选做，非全勤）') + '奖励</label><input type="number" min="0" data-reward-points="' + kind + '" value="' + Number(kind === 'base' ? settings.baseRewardPoints : settings.perfectRewardPoints) + '"></div>').join('') +
+      options.map(kind => '<div class="field"><label><input type="checkbox" data-reward="' + kind + '" checked> 同时领取' + (kind === 'base' ? '保底' : '前两栏全部完成（必做与理想）') + '奖励</label><input type="number" min="0" data-reward-points="' + kind + '" value="' + Number(kind === 'base' ? settings.baseRewardPoints : settings.perfectRewardPoints) + '"></div>').join('') +
       '</details><p class="hint" id="memo-action-info"></p><p id="memo-action-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="commit">确认完成</button>', { lock: true, cancelOnBackdrop: true });
     App.ui.dateContext(m,{day:spec.day||sourceTask?.assignment?.day||day,label:'完成归属',saveSelector:'[data-act=commit]',saveLabel:'确认完成 · ',shortSaveLabel:spec.kind==='checkin'?'确认打卡':'确认完成'});
@@ -395,6 +433,7 @@
       if (spec.kind === 'task') { const task = d.days[spec.day].tasks[spec.list].find(t => t.id === spec.id); task.done = false; if (task.summary) task.summary.done = false; }
       else if (spec.kind === 'queue') { const i = d.queueDone.findIndex(t => t.id === spec.id); if (i < 0) throw new Error('任务已移动'); const it = d.queueDone.splice(i, 1)[0]; delete it.doneDay; delete it.doneAt; d.queue.unshift(it); }
       else { const it = (spec.kind === 'checkin' ? d.checkins : d.daily).find(t => t.id === spec.id); if (spec.kind === 'daily' || it.days[spec.day] <= 1) delete it.days[spec.day]; else it.days[spec.day]--; }
+      withdrawRewards(spec.day);
       const reason = m.querySelector('#memo-action-text').value;
       if (reason.trim()) { const at = new Date().toISOString(); append({ id: S().uid(), kind: 'cancellation', noteDay: M().userDay(at), at }, stamp(at, M().userDay(at)) + '【取消勾选】' + spec.title + '：' + reason); }
     });
