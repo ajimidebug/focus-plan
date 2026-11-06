@@ -53,7 +53,8 @@ const server=http.createServer((req,res)=>{
   const queueOrder=await page.evaluate(()=>{const q=document.querySelector('.exec-queue'),g=document.querySelector('.memo-gantt');return !!(q.compareDocumentPosition(g)&Node.DOCUMENT_POSITION_FOLLOWING)});
   assert(queueOrder,'execution queue precedes Gantt');
   await page.locator('.exec-queue-row [data-exec="skip"]').click();
-  await page.waitForFunction(()=>App.memoExecutionQueue.rows().length===0);
+  await page.locator('.exec-queue-row').waitFor({state:'detached'});
+  assert.equal(await page.evaluate(()=>App.memoExecutionQueue.rows().length),0,'skip removes the stored reference');
   assert.equal(await page.evaluate(()=>App.store.data().days['2026-11-06'].tasks.ideal.find(t=>t.id==='once-ideal')?.done),false,'skip preserves task state');
   assert.equal(await page.locator('.exec-queue-row').count(),0,'skip is visually immediate');
   await page.evaluate(async()=>{
