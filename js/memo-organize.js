@@ -17,7 +17,7 @@ function grouped(items,render,compact=false){
  }).join('');
 }
 function add(id){context=id;A.memoWorkspace.editor(null,'extra')}
-function bountyTier(points){const n=Number(points);return !Number.isFinite(n)||n<11?'none':n>=31?'high':'basic'}
+function bountyTier(points){const n=Number(points),configured=Number(S().settings().memoBountyThreshold??30),threshold=Number.isFinite(configured)&&configured>0?configured:30;return !Number.isFinite(n)||n<threshold?'none':n>=Math.max(31,threshold)?'high':'basic'}
 function bounty(points){return bountyTier(points)!=='none'}
 function badge(){return ''}
 function fold(key,body,count){
