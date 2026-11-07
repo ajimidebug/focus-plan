@@ -1,7 +1,7 @@
 /* Isolated synthetic records. Exercises 173.2 interactions; never opens a user session. */
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const {chromium}=require(require.resolve('playwright',{paths:[process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||'',process.cwd()]}));
+const {chromium}=require('playwright');
 const root=path.resolve(process.env.FOCUS_TEST_ROOT||path.resolve(__dirname,'..'));
 const server=http.createServer((req,res)=>{
  const pathname=new URL(req.url,'http://localhost').pathname;
@@ -23,7 +23,7 @@ async function run(){
    await page.goto('http://127.0.0.1:'+server.address().port);
    await page.addStyleTag({content:'#toast-root{visibility:hidden!important}'});
    const shot=async name=>{if(process.env.FOCUS_SCREENSHOT_DIR){fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR,{recursive:true});await page.screenshot({animations:'disabled',path:path.join(process.env.FOCUS_SCREENSHOT_DIR,name+'-'+width+'.png')});}};
-   await page.waitForFunction(()=>App?.app?.ready);
+   await page.waitForFunction(()=>window.App?.app?.ready);
    if(process.env.FOCUS_TEST_FONT_DIR){await page.addStyleTag({content:'@import url("/__fonts/400.css");body,button,input,textarea,select{font-family:"Noto Sans SC",sans-serif!important}'});await page.evaluate(()=>document.fonts.ready);}
    const day=await page.evaluate(async()=>{
     const M=App.memoCore,S=App.store,d=S.data(),day=M.userDay();
@@ -123,7 +123,7 @@ async function run(){
   // Boundary passes while a form remains open: text updates, target does not move.
   const context=await browser.newContext({viewport:{width:390,height:700},serviceWorkers:'block'}),page=await context.newPage();
   await page.clock.install({time:new Date('2026-10-28T03:59:50+08:00')});
-  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>App?.app?.ready);
+  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.App?.app?.ready);
   await page.evaluate(()=>{
    const day=App.memoCore.userDay();App.store.data().checkins=[{id:'boundary-clock',text:'分日预计计时',target:10,rewardLimit:10,points:2,estimatedMinutes:40,days:{}}];
    App.memoSchedule.startRef({kind:'checkin',id:'boundary-clock',day},Date.now()-20*60000);App.memoSchedule.tick();

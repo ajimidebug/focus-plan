@@ -1,7 +1,7 @@
 /* Synthetic records only. Posting-day flows, granular snapshots, copy deltas and task navigation. */
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const {chromium}=require(require.resolve('playwright',{paths:[process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||'',process.cwd()]}));
+const {chromium}=require('playwright');
 const root=path.resolve(process.env.FOCUS_TEST_ROOT||path.resolve(__dirname,'..'));
 const server=http.createServer((req,res)=>{
  const pathname=new URL(req.url,'http://localhost').pathname,fonts=process.env.FOCUS_TEST_FONT_DIR;
@@ -19,7 +19,7 @@ async function run(){
    const context=await browser.newContext({viewport:{width,height},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    await page.clock.install({time:new Date('2026-10-28T12:00:00+08:00')});
-   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>App?.app?.ready);
+   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.App?.app?.ready);
    await page.addStyleTag({content:'#toast-root{visibility:hidden!important}'});
    if(process.env.FOCUS_TEST_FONT_DIR){await page.addStyleTag({content:'@import url("/__fonts/400.css");body,button,input,textarea,select{font-family:"Noto Sans SC",sans-serif!important}'});await page.evaluate(()=>document.fonts.ready);}
    const {day,old}=await page.evaluate(async()=>{
@@ -102,7 +102,7 @@ async function run(){
    await context.close();
   }
   // Actual 04:00 change refreshes today's flow independently of behavior/effective date.
-  const c=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),p=await c.newPage();await p.clock.install({time:new Date('2026-10-28T03:59:00+08:00')});await p.goto('http://127.0.0.1:'+server.address().port);await p.waitForFunction(()=>App?.app?.ready);await p.clock.pauseAt(new Date('2026-10-28T03:59:59+08:00'));
+  const c=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),p=await c.newPage();await p.clock.install({time:new Date('2026-10-28T03:59:00+08:00')});await p.goto('http://127.0.0.1:'+server.address().port);await p.waitForFunction(()=>window.App?.app?.ready);await p.clock.pauseAt(new Date('2026-10-28T03:59:59+08:00'));
   await p.evaluate(()=>{App.store.data().ledger=[{id:'boundary',at:'2026-10-28T03:59:59+08:00',date:'2026-10-27',points:5,type:'earn-task'}];App.app.refreshStats();App.memoSchedule.tick();});
   check((await p.locator('#stat-points-today').innerText()).includes('+5'),'pre-boundary flow');await p.clock.runFor(2100);await p.evaluate(()=>App.memoSchedule.tick());check((await p.locator('#stat-points-today').innerText())==='今日 +0 / −0','flow resets at 04:00');await c.close();
  }finally{await browser.close();await new Promise(r=>server.close(r));}

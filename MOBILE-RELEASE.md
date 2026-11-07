@@ -1,4 +1,4 @@
-> 174 起采用构建发布：main 保存源码，gh-pages 发布 dist/spa；框架与恢复审计见 [docs/174-framework.md](docs/174-framework.md)。下方旧版发布方式仅供历史参考。
+> 当前开发与发布规范见 [docs/RELEASE.md](docs/RELEASE.md)。175.7 的工作流将验证与授权发布分开，发布复用已验证的 `dist/spa` 候选；实际启用需配置 GitHub Pages Actions。下方旧版发布步骤仅供历史参考，手机备份与数据保护原则继续适用。
 
 # 手机使用与发布维护
 

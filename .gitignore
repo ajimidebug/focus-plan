@@ -13,4 +13,7 @@ public/manifest.webmanifest
 public/version.html
 src/legacy-template.html
 src/css/legacy.css
+public/html-safety.js
+browser-results/
+.release/
 .openai/

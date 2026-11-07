@@ -1,16 +1,20 @@
 {
   "name": "focus-plan",
-  "version": "175.6.0",
+  "version": "175.7.0",
   "private": true,
-  "description": "\u4e2a\u4eba\u5b66\u4e60\u3001\u65f6\u95f4\u4e0e\u79ef\u5206\u8bb0\u5f55",
+  "description": "个人学习、时间与积分记录",
   "scripts": {
     "predevelop": "node scripts/prepare-framework.mjs",
     "prebuild": "node scripts/prepare-framework.mjs",
     "develop": "node scripts/dev.mjs",
     "build": "quasar build && node scripts/package-app.mjs",
-    "check": "node scripts/check-release.mjs",
-    "test": "node --test test/release-safety.test.cjs test/framework.test.cjs",
-    "typecheck": "quasar prepare && vue-tsc --noEmit"
+    "check": "node scripts/check-source.mjs",
+    "test": "node --test test/*.test.cjs && node test/test-store.js",
+    "typecheck": "quasar prepare && vue-tsc --noEmit",
+    "check:release": "node scripts/check-release.mjs",
+    "test:browser": "node scripts/test-browser.mjs",
+    "verify": "npm run check && npm run build && npm run typecheck && npm test && npm run check:release",
+    "release:version": "node scripts/prepare-release.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -20,6 +24,7 @@
     "@fullcalendar/interaction": "6.1.19",
     "@fullcalendar/vue3": "6.1.19",
     "chart.js": "4.6.1",
+    "dompurify": "3.4.17",
     "papaparse": "5.7.0",
     "pinia": "3.0.4",
     "quasar": "2.35.2",
@@ -32,11 +37,14 @@
     "@quasar/app-vite": "3.10.3",
     "@types/papaparse": "5.5.2",
     "esbuild": "0.28.2",
+    "fake-indexeddb": "6.2.4",
     "fast-check": "4.10.2",
+    "jsdom": "26.1.0",
     "playwright": "1.57.0",
     "postcss": "8.5.32",
     "postcss-prefix-selector": "2.2.1",
     "typescript": "5.9.3",
-    "vue-tsc": "3.3.14"
+    "vue-tsc": "3.3.14",
+    "yaml": "2.9.1"
   }
 }

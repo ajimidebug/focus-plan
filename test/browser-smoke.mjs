@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { chromium } = require(require.resolve('playwright', { paths:[process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES || '', process.cwd()] }));
+const { chromium } = require('playwright');
 import { createServer } from 'node:http';
 import { readFileSync, statSync } from 'node:fs';
 import { resolve, extname, sep } from 'node:path';

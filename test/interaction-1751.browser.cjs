@@ -14,7 +14,7 @@ const server=http.createServer((req,res)=>{
   page.on('pageerror',e=>errors.push(e.message));
   await page.clock.install({time:new Date('2026-11-06T12:00:00+08:00')});
   await page.goto('http://127.0.0.1:'+server.address().port+'/#/tasks');
-  await page.waitForFunction(()=>App?.app?.ready&&App?.memoGantt?.nodes&&App?.memoOrganize?.openGroups);
+  await page.waitForFunction(()=>window.App?.app?.ready&&window.App?.memoGantt?.nodes&&window.App?.memoOrganize?.openGroups);
   const initial=await page.evaluate(()=>{
    const A=App,d=A.store.data(),day='2026-11-06';
    d.memoTaskGroups=[{id:'g-math',name:'数学'},{id:'g-life',name:'生活'}];
@@ -267,7 +267,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('[data-gantt-custom-start-kind]').inputValue(),'before2','relative start selected');
   await page.evaluate(()=>App.store.save());
   await page.reload();
-  await page.waitForFunction(()=>App?.app?.ready&&App?.memoGantt?.model);
+  await page.waitForFunction(()=>window.App?.app?.ready&&window.App?.memoGantt?.model);
   assert.deepEqual(await readRange(),{from:'2026-11-04',to:'2026-12-12',error:''},'custom view survives reload');
   await page.clock.setFixedTime(new Date('2026-11-07T12:00:00+08:00'));
   assert.deepEqual(await readRange(),{from:'2026-11-05',to:'2026-12-12',error:''},'relative start advances on following day');

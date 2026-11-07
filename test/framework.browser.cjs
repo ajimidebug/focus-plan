@@ -7,7 +7,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});const base='http://127.0.0.1:'+server.address().port;try{
 for(const width of [320,390,1280]){
  const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',timezoneId:'Asia/Shanghai'}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.clock.setFixedTime(new Date('2026-11-04T12:00:00+08:00'));await page.goto(base+'/#/tasks');await page.waitForFunction(()=>App?.app?.ready&&document.querySelector('.framework-overview'));
+ await page.clock.setFixedTime(new Date('2026-11-04T12:00:00+08:00'));await page.goto(base+'/#/tasks');await page.waitForFunction(()=>window.App?.app?.ready&&document.querySelector('.framework-overview'));
  assert.equal(await page.locator('.bottom-grid button').count(),5);
  const shell=await page.evaluate(()=>({
    stats:[...document.querySelectorAll('.shell-stats #stat-bar .stat-item')].filter(el=>getComputedStyle(el).display!=='none').length,
@@ -75,12 +75,12 @@ for(const width of [320,390,1280]){
    if(view==='stats')assert((await page.locator('canvas').count())>0,'Chart.js mounted');
  }
  const csv=await page.evaluate(()=>App.framework.csv([['文本','值'],['逗号,引号"换行\n','中文']]));assert(csv.includes('"逗号,引号""换行\n"'));assert(csv.includes('\r\n'));
- await page.reload();await page.waitForFunction(()=>App?.app?.ready);assert.equal(await page.evaluate(()=>App.store.getDay('2026-11-04').tasks.ideal[0].text),'成熟框架验收');assert.equal(await page.evaluate(()=>App.store.pointsTotal()),0);
+ await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);assert.equal(await page.evaluate(()=>App.store.getDay('2026-11-04').tasks.ideal[0].text),'成熟框架验收');assert.equal(await page.evaluate(()=>App.store.pointsTotal()),0);
  // Old UI reads exactly the same store; no migration or second worker is needed.
- await page.goto(base+'/rollback/173.9.1/index.html');await page.waitForFunction(()=>App?.app?.ready);assert.equal(await page.evaluate(()=>App.store.getDay('2026-11-04').tasks.ideal[0].text),'成熟框架验收');assert.equal(await page.evaluate(()=>App.store.pointsTotal()),0);
+ await page.goto(base+'/rollback/173.9.1/index.html');await page.waitForFunction(()=>window.App?.app?.ready);assert.equal(await page.evaluate(()=>App.store.getDay('2026-11-04').tasks.ideal[0].text),'成熟框架验收');assert.equal(await page.evaluate(()=>App.store.pointsTotal()),0);
  assert.deepEqual(errors,[]);await context.close();
 }
 // Exercise the real release worker and all cached recovery resources offline.
-const c=await browser.newContext({timezoneId:'Asia/Shanghai'}),p=await c.newPage();await p.goto(base+'/');await p.waitForFunction(()=>App?.app?.ready);await p.evaluate(()=>navigator.serviceWorker.ready);await p.reload();await p.waitForFunction(()=>navigator.serviceWorker.controller);await c.setOffline(true);await p.reload();await p.waitForFunction(()=>App?.app?.ready);await p.goto(base+'/recovery.html');assert.equal(await p.getByRole('heading',{name:'随手记恢复入口'}).count(),1);await c.setOffline(false);await c.close();
+const c=await browser.newContext({timezoneId:'Asia/Shanghai'}),p=await c.newPage();await p.goto(base+'/');await p.waitForFunction(()=>window.App?.app?.ready);await p.evaluate(()=>navigator.serviceWorker.ready);await p.reload();await p.waitForFunction(()=>navigator.serviceWorker.controller);await c.setOffline(true);await p.reload();await p.waitForFunction(()=>window.App?.app?.ready);await p.goto(base+'/recovery.html');assert.equal(await p.getByRole('heading',{name:'随手记恢复入口'}).count(),1);await c.setOffline(false);await c.close();
 console.log('Framework navigation, task transaction, accessibility, responsive, CSV, persistence, rollback and offline checks passed.');
 }finally{await browser.close();await new Promise(r=>server.close(r));}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

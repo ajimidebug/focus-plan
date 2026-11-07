@@ -1,0 +1,142 @@
+name: Publish verified site
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        type: choice
+        options: [publish, rollback]
+        default: publish
+        required: true
+      source_sha:
+        description: Full source commit SHA approved for this deployment
+        type: string
+        required: true
+      validation_run:
+        description: Successful main push validation run ID (publish mode)
+        type: string
+      release_tag:
+        description: Archived app-v version (rollback mode)
+        type: string
+      current_live_sha:
+        description: Full current online SHA observed before approving rollback (rollback only)
+        type: string
+      data_compatible:
+        description: Confirmed rollback data compatibility (rollback only)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: focus-plan-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write
+    outputs:
+      page_url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      EXPECTED_SHA: ${{ inputs.source_sha }}
+      EXPECTED_RUN: ${{ inputs.validation_run }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: mkdir -p .release
+      - name: Validate exact successful main run
+        id: candidate
+        if: inputs.mode == 'publish'
+        run: node scripts/publish-guard.mjs
+      - uses: actions/download-artifact@v4
+        if: inputs.mode == 'publish'
+        with:
+          artifact-ids: ${{ steps.candidate.outputs.artifact_id }}
+          run-id: ${{ inputs.validation_run }}
+          github-token: ${{ github.token }}
+          path: .release/candidate
+          merge-multiple: true
+      - name: Restore approved archive
+        if: inputs.mode == 'rollback'
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          DATA_COMPATIBLE: ${{ inputs.data_compatible }}
+        run: node scripts/archive-release.mjs restore "$RELEASE_TAG"
+      - name: Check every file and provenance
+        run: node scripts/release-bundle.mjs check
+        env:
+          EXPECTED_RUN: ${{ inputs.mode == 'publish' && inputs.validation_run || '' }}
+      - uses: actions/configure-pages@v5
+        id: pages
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .release/candidate/site
+      - name: Recheck main before normal publication
+        if: inputs.mode == 'publish'
+        run: node scripts/publish-guard.mjs
+      - name: Reject reused versions and stale rollback requests
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+          DEPLOY_MODE: ${{ inputs.mode }}
+          CURRENT_LIVE_SHA: ${{ inputs.current_live_sha }}
+        run: node scripts/check-deployment.mjs
+      - uses: actions/deploy-pages@v4
+        id: deploy
+      - name: Verify online version and resource hashes
+        env:
+          SITE_URL: ${{ steps.deploy.outputs.page_url }}
+        run: node scripts/verify-online.mjs "$SITE_URL"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deployed-candidate
+          path: .release/candidate/
+          include-hidden-files: true
+  online-browser:
+    needs: deploy
+    runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright:v1.57.0-noble
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Isolated online startup
+        env:
+          SITE_URL: ${{ needs.deploy.outputs.page_url }}
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+        run: node scripts/online-smoke.mjs
+  archive:
+    needs: [deploy, online-browser]
+    if: inputs.mode == 'publish'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: deployed-candidate
+          path: .release/candidate
+      - name: Preserve successful release for rollback
+        env:
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/archive-release.mjs save

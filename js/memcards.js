@@ -955,7 +955,7 @@
       if (typeof window.katex === 'undefined') return '<code>' + esc(item.tex) + '</code>';
       try {
         return window.katex.renderToString(item.tex, {
-          displayMode: item.display, throwOnError: false, strict: false, trust: true
+          displayMode: item.display, throwOnError: false, strict: false, trust: false
         });
       } catch (e) { return '<code>' + esc(item.tex) + '</code>'; }
     });
@@ -967,10 +967,14 @@
       ensureMath(refreshOpen);
       return esc(src).replace(/\n/g, '<br>');
     }
-    if (typeof window.katex !== 'undefined') {
-      return restoreMath(window.marked.parse(protectMath(src)));
-    }
-    return window.marked.parse(String(src).replace(/\r\n?/g, '\n'));
+    if (typeof App.safeHTML !== 'function') return esc(src).replace(/\n/g, '<br>');
+    try {
+      if (typeof window.katex !== 'undefined') {
+        const safe = App.safeHTML(window.marked.parse(protectMath(src)));
+        return App.safeHTML(restoreMath(safe), true);
+      }
+      return App.safeHTML(window.marked.parse(String(src).replace(/\r\n?/g, '\n')));
+    } catch (error) { return esc(src).replace(/\n/g, '<br>'); }
   }
 
   /* 批量导入解析：=== 分卡 · --- 分正反 · 单行用 | 或 Tab */
