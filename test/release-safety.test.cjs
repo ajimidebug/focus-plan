@@ -7,42 +7,10 @@ const path = require('node:path');
 const { webcrypto, createHash } = require('node:crypto');
 const root = path.resolve(__dirname, '..');
 const source = f => fs.readFileSync(path.join(root, f), 'utf8');
+const {data,browser,backupHarness,workerHarness,updatesHarness,memoHarness,actionHarness,actionAt,scheduleHarness,currencyHarness,flowHarness,financeHarness,executionReportHarness,reviewHarness,reviewAt,recurrenceHarness,built}=require('./helpers/harness.cjs');
 const copy = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
-function data(extra = {}) { return { version: 1, settings: {}, days: { '2026-10-18': { tasks: { required: [{ id: 'stable-task', text: 'test' }], ideal: [], extra: [] }, timeline: [{ id: 'stable-event', minutes: 35 }], sessions: [] } }, ledger: [], ...extra }; }
-function browser({ initial = data(), localFails = false, idbFails = false, mirror = null, delay = 0, shared = null } = {}) {
-  const mem = shared?.mem || new Map(initial === null ? [] : [['focusPlanData.v1', JSON.stringify(initial)]]);
-  const databases = shared?.databases || new Map(mirror ? [['focus-plan', new Map([['data', copy(mirror)]])]] : []);
-  const options = { localFails, idbFails };
-  let writes = 0;
-  const ctx = { console, Date, Math, JSON, Promise, Blob, URL, setTimeout, clearTimeout };
-  ctx.window = ctx;
-  ctx.localStorage = { getItem: k => mem.get(k) ?? null, setItem(k, v) { if (options.localFails) throw new Error('quota'); writes++; mem.set(k, String(v)); }, removeItem(k) { mem.delete(k); } };
-  ctx.indexedDB = { open(name) {
-    const request = {};
-    setTimeout(() => {
-      if (options.idbFails) { request.error = new Error('idb unavailable'); request.onerror?.(); return; }
-      if (!databases.has(name)) databases.set(name, new Map());
-      const values = databases.get(name);
-      const db = { objectStoreNames: { contains: () => true }, createObjectStore() {}, close() {}, transaction() {
-        const tx = {};
-        tx.objectStore = storeName => {
-          let store = values;
-          if (storeName === 'meta' || storeName === 'body') {
-            const key = '__store:' + storeName; if (!values.has(key)) values.set(key, new Map()); store = values.get(key);
-          }
-          return ({
-          get(k) { const rq = {}; setTimeout(() => { rq.result = copy(store.get(k)); rq.onsuccess?.(); tx.oncomplete?.(); }, delay); return rq; },
-          put(v, k) { setTimeout(() => { if (options.idbFails) { tx.error = new Error('write failure'); tx.onerror?.(); } else { store.set(k === undefined ? v.id : k, copy(v)); tx.oncomplete?.(); } }, delay); },
-          getAll() { const rq = {}; setTimeout(() => { rq.result = [...store.values()].map(copy); rq.onsuccess?.(); tx.oncomplete?.(); }, delay); return rq; },
-          delete(k) { store.delete(k); setTimeout(() => tx.oncomplete?.(), delay); }
-        }); }; return tx;
-      } };
-      request.result = db; request.onsuccess?.();
-    }, 0); return request;
-  } };
-  vm.runInNewContext(source('js/store.js'), ctx);
-  return { ctx, S: ctx.App.store, mem, databases, options, writes: () => writes };
-}
+
+
 test('existing v1 task/event identities survive load, save and a new program instance', async () => {
   const b = browser(); assert.equal(await b.S.load(), true);
   assert.equal(b.S.getDay('2026-10-18').tasks.required[0].id, 'stable-task');
@@ -89,15 +57,7 @@ test('fresh storage initialises normally only after both sources are checked', a
   const b = browser({ initial: null }); assert.equal(await b.S.load(), true); assert.equal(b.S.status().phase, 'saved');
   assert.equal(JSON.parse(b.mem.get('focusPlanData.v1')).version, 1);
 });
-function backupHarness() {
-  const messages = [], confirmations = [];
-  const ctx = { window: null, console, crypto: webcrypto, TextEncoder, Date, JSON, setTimeout, clearTimeout, App: {
-    store: { validate: d => d?.version === 1 && d.days && d.settings && Array.isArray(d.ledger) },
-    memcards: { readyPhotos: async () => {}, allPhotos: () => ({}) },
-    ui: { toast: msg => messages.push(msg), confirm: (...args) => confirmations.push(args) }
-  } }; ctx.window = ctx; vm.runInNewContext(source('js/backup.js'), ctx);
-  return { B: ctx.App.backup, messages, confirmations };
-}
+
 test('complete backup includes exact image bytes and digest; missing image stops export', async () => {
   const { B } = backupHarness(); const d = data({ memcards: [{ cards: [{ frontImgs: ['p1'] }] }] });
   const photos = { p1: 'data:image/jpeg;base64,VEVTVA==' };
@@ -111,32 +71,13 @@ test('tampered backup is rejected before offering to overwrite data', async () =
   pack.data.queue = [{ id: 'tamper' }]; assert.equal(await B.importFromText(JSON.stringify(pack), 'tampered.json'), false);
   assert.equal(confirmations.length, 0);
 });
-function workerHarness({ bad = '', clients = 1 } = {}) {
-  const listeners = {}, values = new Map(), deleted = [], network = [];
-  let skipped = 0, claimed = 0;
-  const ctx = { console, URL, Response, Request, Uint8Array, Map, Promise, crypto: webcrypto };
-  const getCache = name => {
-    if (!values.has(name)) values.set(name, new Map()); const m = values.get(name);
-    return { put: async (u, r) => m.set(u, r.clone()), match: async u => m.get(u)?.clone() };
-  };
-  ctx.caches = { open: async n => getCache(n), keys: async () => [...values.keys()], delete: async n => { deleted.push(n); return values.delete(n); } };
-  ctx.self = { registration: { scope: 'https://example.test/focus-plan/' }, addEventListener: (t, fn) => listeners[t] = fn,
-    skipWaiting: async () => { skipped++; }, clients: { claim: async () => { claimed++; }, matchAll: async () => Array.from({ length: clients }, () => ({ url: 'https://example.test/focus-plan/' })) } };
-  ctx.fetch = async url => {
-    network.push(url); const p = new URL(url).pathname.replace('/focus-plan/', '');
-    if (p === bad) return new Response('missing', { status: 404 });
-    return new Response(fs.readFileSync(path.join(root, p)));
-  };
-  vm.runInNewContext(source('sw.js'), ctx);
-  const invoke = async (event, extras = {}) => { let pending; listeners[event]({ waitUntil: p => pending = p, ...extras }); await pending; };
-  return { ctx, listeners, values, deleted, network, invoke, skipped: () => skipped, claimed: () => claimed };
-}
+
 test('worker installs the complete release without forcing activation', async () => {
   const w = workerHarness(); await w.invoke('install'); assert.equal(w.skipped(), 0);
-  assert.equal([...w.values.values()][0].size, JSON.parse(source('version.json')).assets.length);
+  assert.equal([...w.values.values()][0].size, JSON.parse(built('version.json')).assets.length);
 });
 test('a missing core resource rejects the new release and leaves other caches intact', async () => {
-  const w = workerHarness({ bad: 'js/store.js' }); w.values.set('other-app', new Map());
+  const w = workerHarness({ bad: 'legacy-core.js' }); w.values.set('other-app', new Map());
   await assert.rejects(w.invoke('install'), /Incomplete release/); assert.equal(w.skipped(), 0); assert(w.values.has('other-app'));
 });
 test('activation cleans only this app namespace, never records or unrelated caches', async () => {
@@ -158,32 +99,15 @@ test('offline navigation uses the current complete shell; version checks bypass 
   assert.equal(intercepted, false);
 });
 test('published manifest hashes match actual source bytes and all app scripts use release URLs', () => {
-  const release = JSON.parse(source('version.json'));
+  const release = JSON.parse(built('version.json'));
   for (const asset of release.assets) {
     const file = asset.url.slice(2).split('?')[0];
-    assert.equal(createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex'), asset.sha256, file);
+    assert.equal(createHash('sha256').update(fs.readFileSync(path.join(root, 'dist/spa', file))).digest('hex'), asset.sha256, file);
   }
-  for (const m of source('index.html').matchAll(/<script src="([^"]+)"/g)) assert(m[1].endsWith('?v=' + release.id), m[1]);
-  assert(!source('index.html').includes('controllerchange')); assert(!source('js/link.js').includes('api.siliconflow.cn'));
+  assert(built('index.html').includes("window.__RELEASE = '"+release.id+"'"));
+  assert(!built('index.html').includes('controllerchange')); assert(!source('js/link.js').includes('api.siliconflow.cn'));
 });
-function updatesHarness(b) {
-  const elements = new Map(), events = {}, posted = [];
-  for (const id of ['storage-status', 'release-status', 'apply-update', 'check-update']) elements.set(id, { dataset: {} });
-  const reg = { waiting: null, installing: null, update: async () => {}, addEventListener() {} };
-  Object.assign(b.ctx, {
-    __RELEASE: JSON.parse(source('version.json')).id,
-    document: { hidden: false, getElementById: id => elements.get(id), querySelector: () => null, addEventListener: (t, f) => events[t] = f },
-    navigator: { serviceWorker: { addEventListener() {}, register: async () => reg } },
-    setInterval() {}, fetch: async () => ({ ok: true, json: async () => ({ id: b.ctx.__RELEASE }) }), addEventListener() {}
-  });
-  b.ctx.App.tasks = { getTimer: () => null, getCdTimer: () => null, saveTimerSnap() {} };
-  b.ctx.App.memcards = { readyPhotos: async () => {}, flushPhotos: async () => true };
-  b.ctx.App.backup = { snap: async () => ({ id: 'snapshot' }) };
-  vm.runInNewContext(source('js/updates.js'), b.ctx);
-  const U = b.ctx.App.updates;
-  U.init(); U.appReady();
-  return { U, reg, events, posted, elements, waiting: () => { reg.waiting = { postMessage: x => posted.push(x) }; } };
-}
+
 test('updater postpones running timers and edited input; no activation message is sent', async () => {
   const b = browser(); await b.S.load(); const u = updatesHarness(b); await new Promise(r => setImmediate(r)); u.waiting();
   b.ctx.App.tasks.getTimer = () => ({ startedAt: Date.now() });
@@ -229,7 +153,7 @@ test('real photo store and complete backup restore task IDs and image bytes befo
   assert(!messages.some(x => x.includes('未完成')));
 });
 
-function memoHarness(b) { vm.runInNewContext(source('js/memo.js'), b.ctx); return b.ctx.App.memoCore; }
+
 test('memo user-day uses Shanghai 04:00 across midnight, month boundaries and device zones', async () => {
   const b = browser(); await b.S.load(); const M = memoHarness(b);
   for (const [at, expected] of [
@@ -294,15 +218,8 @@ test('memo updater blocks unflushed notes and awaits memo flush before activatin
   assert.equal(await u.U.apply(true), true); assert.equal(u.posted.length, 1);
 });
 
-function actionHarness(b) {
-  memoHarness(b);
-  vm.runInNewContext(source('js/memo-editor.js'), b.ctx);
-  vm.runInNewContext(source('js/memo-actions.js'), b.ctx);
-  b.ctx.App.memo.flush = async () => b.S.flush();
-  b.ctx.App.checkin = { memoPoints: (it, day) => Math.max(0, Number(it.points) || 0) * (day === '2026-10-19' ? 2 : 1) };
-  return { A: b.ctx.App.memoActions, M: b.ctx.App.memoCore, E: b.ctx.App.memoEditor };
-}
-const actionAt = '2026-10-19T09:52:00.000Z';
+
+
 test('queue completion and exact undo survive reload, text editing, repricing and renaming', async () => {
   const b = browser(); await b.S.load(); const { A, M, E } = actionHarness(b);
   M.write('2026-10-19', '1055坐下来\n打算背英语');
@@ -432,9 +349,7 @@ test('exports include reliable provenance without rewriting notes or guessing ol
   assert(!M.exportText(['2026-10-19']).includes('【任务生成开始'));
   assert.equal(M.read('2026-10-19').text, '原话\n【任务生成】旧文字');
 });
-function scheduleHarness(b) {
-  const h = actionHarness(b); vm.runInContext(source('js/memo-schedule.js'), b.ctx); return { ...h, P: b.ctx.App.memoSchedule };
-}
+
 test('over-target punches keep individual event amounts and exact undo', async () => {
   const b = browser(); await b.S.load(); const { A, M } = actionHarness(b);
   b.S.data().checkins = [{ id: 'h', text: '喝水', target: 1, points: 3, days: {} }];
@@ -599,12 +514,7 @@ test('queue pin and group ordering survive completion, cancellation and unrelate
   W.moveQueue('b', 'pin'); A.undoCore(event.id, '', actionAt);
   assert.equal(W.sortedQueue().filter(t => t.pinned).length, 2); assert.equal(b.S.data().queue.length, 3); assert.equal(b.S.pointsTotal(), 0);
 });
-function currencyHarness(b) {
-  const h = scheduleHarness(b); vm.runInContext(source('js/memo-currency.js'), b.ctx);
-  b.ctx.App.checkin.streakWithToday = () => 30;
-  b.ctx.App.checkin.memoPoints = (it, day) => b.ctx.App.memoCurrency.quote(it, day)?.total || 0;
-  return { ...h, C: b.ctx.App.memoCurrency };
-}
+
 test('new currency caps paid punches, retains exact awards and never reallocates cancelled bonus', async () => {
   const b = browser(); await b.S.load(); const { A, M, C } = currencyHarness(b), day = M.userDay();
   b.S.data().memoCurrency = { version: 2, claims: {}, extraPaidCount: 0 };
@@ -697,11 +607,7 @@ test('time-axis details group completed task occurrences, retain graph records a
   assert.equal(P.visibleRecords(day, start + 120000).sessions.length, 2);
 });
 
-function flowHarness(b, day = '2026-10-20') {
-  const h = currencyHarness(b); vm.runInContext(source('js/memo-flow.js'), b.ctx);
-  const F=b.ctx.App.memoFlow; F.enableCore(Date.parse(day+'T08:00:00+08:00'));
-  return {...h,F,C:b.ctx.App.memoCurrency};
-}
+
 test('prospective overdue settlement caps each due day, keeps one live identity and never compounds', async()=>{
   const b=browser();await b.S.load();const {F,P}=flowHarness(b),d=b.S.data();
   const tasks=b.S.getDay('2026-10-20').tasks.required;
@@ -893,7 +799,7 @@ test('one-off long tasks carry without ledger writes and keep one live identity'
  const b=browser();await b.S.load();const {M,F}=flowHarness(b),d=b.S.data(),day=M.userDay(),old=M.shiftDay(day,-3);d.days['2026-10-18'].tasks.required=[];b.S.getDay(old).tasks.extra=[{id:'long',text:'长期',points:10},{id:'done',done:true},{id:'dismissed',memoDismissed:'yes'},{id:'daily',memoProjectId:'p'}];d.queue=[{id:'q',assignment:{day:old,list:'extra'}},{id:'unassigned'}];const before=d.ledger.length;F.settleCore();assert.equal(d.ledger.length,before);assert.equal(b.S.getDay(day).tasks.extra.filter(t=>t.id==='long').length,1);assert.equal(d.queue[0].assignment.day,day);assert.equal(d.queue[1].assignment,undefined);assert.equal(F.isCarried(b.S.getDay(day).tasks.extra.find(t=>t.id==='long')),true);F.settleCore();assert.equal(F.longOverdue().length,0);assert.equal(b.S.getDay(day).tasks.extra.filter(t=>t.id==='long').length,1);assert.equal(d.ledger.length,before);
 });
 
-function financeHarness(b){b.ctx.document={addEventListener:()=>{}};vm.runInContext(source('js/memo-finance.js'),b.ctx);return b.ctx.App.memoFinance;}
+
 test('173.5 ideal default migration preserves old implicit points, zeroes and future custom defaults',async()=>{
  for(const oldDefault of [10,3,0,undefined]){
   const initial=data({settings:oldDefault===undefined?{}:{idealPoints:oldDefault}});initial.days['2026-10-18'].tasks.ideal=[{id:'implicit',text:'旧任务'},{id:'zero',points:0},{id:'custom',points:7}];
@@ -1450,11 +1356,7 @@ test('173.3 structured copy checkpoints persist, preserve future baselines and e
  const malformed=copy(b.S.data());malformed.memoFlow.reportFacts.ledger.old.points='bad';const bad=browser({initial:malformed});assert.equal(await bad.S.load(),false);assert(bad.S.status().readOnly);
 });
 
-function executionReportHarness(b, at='2026-10-28T12:00:00+08:00') {
- const h=flowHarness(b);financeHarness(b);vm.runInContext(source('js/memo-report.js'),b.ctx);
- let time=Date.parse(at);class Clock extends Date{constructor(...args){super(...(args.length?args:[time]));}static now(){return time;}}
- b.ctx.Date=Clock;return {...h,R:b.ctx.App.memoReport,setTime:at=>{time=Date.parse(at);}};
-}
+
 test('173.4 unfinished timers export every actual chunk without mutating notes or sessions',async()=>{
  const b=browser();await b.S.load();const {P,F,M}=executionReportHarness(b),day=M.userDay(),ref={kind:'queue',id:'open'};
  b.S.data().queue=[{id:'open',text:'未完成的复盘'}];const base=Date.parse(day+'T09:10:00+08:00');
@@ -1523,8 +1425,8 @@ test('173.4 repeated tasks use each execution day for completion status across 0
 });
 
 // Review integration exercises the same storage, ledger and timer code as tasks.
-function reviewHarness(b){const h=flowHarness(b);vm.runInContext(source('js/memo-review.js'),b.ctx);return {...h,R:b.ctx.App.memoReview};}
-const reviewAt=()=>Date.now()+120*60000;
+
+
 test('reviews keep same-day rounds and same-name series independent',async()=>{const b=browser();await b.S.load();const {R,P}=reviewHarness(b);const due=reviewAt();const a=R.newSeriesCore({text:'环工',due}),c=R.newSeriesCore({text:'环工',due});R.scheduleCore(a.id,due+3600000);assert.equal(R.state().series.length,2);assert.equal(R.state().rounds.length,3);assert.equal(new Set(R.state().rounds.map(r=>r.taskRef.id)).size,3);const days=[...new Set(R.state().rounds.map(x=>x.taskRef.day))];assert.equal(days.reduce((n,day)=>n+P.columnItems(day,'ideal').filter(x=>x.task.memoReviewRoundId).length,0),3,'rounds may legitimately cross the 04:00 user-day boundary');assert.notEqual(a.id,c.id);});
 test('review completion schedules from actual confirmation and posts only ordinary task points',async()=>{const b=browser();await b.S.load();const {R,A}=reviewHarness(b);const s=R.newSeriesCore({text:'矩阵',points:1,due:reviewAt()}),r=R.rounds(s.id)[0],at=new Date().toISOString();const e=A.completeCore({...r.taskRef,title:'复习矩阵',review:{result:'partial',mode:'relative',minutes:240}},'原文',at);assert.equal(r.status,'done');assert.equal(e.review.result,'partial');assert.equal(R.round(e.review.nextRoundId).due,Date.parse(at)+240*60000);assert.equal(b.S.data().ledger.filter(x=>x.memoEventId===e.id).reduce((n,x)=>n+x.points,0),1);assert.equal(b.S.data().ledger.some(x=>x.type==='earn-review'),false);assert.throws(()=>A.completeCore({...r.taskRef,title:'重复'},'',at));assert.match(A.passage(e),/第1轮/);});
 test('undo cancels pristine dependent next round and restores source completion exactly once',async()=>{const b=browser();await b.S.load();const {R,A}=reviewHarness(b);const s=R.newSeriesCore({text:'撤销',due:reviewAt()}),r=R.rounds(s.id)[0];const e=A.completeCore({...r.taskRef,title:s.text,review:{mode:'relative',minutes:30}},'生成文字');A.undoCore(e.id);assert.equal(r.status,'pending');assert.equal(R.round(e.review.nextRoundId).status,'cancelled');assert.equal(b.S.data().ledger.reduce((n,x)=>n+x.points,0),0);assert.throws(()=>A.undoCore(e.id));});
@@ -1546,7 +1448,7 @@ test('173.6 store can round-trip new review metadata after create, complete and 
 test('review rounds moved through the queue keep cancellation and pause visibility consistent',async()=>{const b=browser();await b.S.load();const {R,A,F,P}=reviewHarness(b);const s=R.newSeriesCore({text:'队列复习',due:reviewAt()}),r=R.rounds(s.id)[0];F.moveCore(r.taskRef,r.taskRef.day,'ideal','queue');const qref=P.canonical(r.taskRef);assert.equal(qref.kind,'queue');F.moveCore(qref,r.taskRef.day,'ideal');R.pauseCore(s.id,true);assert.equal(P.columnItems(r.taskRef.day,'ideal').some(x=>x.ref.id===qref.id),false);R.pauseCore(s.id,false);const e=A.completeCore({...qref,title:s.text},'');assert.equal(r.status,'done');A.undoCore(e.id);assert.equal(r.status,'pending');});
 test('review snapshots freeze scheduled titles and copy checkpoints track same-day time edits only',async()=>{const b=browser();await b.S.load();const {R,A,M}=reviewHarness(b);vm.runInContext(source('js/memo-report.js'),b.ctx);const due=reviewAt(),s=R.newSeriesCore({text:'原复习内容',due}),r=R.rounds(s.id)[0],day=M.userDay(due),other=M.shiftDay(day,-1),report=b.ctx.App.memoReport,baseline=JSON.stringify(report.facts(day)),unrelated=JSON.stringify(report.facts(other));R.rescheduleCore(r.id,due+60000);assert.notEqual(JSON.stringify(report.facts(day)),baseline);assert.equal(JSON.stringify(report.facts(other)),unrelated);s.text='仅修改未来内容';const e=A.completeCore({...r.taskRef,title:R.taskOf(r).task.text},'记录');assert.equal(e.review.title,'原复习内容');assert.match(A.passage(e),/原复习内容/);assert.equal(report.facts(day).reviews[0].title,'原复习内容');});
 
-function recurrenceHarness(b){const h=reviewHarness(b);vm.runInContext(source('js/memo-recurrence.js'),b.ctx);return {...h,Cycle:b.ctx.App.memoRecurrence};}
+
 test('173.8 repeated backfill refund reversals target each individual refund and restore arrangement',async()=>{
  const b=browser();await b.S.load();const {F,P,A}=flowHarness(b),d=b.S.data();b.ctx.App.memoEconomy={state:()=>true};b.S.getDay('2026-10-20').tasks.required.push({id:'cycle-bf',text:'补记循环'});F.settleCore(Date.parse('2026-10-21T05:00:00+08:00'));
  let handlers;const values={'#bf-day':{value:'2026-10-20'},'#bf-note':{value:'隔离测试'},'#bf-preview':{},'[role="alert"]':{}};b.ctx.App.ui={openModal:()=>({querySelector:s=>values[s]}),bindActions:h=>handlers=h,closeModal:()=>{}};b.ctx.App.memoWorkspace={render:()=>{}};b.ctx.App.app={refreshStats:()=>{}};P.render=()=>{};

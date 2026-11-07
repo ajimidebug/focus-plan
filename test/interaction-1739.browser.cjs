@@ -8,7 +8,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
  for(const width of [320,360,390,430,1280]){
   const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',timezoneId:'Asia/Shanghai'}),page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-10-30T12:00:00+08:00'));
-  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>App?.app?.ready);
+  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.App?.app?.ready);
   await page.evaluate(async()=>{
    const S=App.store,M=App.memoCore,P=App.memoSchedule,day=M.userDay(),old=M.shiftDay(day,-1),d=S.data();
    d.queue=[{id:'prior-current',text:'此前20分钟，本次5分钟，未设置预计时长'}];
@@ -49,7 +49,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   check(await page.locator('#mw-live').getAttribute('data-meter-state')==='overtime','already accumulated time triggers overtime immediately '+width);
   check(await page.locator('.float-expected-mark').evaluate(e=>!e.hidden&&parseFloat(e.style.left)===50),'expected landmark retained after extension '+width);
   check(await page.locator('#float-meter .float-meter-track').evaluate(e=>+e.dataset.totalMs===25*60000),'overtime keeps cumulative total '+width);
-  await page.reload();await page.waitForFunction(()=>App?.app?.ready);await page.evaluate(()=>App.memoSchedule.tick());
+  await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);await page.evaluate(()=>App.memoSchedule.tick());
   check(await page.locator('#float-meter .float-meter-track').evaluate(e=>+e.dataset.previousMs===20*60000&&+e.dataset.currentMs===5*60000),'session colors survive reload '+width);
   if(process.env.FOCUS_SCREENSHOT_DIR){fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.FOCUS_SCREENSHOT_DIR,'1739-'+width+'.png'),animations:'disabled'});}
   check(errors.length===0,'no runtime exceptions '+width+': '+errors.join(';'));await context.close();

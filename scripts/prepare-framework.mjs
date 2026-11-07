@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync } from 'node:fs';
-import { transform } from 'esbuild';
+import { transform, build } from 'esbuild';
 import postcss from 'postcss';
 import prefix from 'postcss-prefix-selector';
 import path from 'node:path';
@@ -25,6 +25,7 @@ write('src/css/legacy.css',css.css);
 const paths=[...html.matchAll(/<script src="([^"?]+)(?:\?[^\"]*)?"/g)].map(m=>m[1]);
 const core=await transform(paths.map(p=>'\n/* '+p+' */\n'+read(p)).join('\n'),{minify:true,target:'es2022',legalComments:'eof'});
 write('public/legacy-core.js',core.code);
+await build({entryPoints:[path.join(root,'src/services/html-safety.ts')],bundle:true,format:'iife',platform:'browser',target:'es2022',minify:true,outfile:path.join(root,'public/html-safety.js'),legalComments:'inline'});
 for(const p of ['icon.svg','manifest.webmanifest','version.html','assets','css/katex.css','js/katex.min.js','js/mhchem.min.js','js/marked.min.js']){
   mkdirSync(path.dirname(path.join(root,'public',p)),{recursive:true});cpSync(path.join(root,p),path.join(root,'public',p),{recursive:true});
 }

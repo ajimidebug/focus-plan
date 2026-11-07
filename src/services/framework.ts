@@ -10,6 +10,7 @@ import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import zh from '@fullcalendar/core/locales/zh-cn'
 import TaskOverview from '../components/TaskOverview.vue'
+import './html-safety'
 
 const leftIcon='M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z'
 const rightIcon='M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z'

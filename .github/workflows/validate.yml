@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feat/quasar-174]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -23,27 +23,23 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: node scripts/prepare-release.mjs "$(node -p 'require("./package.json").version')"
-      - run: npm run check
-      - run: npm run build
-      - run: npm run typecheck
-      - run: npm test
+      - run: npm run verify
+      - run: node scripts/release-bundle.mjs create
       - uses: actions/upload-artifact@v4
         with:
-          name: verified-spa
-          path: dist/spa/
+          name: candidate-spa
+          path: .release/candidate/
           include-hidden-files: true
+          retention-days: 14
   browser:
     needs: build
     runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright:v1.57.0-noble
     timeout-minutes: 15
     strategy:
       fail-fast: false
-      max-parallel: 5
       matrix:
-        script: [interaction-1751.browser.cjs, interaction-1750.browser.cjs, browser-smoke.mjs, interaction-1732.browser.cjs, interaction-1733.browser.cjs, interaction-1734.browser.cjs, interaction-1735.browser.cjs, interaction-1736.browser.cjs, interaction-1737.browser.cjs, interaction-1738.browser.cjs, interaction-1739.browser.cjs, interaction-17391.browser.cjs, points-account.browser.cjs, framework.browser.cjs, interaction-1742.browser.cjs, interaction-1744.browser.cjs, interaction-1745.browser.cjs, interaction-1747.browser.cjs, interaction-1748.browser.cjs]
-    env:
-      FOCUS_TEST_ROOT: dist/spa
+        group: [A, B, C]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -53,44 +49,35 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - uses: actions/download-artifact@v4
         with:
-          name: verified-spa
-          path: dist/spa
-      - run: npx playwright install --with-deps chromium
-      - run: node test/${{ matrix.script }}
+          name: candidate-spa
+          path: .release/candidate
+      - run: node scripts/release-bundle.mjs check
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_RUN: ${{ github.run_id }}
+      - run: mkdir -p dist && cp -a .release/candidate/site dist/spa
+      - run: node scripts/test-browser.mjs ${{ matrix.group }}
+      - name: Confirm tests used the unchanged candidate
+        run: node scripts/check-tested-bundle.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: browser-${{ matrix.script }}
-          path: test-results/
-          if-no-files-found: ignore
-
-  stage-pages:
-    # Build a candidate only after every browser check has passed. Publishing is a separate, reviewed PR.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+          name: browser-${{ matrix.group }}
+          path: browser-results/
+          if-no-files-found: warn
+          retention-days: 14
+  verified:
+    name: Release verification
+    if: always()
     needs: [build, browser]
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/download-artifact@v4
-        with:
-          name: verified-spa
-          path: dist/spa
-      - name: Stage verified site against current gh-pages
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
-          test -f dist/spa/version.json
-          test "$(node -p "require('./dist/spa/version.json').id")" = "$(node -p "require('./package.json').version")"
-          git fetch origin gh-pages
-          git worktree add --detach "$RUNNER_TEMP/focus-pages" origin/gh-pages
-          cd "$RUNNER_TEMP/focus-pages"
-          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          cp -a "$GITHUB_WORKSPACE/dist/spa/." .
-          git add -A
-          git -c user.name="focus-plan release bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "release: $(node -p "require('$GITHUB_WORKSPACE/package.json').version") verified SPA"
-          git push origin HEAD:refs/heads/release/$(node -p "require('$GITHUB_WORKSPACE/package.json').version")-built
+      - name: Require every build and browser group
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+        run: test "$BUILD_RESULT" = success && test "$BROWSER_RESULT" = success
+      - name: Summarize candidate
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: echo "Verified candidate for $SOURCE_SHA. Publishing requires the explicit Publish verified site workflow." >> "$GITHUB_STEP_SUMMARY"

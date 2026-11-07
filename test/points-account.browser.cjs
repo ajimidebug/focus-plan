@@ -1,7 +1,7 @@
 /* Isolated synthetic ledger: unified entry points, full detail and refund recovery. */
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const {chromium}=require(require.resolve('playwright',{paths:[process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||'',process.cwd()]}));
+const {chromium}=require('playwright');
 const root=path.resolve(process.env.FOCUS_TEST_ROOT||path.resolve(__dirname,'..'));
 const server=http.createServer((req,res)=>{
  const pathname=new URL(req.url,'http://localhost').pathname,fonts=process.env.FOCUS_TEST_FONT_DIR,base=fonts&&pathname.startsWith('/__fonts/')?fonts:root;
@@ -18,7 +18,7 @@ async function run(){
    const context=await browser.newContext({viewport:{width,height},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    await page.clock.install({time:new Date('2026-10-29T12:40:00+08:00')});
-   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>App?.app?.ready);
+   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.App?.app?.ready);
    await page.addStyleTag({content:'#toast-root{visibility:hidden!important}'});
    if(process.env.FOCUS_TEST_FONT_DIR){await page.addStyleTag({content:'@import url("/__fonts/400.css");body,button,input,textarea,select{font-family:"Noto Sans SC",sans-serif!important}'});await page.evaluate(()=>document.fonts.ready);}
    await page.evaluate(async()=>{
@@ -91,14 +91,14 @@ async function run(){
    check(await page.evaluate(()=>App.store.data().ledger.filter(e=>e.note==='自定义支出：合成新支出'&&e.points===-12).length)===1,'new expense returns to same complete ledger '+width);
    if(process.env.FOCUS_SCREENSHOT_DIR){fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR,{recursive:true});await page.evaluate(()=>document.body.dataset.theme='default');await page.screenshot({path:path.join(process.env.FOCUS_SCREENSHOT_DIR,'points-'+width+'.png'),animations:'disabled'});}
    await page.locator('.modal [data-act="cancel"]').click();
-   await page.reload();await page.waitForFunction(()=>App?.app?.ready);
+   await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);
    check(await page.evaluate(()=>App.store.data().ledger.filter(e=>e.refundOf==='cost').length)===1,'refund survives reload '+width);
    check(errors.length===0,'no browser exceptions '+width+': '+errors.join(';'));
    await context.close();
   }
   const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),page=await context.newPage();
   await page.clock.install({time:new Date('2026-10-29T03:59:58+08:00')});
-  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>App?.app?.ready);
+  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.App?.app?.ready);
   await page.evaluate(async()=>{
    const d=App.store.data();d.checkins=[];d.queue=[];d.daily=[];d.memoProjects=[];
    d.ledger=[{id:'early',at:'2026-10-29T03:59:57+08:00',date:'2026-10-20',type:'earn-checkin',points:25,note:'合成旧奖励'},

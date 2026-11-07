@@ -2,13 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),fc=require('fast-check');
 const {createHash}=require('node:crypto');
 const root=path.resolve(__dirname,'..');
-function harness(){
-  const module={exports:{}};
-  const noop=()=>{};
-  const ctx={require:id=>id==='node:test'?Object.assign(noop,{test:noop}):require(id),module,exports:module.exports,__dirname:path.join(root,'test'),console,Date,Math,JSON,Promise,Blob,URL,Response,Request,Map,Set,Uint8Array,structuredClone,TextEncoder,setTimeout,clearTimeout,setImmediate};
-  vm.runInNewContext(fs.readFileSync(path.join(root,'test/release-safety.test.cjs'),'utf8')+'\nmodule.exports={browser,actionHarness,scheduleHarness,actionAt};',ctx);
-  return module.exports;
-}
+const harness=()=>require('./helpers/harness.cjs');
 test('random completion and exact undo keep one active occurrence and preserve handwritten text',async()=>{
   const H=harness();
   await fc.assert(fc.asyncProperty(fc.array(fc.boolean(),{minLength:1,maxLength:60}),async actions=>{

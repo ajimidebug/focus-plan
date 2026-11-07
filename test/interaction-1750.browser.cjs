@@ -10,7 +10,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   page.on('pageerror',e=>errors.push(e.message));
   await page.clock.install({time:new Date('2026-11-05T12:00:00+08:00')});
   await page.goto('http://127.0.0.1:'+server.address().port+'/#/tasks');
-  await page.waitForFunction(()=>App?.app?.ready&&App?.memoGantt?.quick&&App?.memoTransfer?.preview);
+  await page.waitForFunction(()=>window.App?.app?.ready&&window.App?.memoGantt?.quick&&window.App?.memoTransfer?.preview);
   const inspect=await page.evaluate(async()=>{
    const A=App,S=A.store,d=S.data(),day='2026-11-05',prev='2026-11-03';
    d.checkins.push({id:'habit-continuing',text:'重置！',target:1,rewardLimit:99,points:2,days:{[day]:1}});

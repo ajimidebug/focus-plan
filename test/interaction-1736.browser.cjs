@@ -1,7 +1,7 @@
 /* Synthetic records only: three timeline tracks, viewport-aware float, first-screen points. */
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
-const {chromium}=require(require.resolve('playwright',{paths:[process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||'',process.cwd()]}));
+const {chromium}=require('playwright');
 const root=path.resolve(process.env.FOCUS_TEST_ROOT||path.resolve(__dirname,'..'));
 const server=http.createServer((req,res)=>{
  const pathname=new URL(req.url,'http://localhost').pathname,fonts=process.env.FOCUS_TEST_FONT_DIR,base=fonts&&pathname.startsWith('/__fonts/')?fonts:root;
@@ -18,7 +18,7 @@ async function run(){
    if(process.env.FOCUS_DEBUG)console.log('viewport',width);
    const context=await browser.newContext({viewport:{width,height},serviceWorkers:'block'}),page=await context.newPage(),errors=[];
    page.on('pageerror',e=>errors.push(e.message));await page.clock.install({time:new Date('2026-10-30T12:30:00+08:00')});
-   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>App?.app?.ready);
+   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.App?.app?.ready);
    await page.addStyleTag({content:'#toast-root{visibility:hidden!important}#q-notify,#q-notify *{pointer-events:none!important}'});
    if(process.env.FOCUS_TEST_FONT_DIR){await page.addStyleTag({content:'@import url("/__fonts/400.css");body,button,input,textarea,select{font-family:"Noto Sans SC",sans-serif!important}'});await page.evaluate(()=>document.fonts.ready);}
    const day=await page.evaluate(async()=>{
@@ -130,7 +130,7 @@ async function run(){
 
   if(process.env.FOCUS_DEBUG)console.log('boundary');
   const boundary=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),p=await boundary.newPage();
-  await p.clock.install({time:new Date('2026-10-31T04:05:01+08:00')});await p.goto('http://127.0.0.1:'+server.address().port);await p.waitForFunction(()=>App?.app?.ready);
+  await p.clock.install({time:new Date('2026-10-31T04:05:01+08:00')});await p.goto('http://127.0.0.1:'+server.address().port);await p.waitForFunction(()=>window.App?.app?.ready);
   await p.evaluate(async()=>{
    const d=App.store.data(),P=App.memoSchedule;d.queue=[{id:'edge',text:'跨04点计时',points:0}];d.checkins=[];d.daily=[];d.memoSchedule={version:1,items:[],sessions:[]};d.memoEvents=[];
    const ref={kind:'queue',id:'edge'};P.savePlan({ref,day:'2026-10-30',type:'span',start:Date.parse('2026-10-31T03:50:00+08:00'),end:Date.parse('2026-10-31T04:10:00+08:00'),title:'跨日预计'});

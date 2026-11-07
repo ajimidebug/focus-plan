@@ -7,7 +7,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
  for(const width of [320,360,390,430,1280]){
   const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',timezoneId:'Asia/Shanghai'}),page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-10-30T12:00:00+08:00'));
-  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>App?.app?.ready);
+  await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.App?.app?.ready);
   await page.evaluate(async()=>{const S=App.store,M=App.memoCore,day=M.userDay(),old=M.shiftDay(day,-1);for(const list of ['required','ideal','extra'])S.getDay(day).tasks[list]=[{id:list+'-late-done',text:list+'延期完成',done:true,originalDay:old,points:1},{id:list+'-done',text:list+'当日完成',done:true,points:1},{id:list+'-pending',text:list+'普通未完成',points:1},{id:list+'-late',text:list+'延期未完成',originalDay:old,points:1}];await S.save();App.app.switchView('tasks');App.memoWorkspace.enter('today',day);});
   for(const theme of ['default','dark']){
    await page.evaluate(t=>document.body.dataset.theme=t,theme);const grays=[];
@@ -38,7 +38,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   let values=await page.evaluate(()=>App.memoFinance.column(App.memoCore.userDay(),'ideal').segments.map(x=>x.count));check(values.join(',')==='2,1,1,0','completion moves the right gray segment to the far-left deep segment '+width);
   await page.evaluate(async()=>{const e=App.store.data().memoEvents.find(e=>e.active&&e.sourceId==='ideal-late');App.memoActions.undoCore(e.id);await App.store.save();App.memoWorkspace.render();});
   values=await page.evaluate(()=>App.memoFinance.column(App.memoCore.userDay(),'ideal').segments.map(x=>x.count));check(values.join(',')==='1,1,1,1','undo restores rightmost pending deferral '+width);
-  await page.reload();await page.waitForFunction(()=>App?.app?.ready);await page.evaluate(()=>App.app.switchView('tasks'));check(await page.locator('#mw-today [data-overview-list="ideal"] .mw-column-meter>[data-progress-state="deferred"]').evaluate(e=>parseFloat(e.style.width)===25),'four-segment projection survives reload '+width);
+  await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);await page.evaluate(()=>App.app.switchView('tasks'));check(await page.locator('#mw-today [data-overview-list="ideal"] .mw-column-meter>[data-progress-state="deferred"]').evaluate(e=>parseFloat(e.style.width)===25),'four-segment projection survives reload '+width);
   check(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),'root width remains bounded '+width);check(errors.length===0,'no runtime errors '+width+': '+errors.join(';'));await context.close();
  }
 }finally{await browser.close();await new Promise(r=>server.close(r));}console.log(checks+' 173.9.1 progress and action-layout checks passed.');})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

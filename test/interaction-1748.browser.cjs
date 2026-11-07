@@ -4,7 +4,7 @@ const root=path.resolve(process.env.FOCUS_TEST_ROOT||'dist/spa');
 const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://localhost').pathname,file=path.resolve(root,'.'+(name==='/'?'/index.html':name));if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return}fs.readFile(file,(e,b)=>{if(e){res.writeHead(404).end();return}res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.json':'application/json'})[path.extname(file)]||'text/html');res.end(b)})});
 (async()=>{await new Promise(ok=>server.listen(0,'127.0.0.1',ok));const browser=await chromium.launch({headless:true});try{
  const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Asia/Shanghai',serviceWorkers:'block'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.clock.install({time:new Date('2026-11-05T12:00:00+08:00')});await page.goto('http://127.0.0.1:'+server.address().port+'/#/tasks');await page.waitForFunction(()=>App?.app?.ready&&App?.memoTransfer?.exportData);
+ await page.clock.install({time:new Date('2026-11-05T12:00:00+08:00')});await page.goto('http://127.0.0.1:'+server.address().port+'/#/tasks');await page.waitForFunction(()=>window.App?.app?.ready&&window.App?.memoTransfer?.exportData);
  assert.equal(await page.locator('.framework-overview .cal-col').count(),3);
  assert.equal(await page.locator('#mw-today > .mw-detail-disclosure,#mw-today > .task-habit-panel,#mw-today > .mw-backlog').count(),0);
  assert.equal(await page.locator('#mw-today .mw-toolbar').count(),1);

@@ -14,7 +14,7 @@ async function run(){
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.clock.install({time:new Date('2026-11-05T12:00:00+08:00')});
   await page.goto('http://127.0.0.1:'+server.address().port+'/#/tasks');
-  await page.waitForFunction(()=>App?.app?.ready&&App?.memoSchedule?.startRef);
+  await page.waitForFunction(()=>window.App?.app?.ready&&window.App?.memoSchedule?.startRef);
   await page.evaluate(async()=>{
     const day=App.memoCore.userDay(),d=App.store.data();
     d.queue=[{id:'timer1742',text:'一次计时',points:1},{id:'rename1742',text:'旧名称',points:1},{id:'window1742',text:'下午计划',points:2}];
@@ -70,7 +70,7 @@ async function run(){
   assert(seconds>=3590&&seconds<=3600,'remaining time is within rendering delay of one hour');
   assert.match(await page.locator('#float-meter .float-meter-track').getAttribute('aria-label'),/截止时刻/);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),true);
-  await page.reload();await page.waitForFunction(()=>App?.app?.ready);
+  await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);
   assert.equal(await page.evaluate(()=>App.store.data().memoEvents.find(e=>e.sourceId==='rename1742')?.title),'最后修改的名称');
   assert.deepEqual(errors,[]);
   await context.close();

@@ -11,7 +11,8 @@ global.localStorage = {
   setItem: function (k, v) { mem[k] = String(v); },
   removeItem: function (k) { delete mem[k]; }
 };
-// 无 indexedDB → 镜像自动降级为 no-op，验证 localStorage 主通道
+// 使用真实事务语义的内存数据库；结束前核验保存结果。
+global.indexedDB = new (require('fake-indexeddb').IDBFactory)();
 
 const fs = require('fs');
 const path = require('path');
@@ -82,6 +83,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(serialized.days[S.todayKey()].timeline.length === 1, '时间轴记录可序列化');
 
   console.log('');
+  assert(await S.flush(), '最终操作已持久化');
   console.log(passed + ' 通过, ' + failed + ' 失败');
   process.exit(failed ? 1 : 0);
 })();

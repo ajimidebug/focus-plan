@@ -1,6 +1,6 @@
-> 174.0.0 使用 Vue 3 + Quasar，源码需构建后部署。框架边界、构建方法和数据恢复见 [174 框架说明](docs/174-framework.md)。下方为上游历史说明，其中零依赖、双击 HTML 和直接部署仓库根目录的步骤不适用于 174。
-
-> 此 Fork 的手机使用、数据保护与发布流程见 [MOBILE-RELEASE.md](MOBILE-RELEASE.md)。以下保留上游说明；当前版本行为以该文件为准。
+> 当前维护入口：[docs/PROJECT.md](docs/PROJECT.md)。本项目使用 Vue 3 + Quasar，必须构建后部署 `dist/spa`；开发、验证、发布和回退以 [docs/RELEASE.md](docs/RELEASE.md) 为准。
+>
+> 下方保留上游历史说明。其中“零依赖”“双击 HTML”“部署仓库根目录”不适用于当前框架版。手机使用与备份见 [MOBILE-RELEASE.md](MOBILE-RELEASE.md)。
 
 # 专注计划 · 学习会计系统
 
