@@ -157,6 +157,10 @@
   let loaded = false;
   let blocked = false;
   let revision = 0;
+  let mirrorStamp = null;
+  let localStamp = null;
+  let saveEpoch = 0;
+  const stamp = value => value == null ? null : JSON.stringify([value.version, Number(value._storageRevision) || 0, value._storageCommit || null]);
   let pending = Promise.resolve(true);
   let recovery = {};
   let state = { phase: 'loading', message: '正在读取记录', readOnly: false };
@@ -181,13 +185,24 @@
       req.onblocked = function () { reject(new Error('请关闭其他打开此网站的标签页后重试')); };
     });
   }
-  function idbPut(obj) {
+  // The revision comparison and write share one readwrite transaction. This
+  // still works when localStorage is full and no storage event is delivered.
+  function idbPut(obj, expected) {
     return idbOpen().then(function (db) {
       return new Promise(function (resolve, reject) {
         const tx = db.transaction(DB_STORE, 'readwrite');
-        tx.objectStore(DB_STORE).put(obj, DB_KEY);
+        const store = tx.objectStore(DB_STORE), read = store.get(DB_KEY);
+        let conflict = false;
+        read.onsuccess = function () {
+          if (stamp(read.result) !== expected) { conflict = true; tx.abort(); return; }
+          store.put(obj, DB_KEY);
+        };
         tx.oncomplete = function () { db.close(); resolve(true); };
-        tx.onerror = tx.onabort = function () { db.close(); reject(tx.error || new Error('数据库写入失败')); };
+        tx.onerror = tx.onabort = function () {
+          db.close();
+          const error = new Error(conflict ? '其他页面已保存较新的记录，本页停止写入；请先导出本页内容。' : '数据库写入失败');
+          error.conflict = conflict; reject(error);
+        };
       });
     });
   }
@@ -362,6 +377,10 @@
     if ((local && local.version !== 1) || (mirror && mirror.version !== 1)) {
       return stop('检测到不受支持的数据版本。原记录已保留，请使用匹配的程序版本；可以先导出原始数据。');
     }
+    localStamp = stamp(local); mirrorStamp = stamp(mirror);
+    if (local && mirror && (+local._storageRevision || 0) === (+mirror._storageRevision || 0)
+        && local._storageCommit && mirror._storageCommit && local._storageCommit !== mirror._storageCommit)
+      return stop('两份存储的版本标识冲突，请先导出原始记录。');
     const choices = [local, mirror].filter(valid).sort(function (a, b) { return (+b._storageRevision || 0) - (+a._storageRevision || 0); });
     if (choices.length) {
       try { data = normalise(choices[0]); } catch (e) { return stop('记录结构异常，已停止写入并保留原始数据。'); }
@@ -379,30 +398,40 @@
   }
   function save() {
     if (!loaded || blocked || !data) return Promise.resolve(false);
-    let raw, snapshot, localOK = false;
-    try {
-      const other = JSON.parse(localStorage.getItem(KEY) || 'null');
-      if (other && (other.version !== 1 || (+other._storageRevision || 0) > revision)) {
-        stop('其他标签页已写入较新的记录。请导出本页内容，再重新打开网站。');
-        return Promise.resolve(false);
-      }
-    } catch (e) { /* 主通道不可读时仍尝试镜像；最终结果会明确显示。 */ }
-    try {
-      data._storageRevision = ++revision;
-      raw = JSON.stringify(data); snapshot = JSON.parse(raw);
-      localStorage.setItem(KEY, raw); localOK = true;
-    } catch (e) {
-      if (!snapshot) { report('error', '记录无法序列化，请立即导出并停止更新'); return Promise.resolve(false); }
-    }
-    const thisRevision = revision;
+    let snapshot;
+    try { snapshot = JSON.parse(JSON.stringify(data)); }
+    catch (error) { report('error', '记录无法序列化，请立即导出并停止更新'); return Promise.resolve(false); }
+    const epoch = ++saveEpoch;
     report('saving', '正在保存');
-    pending = pending.then(function () { return idbPut(snapshot).then(function () { return true; }, function () { return false; }); })
-      .then(function (mirrorOK) {
-        const ok = localOK || mirrorOK;
-        if (thisRevision === revision && !blocked) report(ok ? ((localOK && mirrorOK) ? 'saved' : 'warning') : 'error',
-          ok ? ((localOK && mirrorOK) ? '已保存到手机' : '已保存一份，另一存储不可用；建议备份') : '保存失败，请立即下载完整备份，暂勿刷新');
-        return ok;
-      });
+    // Capture the operation now, persist snapshots sequentially. Revision only
+    // advances after a durable commit; failed retries never replay the operation.
+    pending = pending.then(async function () {
+      if (blocked) return false;
+      try {
+        const other = JSON.parse(localStorage.getItem(KEY) || 'null');
+        if (stamp(other) !== localStamp) return stop('其他页面改变了记录，本页停止写入；请先导出本页内容。');
+      } catch (error) { /* The transactional database remains authoritative. */ }
+      snapshot._storageRevision = revision + 1;
+      snapshot._storageCommit = uid();
+      try { await idbPut(snapshot, mirrorStamp); }
+      catch (error) {
+        if (error.conflict) return stop(error.message);
+        // Without reading the database we cannot exclude a newer database-only
+        // write from another tab. Do not silently create a divergent local copy.
+        if (epoch === saveEpoch) report('error', '无法确认数据库已安全保存，请下载本页完整备份，暂勿刷新；恢复后可重试保存');
+        return false;
+      }
+      revision = snapshot._storageRevision; mirrorStamp = stamp(snapshot);
+      data._storageRevision = revision; data._storageCommit = snapshot._storageCommit;
+      let localOK = false;
+      try {
+        const latest = JSON.parse(localStorage.getItem(KEY) || 'null');
+        if (stamp(latest) !== localStamp) return stop('保存期间其他页面改变了记录，请先导出本页及原始记录后排查。');
+        localStorage.setItem(KEY, JSON.stringify(snapshot)); localStamp = stamp(snapshot); localOK = true;
+      } catch (error) { /* IndexedDB commit has succeeded; local mirror may be full. */ }
+      if (epoch === saveEpoch && !blocked) report(localOK ? 'saved' : 'warning', localOK ? '已保存到手机' : '已保存到数据库，本机镜像不可用；建议下载备份');
+      return !blocked;
+    }).catch(function () { report('error', '保存失败，请下载本页完整备份，暂勿刷新'); return false; });
     return pending;
   }
   async function flush() {
@@ -410,6 +439,14 @@
     do { current = pending; await current; } while (current !== pending);
     return !blocked && state.phase !== 'error' && state.phase !== 'loading';
   }
+  // A transaction may still be pending when the user closes or reloads a tab.
+  // Browsers only show this prompt after user interaction; it cannot protect
+  // against an operating-system kill, so the saving status remains essential.
+  if (window.addEventListener) window.addEventListener('beforeunload', function (event) {
+    if (state.phase === 'saving' || state.phase === 'error' || (blocked && saveEpoch > 0)) {
+      event.preventDefault(); event.returnValue = '';
+    }
+  });
   function exportRecovery() { download('focus-plan-recovery-' + todayKey() + '.json', JSON.stringify(recovery, null, 2)); }
   if (window.addEventListener) window.addEventListener('storage', function (e) {
     if (e.key !== KEY || !loaded) return;
@@ -516,12 +553,12 @@
         rows.push([k, hhmmOf(r.start), hhmmOf(r.end), r.minutes, r.content, r.category, r.countAsStudy ? '是' : '否', r.auto ? '自动' : '手动', r.taskText || '', r.note || '']);
       });
     });
-    download('focus-plan-timeline-' + todayKey() + '.csv', '\ufeff' + rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n'));
+    download('focus-plan-timeline-' + todayKey() + '.csv', '\ufeff' + (App.framework ? App.framework.csv(rows) : rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n')));
     const rows2 = [['日期', '类型', '积分变动', '休闲变动(分钟)', '说明']];
     data.ledger.forEach(function (e) {
       rows2.push([e.date, e.type, e.points || 0, e.leisure || 0, e.note || '']);
     });
-    download('focus-plan-ledger-' + todayKey() + '.csv', '\ufeff' + rows2.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n'));
+    download('focus-plan-ledger-' + todayKey() + '.csv', '\ufeff' + (App.framework ? App.framework.csv(rows2) : rows2.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n')));
   }
   /** 💾 v113：用一份备份/导出的 JSON **把本地数据整个换掉**。
    *  ⚠️ 老的 importJSON 只搬了 settings / days / ledger ——
