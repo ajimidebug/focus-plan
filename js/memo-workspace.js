@@ -138,7 +138,7 @@
       const live=session?.status==='running'?' · 执行中':session?.status==='paused'?' · 暂停中':'';
       return '<div class="mw-exec-item" data-category="'+esc(category)+'"><i class="mw-exec-color" aria-hidden="true"></i><div class="mw-exec-info"><strong>'+(entry.pinned?'📌 ':'')+(i+1)+'. '+esc(found.task.text)+'</strong><small>'+esc(names[category]||'待安排')+(isHabit?' · 习惯':'')+(i===0?' · 当前':'')+live+(ref.day?' · '+esc(ref.day):'')+'</small></div><div class="mw-exec-actions"><button type="button" class="btn btn-small" data-schedule-command="start" data-schedule-ref="'+esc(JSON.stringify(ref))+'"'+(session?.status==='paused'?' data-session-id="'+esc(session.id)+'"':'')+'>▶ 开始／继续</button>'+(isHabit?button('exec-checkin','打卡',attr):'')+button('exec-skip','跳过',attr)+'</div>'+button('exec-menu','⋯',attr+' aria-label="队列操作：'+esc(found.task.text)+'"')+'</div>';
     };
-    return '<section class="card mw-exec-board" aria-label="执行队列"><div class="mw-exec-head"><h2>执行队列 <small>· '+rows.length+' 项</small></h2>'+button('exec-pick','＋ 添加任务')+'</div>'+(rows.length?visible.map(renderItem).join(''):'<p class="hint">尚无执行队列任务。可从三栏加入，不改变原安排。</p>')+(rows.length>5?button('exec-expand',execExpanded?'收起':'展开其余 '+(rows.length-5)+' 项'):'')+'</section>';
+    return '<section class="card mw-exec-board" aria-label="执行队列"><div class="mw-exec-head"><h2>执行队列 <small>· '+rows.length+' 项</small></h2>'+button('search','检索任务','aria-label="检索任务"')+button('exec-pick','＋ 添加任务')+'</div>'+(rows.length?visible.map(renderItem).join(''):'<p class="hint">尚无执行队列任务。可从三栏加入，不改变原安排。</p>')+(rows.length>5?button('exec-expand',execExpanded?'收起':'展开其余 '+(rows.length-5)+' 项'):'')+'</section>';
   }
 
   async function commit(fn, retry = false) { if (A.memoActions.busy() && !retry) { A.ui.toast('请先重试保存当前操作'); return false; } try { if (await A.memoActions.commit(fn)) { $('mw-error').textContent = ''; render(); A.app.refreshStats(); A.memoSchedule.render(); return true; } }
@@ -164,7 +164,7 @@
   function scoreHTML(n){return n===null?'':(A.memoOrganize?.badge(n)||'')+'<small class="mw-score">+'+esc(n)+'分</small>';}
   function scoreBand(n){return n===null?'group':n===0?'zero':n<5?'low':n<10?'medium':'high';}
   function taskItems(day,list){
-    return A.memoSchedule.columnItems(day,list).concat(A.memoFlow.deferred?.(day,list)||[]).map((x,i)=>({x,i})).sort((a,b)=>Number(a.x.done)-Number(b.x.done)||(!a.x.done&&!a.x.deferred&&!b.x.deferred&&list==='required'?priorityWeight(b.x.task)-priorityWeight(a.x.task):0)||(!a.x.done&&list!=='required'?score(b.x.task,b.x.ref)-score(a.x.task,a.x.ref):0)||a.i-b.i).map(v=>v.x);
+    return A.memoSchedule.columnItems(day,list).concat((A.memoFlow.deferred?.(day,list)||[]).filter(x=>x.automatic)).map((x,i)=>({x,i})).sort((a,b)=>Number(a.x.done)-Number(b.x.done)||(!a.x.done&&!a.x.deferred&&!b.x.deferred&&list==='required'?priorityWeight(b.x.task)-priorityWeight(a.x.task):0)||(!a.x.done&&list!=='required'?score(b.x.task,b.x.ref)-score(a.x.task,a.x.ref):0)||a.i-b.i).map(v=>v.x);
   }
   function deferredHTML(x,compact=false){
     const t=x.task,current=A.memoSchedule.find(x.currentRef),attrs='data-deferred-source="'+esc(JSON.stringify(x.ref))+'"';
@@ -216,7 +216,7 @@
       const requestedDay=taskDay;commit(()=>A.memoRecurrence.ensureCore(requestedDay));return;
     }
     const root=$('mw-today');
-    root.innerHTML=(A.ms?.compactHTML?.()||'')+(A.framework?'<div data-framework-overview></div>':overviewHTML(taskDay))+execHTML()+(A.memoGantt?.html()||'')+inlineWaiting();
+    root.innerHTML=execHTML()+(A.framework?'<div data-framework-overview></div>':overviewHTML(taskDay))+(A.memoFinance&&A.memoActions.availableRewards(taskDay).length?'<section class="mw-reward-claim">'+button('claim-rewards','领取已达成的整组奖励')+'</section>':'')+(A.ms?.compactHTML?.()||'')+(A.memoGantt?.html()||'')+inlineWaiting();
     if(A.framework)A.framework.overview(root.querySelector('[data-framework-overview]'),taskDay);
     A.ms?.refresh();
   }
@@ -342,6 +342,7 @@
           t.priorityWeight=weight;
         }
         if(q('#task-group'))t.memoGroup=q('#task-group').value;A.memoGantt?.apply(t,m);saveTiming(m, targetRef, text, targetRef.kind === 'project' ? targetRef.day : day); savedRef=targetRef;
+        A.memoActions?.reconcileRewards?.(day);
       })){taskSaved=true;}else return;}
       if(begin){if(day!==M().userDay())throw Error('日期已改变，任务已保存，请关闭后重新开始');if(!await A.memoActions.commit(()=>A.memoSchedule.startRef(savedRef)))return;}
       A.ui.closeModal();render();A.memoSchedule.render();if(begin)A.ui.toast('任务已保存，计时已开始或保持运行');
@@ -445,6 +446,8 @@
         if(act==='exec-menu')return execMenu(ref);
         if(act==='exec-checkin')return A.memoActions.checkin(ref.id,ref.day);
         if(act==='exec-expand'){execExpanded=!execExpanded;return renderTasks();}
+        if(act==='search')return taskSearch();
+        if(act==='claim-rewards')return claimDayRewards();
         if(['exec-skip','exec-pin','exec-up','exec-down','exec-tail'].includes(act))return execMove(ref,act.slice(5));
         if(act==='exec-edit')return editor(ref);
         if(act==='exec-delete')return ref.kind==='project'||ref.kind==='daily'?editor(ref):A.memoActions.deleteTask(ref);
