@@ -28,7 +28,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   });
   assert(inspect.total>=3&&inspect.done>=1,'goal complete habit counted once');
   assert.equal(await page.locator('.framework-overview .overview-habit').filter({hasText:'重置！'}).count(),1,'continuing habit stays visible');
-  assert.equal(await page.locator('.framework-overview .mw-late-section').first().count(),1,'moved active task rendered as late');
+  assert.equal(await page.locator('.framework-overview .mw-late-section').count(),0,'manual rescheduling is not overdue');
   assert.equal(await page.locator('.framework-overview .mw-completed .overview-habit').filter({hasText:'重置！'}).count(),0,'continuing habit not folded');
   assert.equal(await page.locator('.memo-gantt .gantt-group').count(),3,'one-off tasks appear in ungrouped Gantt');
   assert.equal(await page.locator('.memo-gantt .gantt-group[data-gantt-group=""]').evaluate(el=>el.open),false,'ungrouped defaults collapsed');
@@ -43,10 +43,9 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   assert.equal(editState.end,'2026-12-05','quick Gantt edit saved: '+JSON.stringify(editState));
   assert.equal(await page.evaluate(()=>App.store.data().memoProjects.find(x=>x.id==='p-two').memoGroup),'g-life');
   await page.evaluate(()=>App.memoWorkspace.setDay('2026-11-03'));
-  assert.equal(await page.locator('.framework-overview .mw-history-section').count(),1,'original day historical copy is folded');
-  await page.locator('.framework-overview .mw-history-section > summary').click();
-  const hist=await page.locator('.mw-history-section').innerText();
-  assert(hist.includes('已改期至'),'changed date must not claim backfill');
+  assert.equal(await page.locator('.framework-overview .mw-history-section').count(),0,'manual change is absent from original-day columns');
+  const hist=await page.evaluate(()=>App.memoFlow.deferred('2026-11-03','required').find(x=>x.ref.id==='moved-1750'));
+  assert(hist&&!hist.automatic&&hist.toDay==='2026-11-05','reschedule audit history survives without overdue state');
   const mapped=await page.evaluate(()=>{
    const A=App,d=A.store.data();
    const exported=A.memoTransfer.exportData(['projects']);
