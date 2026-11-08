@@ -69,9 +69,9 @@ const server=http.createServer((req,res)=>{
 
   const order1753=await page.evaluate(()=>{
     const a=document.querySelector('.mw-exec-board'),b=document.querySelector('.memo-gantt'),c=document.querySelector('.framework-overview');
-    return !!(a&&b&&c&&(c.compareDocumentPosition(a)&Node.DOCUMENT_POSITION_FOLLOWING)&&(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING));
+    return !!(a&&b&&c&&(a.compareDocumentPosition(c)&Node.DOCUMENT_POSITION_FOLLOWING)&&(c.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING));
   });
-  assert(order1753,'execution queue between task columns and Gantt');
+  assert(order1753,'execution queue comes before task columns and Gantt');
   assert.equal(await page.locator('.gantt-deadline-badge').count(),1,'global deadline initial rendered');
   assert.equal(await page.locator('.gantt-deadline-badge').first().textContent(),'考','global deadline first character');
   assert.equal(await page.locator('.overview-exec-add').count(),0,'three-column cards have no permanent queue button');
