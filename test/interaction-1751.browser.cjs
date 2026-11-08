@@ -30,6 +30,17 @@ const server=http.createServer((req,res)=>{
   assert(initial.some(n=>n.key==='once:once-ideal'&&n.group==='g-math'),'dated one-off shown in Gantt');
   assert(initial.some(n=>n.key==='once:once-queue'),'unscheduled queue item shown in Gantt');
   assert(initial.some(n=>n.key==='once:once-ungrouped'&&n.group===''),'ungrouped one-off shown');
+  // 175.8: search is read-only and resolves to the one current task instance.
+  const searchBefore=await page.evaluate(()=>JSON.stringify({days:App.store.data().days,queue:App.store.data().queue,ledger:App.store.data().ledger}));
+  await page.locator('.mw-exec-head [data-mw="search"]').click();
+  await page.locator('#mw-search-text').fill('一次性数学测试');
+  assert.equal(await page.locator('#mw-search-results [data-search-id="once-ideal"]').count(),1,'search finds the current dated task once');
+  await page.locator('#mw-search-results [data-search-id="once-ideal"]').click();
+  assert.equal(await page.locator('#mw-title').inputValue(),'一次性数学测试','search result opens the matching task editor');
+  await page.locator('.modal [data-act="cancel"]').click();
+  await page.locator('.modal').waitFor({state:'detached'});
+  assert.equal(await page.evaluate(()=>JSON.stringify({days:App.store.data().days,queue:App.store.data().queue,ledger:App.store.data().ledger})),searchBefore,'search and navigation do not mutate tasks or points');
+
 
   // 175.6: one-screen overview, shared axis geometry, day/weekday markers and saved display mode.
   assert.equal(await page.locator('[data-gantt-display="detail"]').getAttribute('aria-pressed'),'true','existing users start in detailed mode');
@@ -69,9 +80,9 @@ const server=http.createServer((req,res)=>{
 
   const order1753=await page.evaluate(()=>{
     const a=document.querySelector('.mw-exec-board'),b=document.querySelector('.memo-gantt'),c=document.querySelector('.framework-overview');
-    return !!(a&&b&&c&&(c.compareDocumentPosition(a)&Node.DOCUMENT_POSITION_FOLLOWING)&&(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING));
+    return !!(a&&b&&c&&(a.compareDocumentPosition(c)&Node.DOCUMENT_POSITION_FOLLOWING)&&(c.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING));
   });
-  assert(order1753,'execution queue between task columns and Gantt');
+  assert(order1753,'execution queue comes before task columns and Gantt');
   assert.equal(await page.locator('.gantt-deadline-badge').count(),1,'global deadline initial rendered');
   assert.equal(await page.locator('.gantt-deadline-badge').first().textContent(),'考','global deadline first character');
   assert.equal(await page.locator('.overview-exec-add').count(),0,'three-column cards have no permanent queue button');

@@ -20,7 +20,8 @@
     const out=[],d=S().data();
     (d.days[day]?.tasks[list]||[]).filter(t=>!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!A.memoReview?.hidden(t,list)&&t.memoMovedTo?.kind==='task'&&t.memoMovedTo.day!==day).forEach(t=>{
       const ref={kind:'task',id:t.id,day,list},found=A.memoSchedule.resolve(ref);
-      out.push({task:t,ref,done:false,deferred:true,toDay:t.memoMovedTo.day,currentRef:found?.ref||t.memoMovedTo,closed:t.memoMovedTo.day<day,legacy:!t.memoDeferred});
+      const automatic=t.memoDeferred?.reason==='automatic'||(!t.memoDeferred?.reason&&(t.memoAutoCarry?.origin===day||!!(t.overdueEventId&&t.originalDay===day)));
+      out.push({task:t,ref,done:false,deferred:true,automatic,toDay:t.memoMovedTo.day,currentRef:found?.ref||t.memoMovedTo,closed:t.memoMovedTo.day<day,legacy:!t.memoDeferred});
     });
     queues().forEach(t=>{
       if(A.memoReview?.hidden(t,list))return;
@@ -28,41 +29,47 @@
       const steps=(t.assignmentHistory||[]).concat(t.assignment?[t.assignment]:[]),matches=[];
       steps.forEach((h,i)=>{if(h.day!==day||h.list!==list)return;const next=steps.slice(i+1).find(x=>x.day&&x.list);if(!next||next.day===day)return;
         const snapshot=h.snapshot||{id:t.id,text:t.text,points:t.points,note:t.note};
-        matches.push({task:snapshot,ref:{kind:'queue',id:t.id,day,list},done:false,deferred:true,toDay:h.toDay||next.day,currentRef:{kind:'queue',id:t.id},closed:(h.toDay||next.day)<day,legacy:!h.snapshot});
+        const automatic=h.moveReason==='automatic'||(!h.moveReason&&(snapshot.memoAutoCarry?.origin===day||!!(snapshot.overdueEventId&&snapshot.originalDay===day)));
+        matches.push({task:snapshot,ref:{kind:'queue',id:t.id,day,list},done:false,deferred:true,automatic,toDay:h.toDay||next.day,currentRef:{kind:'queue',id:t.id},closed:(h.toDay||next.day)<day,legacy:!h.snapshot});
       });
       if(matches.length)out.push(matches[matches.length-1]);
     });
     return out;
   }
-  function moveCore(ref, day, list, target = 'task') {
+  function moveCore(ref, day, list, target = 'task', reason = 'manual') {
     if (!M().validDate(day) || !['required', 'ideal', 'extra'].includes(list)) throw new Error('请选择有效日期和任务栏目');
     const found = A.memoSchedule.resolve(ref); if (!found) throw new Error('任务已移动或删除');
     const t = found.task, r = found.ref;
     A.memoSchedule.invalidate?.();
     if (t.done || t.doneAt || t.archived || t.memoDismissed) throw new Error('请先恢复未完成状态');
     if (r.kind === 'queue') {
-      if (target === 'queue') { if(t.assignment)(t.assignmentHistory||(t.assignmentHistory=[])).push(clone(t.assignment));delete t.assignment; return; }
+      if (target === 'queue') { const oldDay=t.assignment?.day;if(t.assignment){const old=clone(t.assignment);old.moveReason=reason;(t.assignmentHistory||(t.assignmentHistory=[])).push(old);}delete t.assignment;if(oldDay)A.memoActions?.reconcileRewards?.(oldDay);return; }
       if (t.assignment?.day === day && t.assignment.list === list) return;
       const old=clone(t.assignment||{at:new Date().toISOString(),state:'待安排'});
-      if(t.assignment&&t.assignment.day!==day){old.toDay=day;old.snapshot=clone(Object.assign({},t,{assignmentHistory:undefined,assignment:undefined}));}
+      if(t.assignment&&t.assignment.day!==day){old.toDay=day;old.moveReason=reason;old.snapshot=clone(Object.assign({},t,{assignmentHistory:undefined,assignment:undefined}));}
       (t.assignmentHistory || (t.assignmentHistory = [])).push(old);
-      t.assignment = { day, list, at: new Date().toISOString() }; return;
+      const oldDay=t.assignment?.day;
+      t.assignment = { day, list, at: new Date().toISOString() };
+      if(oldDay)A.memoActions?.reconcileRewards?.(oldDay);
+      A.memoActions?.reconcileRewards?.(day);return;
     }
     if (r.kind !== 'task') throw new Error('每日推进项目不作为一次性任务移动');
     if (target === 'queue') {
       if (queues().some(q => q.id === t.id)) throw new Error('队列中已存在此任务');
       const q = clone(t); delete q.done; delete q.memoMovedTo;delete q.memoDeferred;
       (S().data().queue || (S().data().queue = [])).push(q);
-      t.memoMovedTo = { kind: 'queue', id: q.id }; return;
+      t.memoMovedTo = { kind: 'queue', id: q.id };A.memoActions?.reconcileRewards?.(r.day);return;
     }
     if (r.day === day && r.list === list) return;
     const destination = S().getDay(day).tasks[list];
     if (r.day!==day && Object.values(S().getDay(day).tasks).flat().some(x => x.id === t.id && !x.memoMovedTo)) throw new Error('此任务已在目标日，请刷新');
     const next = clone(t);next.originalDay=t.originalDay||r.day;delete next.memoMovedTo;delete next.memoDeferred;
     if (r.day === day) S().getDay(r.day).tasks[r.list] = S().getDay(r.day).tasks[r.list].filter(x => x.id !== t.id);
-    else {t.memoMovedTo = { kind: 'task', id: t.id, day, list };t.memoDeferred={version:1,at:new Date().toISOString(),toDay:day};}
+    else {t.memoMovedTo = { kind: 'task', id: t.id, day, list };t.memoDeferred={version:1,at:new Date().toISOString(),toDay:day,reason};}
     Object.values(S().getDay(day).tasks).forEach(items => { for(let i=items.length-1;i>=0;i--)if(items[i].id===t.id && items[i].memoMovedTo)items.splice(i,1); });
     destination.push(next);
+    A.memoActions?.reconcileRewards?.(r.day);
+    if(day!==r.day)A.memoActions?.reconcileRewards?.(day);
   }
   function overdue(now = Date.now()) {
     const today = M().userDay(now), f = state(), out = [];
@@ -83,7 +90,7 @@
   function settleCore(now = Date.now()) {
     const f = state(), today = M().userDay(now), at = new Date(now).toISOString();
     A.memoRecurrence?.ensureCore(M().userDay(now),now);
-    longOverdue(now).forEach(({task:t,ref,day})=>{t.originalDay=t.originalDay||day;t.memoAutoCarry={kind:'extra',at,origin:t.memoAutoCarry?.origin||day};moveCore(ref,today,'extra');});
+    longOverdue(now).forEach(({task:t,ref,day})=>{t.originalDay=t.originalDay||day;t.memoAutoCarry={kind:'extra',at,origin:t.memoAutoCarry?.origin||day};moveCore(ref,today,'extra','task','automatic');});
     overdue(now).forEach(({ task: t, ref, day }) => {
       const dueDay = day || ref.day, origin = t.originalDay || dueDay;
       let event = f.settlements.find(e => e.taskId === t.id && e.origin === origin);
@@ -94,7 +101,7 @@
         if (points) S().data().ledger.push({ id: event.id, operationId: 'overdue:' + t.id + ':' + origin, date: dueDay, type: 'penalty-required', taskId: t.id, points: -points, leisure: 0, at, note: '必做逾期：' + t.text });
       }
       t.originalDay = origin; t.overdueEventId = event.id;
-      moveCore(ref, today, 'required');
+      moveCore(ref, today, 'required', 'task', 'automatic');
       if(t.memoReviewRoundId) A.memoReview?.carryCore(t.memoReviewRoundId,today,now);
     });
   }

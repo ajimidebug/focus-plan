@@ -49,7 +49,7 @@ for(const width of [320,390,1280]){
  assert.deepEqual(initial.order,['priority-high','priority-default','priority-low'],'required priority and stable default');
  assert.deepEqual(initial.tiers,['none','none','basic','basic','high'],'configured >=25 bounty and >=31 high tier');
  assert.equal(initial.invalid,3,'invalid legacy weight defaults safely');
- assert.deepEqual(initial.segments,['late-done','done','pending','deferred'],'four progress segments retain their ordering');
+ assert.deepEqual(initial.segments,['late-done','deferred','done','pending'],'four progress segments retain their ordering');
  const tierEls=await page.locator('.framework-overview .overview-task[data-bounty-tier]').evaluateAll(nodes=>Object.fromEntries(nodes.filter(n=>n.getAttribute('data-overview-ref')?.includes('bounty-')).map(n=>[JSON.parse(n.dataset.overviewRef).id,n.dataset.bountyTier])));
  assert.equal(tierEls['bounty-10'],'none');assert.equal(tierEls['bounty-11'],'none');assert.equal(tierEls['bounty-25'],'basic');assert.equal(tierEls['bounty-31'],'high');
  await page.evaluate(()=>App.memoWorkspace.editor({kind:'task',id:'priority-low',day:'2026-11-04',list:'required'}));

@@ -823,7 +823,7 @@ test('173.5 dated deferrals preserve independent source snapshots and exactly on
  const historyCopy=F.deferred(old,'ideal')[0];assert.equal(historyCopy.task.text,'原名称');assert.equal(historyCopy.task.note,'原备注');assert.equal(historyCopy.task.subs[0].text,'已做子项');assert.equal(historyCopy.task.groups[0].subs[0].done,false);
  F.moveCore(ref,next,'ideal');assert.equal(F.deferred(day,'ideal')[0].task.text,'新名称');assert.equal(F.deferred(old,'ideal')[0].toDay,day);assert.equal(F.deferred(old,'ideal')[0].currentRef.day,next);
  A.completeCore({kind:'task',id:'copy',day:next,list:'ideal',title:'新名称'},'',next+'T12:00:00+08:00');assert.equal(b.S.pointsTotal(),10);assert.equal(historyCopy.task.done,undefined);
- const c=b.ctx.App.memoFinance.column(old,'ideal');assert.equal(c.done,0);assert.equal(c.total,1);assert.match(b.ctx.App.memoReport.report(old).text,/未完成；已延期至/);
+ const c=b.ctx.App.memoFinance.column(old,'ideal');assert.equal(c.done,0);assert.equal(c.total,0);assert.doesNotMatch(b.ctx.App.memoReport.report(old).text,/未完成；已延期至/);
  assert.throws(()=>A.completeCore({kind:'task',id:'copy',day:next,list:'ideal',title:'新名称'},''));
 });
 test('173.5 queue deferrals snapshot names and subitems without copying completion or rewards',async()=>{
@@ -837,10 +837,40 @@ test('173.5 running deferral preserves session identity, timer chunks and daily 
  b.S.getDay(old).tasks.required=[{id:'clock-copy',text:'计时任务'}];const ref={kind:'task',id:'clock-copy',day:old,list:'required'},s=P.startRef(ref,edge-600000);
  assert.equal(P.timing(ref,edge).allMs,600000);const raw=JSON.stringify(P.state().sessions);F.moveCore(ref,day,'required');assert.equal(P.timing(ref,edge+600000).allMs,1200000);assert.equal(JSON.stringify(P.state().sessions),raw);assert.equal(P.dayExecutionMs(old,edge+600000),600000);assert.equal(P.dayExecutionMs(day,edge+600000),600000);assert.equal(P.state().sessions[0].id,s.id);
 });
-test('173.5 deferring a required task cannot turn its original day into full completion rewards',async()=>{
- const b=browser();await b.S.load();const {F,M,A}=flowHarness(b),day=M.userDay(),next=M.shiftDay(day,1);b.S.getDay(day).tasks.required=[{id:'delay',text:'延期必做'}];b.S.getDay(day).tasks.ideal=[{id:'finish',text:'其他任务',points:1}];
- F.moveCore({kind:'task',id:'delay',day,list:'required'},next,'required');A.completeCore({kind:'task',id:'finish',day,list:'ideal',title:'其他任务'},'',day+'T12:00:00+08:00',[{kind:'base',points:10},{kind:'perfect',points:20}]);
- assert.equal(b.S.pointsTotal(),1);assert.equal(b.S.getDay(day).rewards.length,0);
+test('175.8 deliberate rescheduling makes the original day eligible for perfect rewards',async()=>{
+ const b=browser();await b.S.load();const {F,M,A}=flowHarness(b),day=M.userDay(),next=M.shiftDay(day,1);financeHarness(b);
+ b.S.getDay(day).tasks.required=[{id:'delay',text:'改期必做'}];b.S.getDay(day).tasks.ideal=[{id:'finish',text:'其他任务',points:1}];
+ F.moveCore({kind:'task',id:'delay',day,list:'required'},next,'required');
+ assert.equal(b.ctx.App.memoFinance.column(day,'required').total,0);
+ A.completeCore({kind:'task',id:'finish',day,list:'ideal',title:'其他任务'},'',day+'T12:00:00+08:00',[{kind:'base',points:10},{kind:'perfect',points:20}]);
+ assert.equal(b.S.pointsTotal(),21);assert.deepEqual(Array.from(b.S.getDay(day).rewards,r=>r.kind),['perfect']);
+});
+test('175.8 claim follows current target membership, refunds when reopened and never duplicates',async()=>{
+ const b=browser();await b.S.load();const {F,M,A}=flowHarness(b),day=M.userDay(),next=M.shiftDay(day,1);financeHarness(b);
+ b.S.getDay(day).tasks.required=[{id:'done',text:'已完成必做',done:true},{id:'delay',text:'调整安排'}];
+ b.S.getDay(day).tasks.ideal=[{id:'ideal',text:'已完成理想',done:true}];
+ assert.equal(b.ctx.App.memoFinance.column(day,'required').total,2);
+ F.moveCore({kind:'task',id:'delay',day,list:'required'},next,'required');
+ assert.equal(b.ctx.App.memoFinance.column(day,'required').label,'1/1');
+ assert.equal(b.ctx.App.memoFinance.column(next,'required').label,'0/1');
+ assert.equal(b.ctx.App.memoFinance.column(day,'required').deferred,0);
+ assert.deepEqual(Array.from(A.availableRewards(day),x=>x.kind),['base','perfect']);
+ A.claimRewardsCore(day,[{kind:'base',points:10},{kind:'perfect',points:20}]);
+ assert.equal(b.S.pointsTotal(),30);assert.equal(A.availableRewards(day).length,0);
+ assert.throws(()=>A.claimRewardsCore(day,[{kind:'base',points:10}]),/改变/);
+ F.moveCore({kind:'task',id:'delay',day:next,list:'required'},day,'required');
+ assert.equal(b.ctx.App.memoFinance.column(day,'required').total,2);
+ assert.equal(b.S.pointsTotal(),0);assert.equal(b.S.getDay(day).rewards.length,0);
+ assert.equal(b.S.data().ledger.filter(x=>x.type==='reward-base').length,0);
+ assert(b.S.validate(b.S.data()));
+});
+test('175.8 deliberately moving a review round leaves the source day without a goal or overdue color',async()=>{
+ const b=browser();await b.S.load();const {F,M}=flowHarness(b);financeHarness(b);
+ const day=M.userDay(),later=M.shiftDay(day,2);
+ b.S.getDay(day).tasks.ideal=[{id:'review-round',text:'复习：线代 · 第3轮',memoReviewRoundId:'round3'}];
+ F.moveCore({kind:'task',id:'review-round',day,list:'ideal'},later,'ideal');
+ assert.equal(b.ctx.App.memoFinance.column(day,'ideal').total,0);
+ assert.equal(b.ctx.App.memoFinance.column(later,'ideal').deferred,0);
 });
 test('173.5 automatic carry is idempotent and backfill closes the continuation without duplicate reward',async()=>{
  const b=browser();await b.S.load();const {F,P,M,A}=flowHarness(b),old='2026-10-20',day='2026-10-21';financeHarness(b);
@@ -1528,28 +1558,28 @@ test('173.9 deferred columns preserve historical obligations and completed prior
  const b=browser();await b.S.load();const {F,P,M,A}=flowHarness(b),C=financeHarness(b),day=M.userDay(),next=M.shiftDay(day,1);
  b.S.getDay(day).tasks.ideal=[{id:'delayed-color',text:'延期',points:1},{id:'normal-color',text:'普通',points:1}];
  F.moveCore({kind:'task',id:'delayed-color',day,list:'ideal'},next,'ideal');
- const before=JSON.stringify(b.S.data());let old=C.column(day,'ideal'),current=C.column(next,'ideal');assert.equal(old.total,2);assert.equal(old.deferred,1);assert.equal(old.deferredPercent,50);assert.equal(current.deferred,1);assert.equal(JSON.stringify(b.S.data()),before);
- A.completeCore({kind:'task',id:'delayed-color',day:next,list:'ideal',title:'延期'},'',next+'T12:00:00+08:00');current=C.column(next,'ideal');old=C.column(day,'ideal');assert.equal(current.done,1);assert.equal(current.deferred,0);assert.equal(old.done,0);assert.equal(old.deferred,1);assert.equal(old.total,2);
+ const before=JSON.stringify(b.S.data());let old=C.column(day,'ideal'),current=C.column(next,'ideal');assert.equal(old.total,1);assert.equal(old.deferred,0);assert.equal(old.deferredPercent,0);assert.equal(current.deferred,0);assert.equal(JSON.stringify(b.S.data()),before);
+ A.completeCore({kind:'task',id:'delayed-color',day:next,list:'ideal',title:'延期'},'',next+'T12:00:00+08:00');current=C.column(next,'ideal');old=C.column(day,'ideal');assert.equal(current.done,1);assert.equal(current.deferred,0);assert.equal(old.done,0);assert.equal(old.deferred,0);assert.equal(old.total,1);
 });
 
 test('173.9.1 progress has four exclusive ordered buckets and completion undo preserves totals',async()=>{
  const b=browser();await b.S.load();const {M,A}=flowHarness(b),C=financeHarness(b),day=M.userDay(),old=M.shiftDay(day,-1);
- b.S.getDay(day).tasks.ideal=[{id:'late-done',text:'延期完成',done:true,originalDay:old},{id:'done',text:'当日完成',done:true},{id:'pending',text:'普通未完成',points:1},{id:'late-pending',text:'延期未完成',originalDay:old,points:1}];
- const before=JSON.stringify(b.S.data()),first=C.column(day,'ideal');assert.equal(JSON.stringify(b.S.data()),before);assert.equal(first.total,4);assert.deepEqual(copy(first.segments.map(x=>x.state)),['late-done','done','pending','deferred']);assert.deepEqual(copy(first.segments.map(x=>x.count)),[1,1,1,1]);assert(first.segments.every(x=>x.percent===25));
- const e=A.completeCore({kind:'task',id:'late-pending',day,list:'ideal',title:'延期未完成'},'',day+'T12:00:00+08:00');let next=C.column(day,'ideal');assert.equal(next.total,4);assert.deepEqual(copy(next.segments.map(x=>x.count)),[2,1,1,0]);A.undoCore(e.id);next=C.column(day,'ideal');assert.deepEqual(copy(next.segments.map(x=>x.count)),[1,1,1,1]);assert.equal(next.segments.reduce((n,x)=>n+x.count,0),next.total);
+ b.S.getDay(day).tasks.ideal=[{id:'late-done',text:'延期完成',done:true,originalDay:old,carried:true},{id:'done',text:'当日完成',done:true},{id:'pending',text:'普通未完成',points:1},{id:'late-pending',text:'延期未完成',originalDay:old,points:1,carried:true}];
+ const before=JSON.stringify(b.S.data()),first=C.column(day,'ideal');assert.equal(JSON.stringify(b.S.data()),before);assert.equal(first.total,4);assert.deepEqual(copy(first.segments.map(x=>x.state)),['late-done','deferred','done','pending']);assert.deepEqual(copy(first.segments.map(x=>x.count)),[1,1,1,1]);assert(first.segments.every(x=>x.percent===25));
+ const e=A.completeCore({kind:'task',id:'late-pending',day,list:'ideal',title:'延期未完成'},'',day+'T12:00:00+08:00');let next=C.column(day,'ideal');assert.equal(next.total,4);assert.deepEqual(copy(next.segments.map(x=>x.count)),[2,0,1,1]);A.undoCore(e.id);next=C.column(day,'ideal');assert.deepEqual(copy(next.segments.map(x=>x.count)),[1,1,1,1]);assert.equal(next.segments.reduce((n,x)=>n+x.count,0),next.total);
  assert(C.column(day,'extra').segments.every(x=>x.count===0&&x.percent===0));
 });
 test('173.9.1 queue deferral follows original dated assignment, not creation or same-day category changes',async()=>{
  const b=browser();await b.S.load();const {M,F}=flowHarness(b),C=financeHarness(b),day=M.userDay(),old=M.shiftDay(day,-1),future=M.shiftDay(day,2);
  b.S.data().queue=['forward','category','earlier','created'].map(id=>({id,text:id,points:1,createdDay:old}));
  const ref=id=>({kind:'queue',id});F.moveCore(ref('forward'),old,'ideal');F.moveCore(ref('forward'),day,'ideal');F.moveCore(ref('category'),day,'required');F.moveCore(ref('category'),day,'ideal');F.moveCore(ref('earlier'),future,'ideal');F.moveCore(ref('earlier'),day,'ideal');F.moveCore(ref('created'),day,'ideal');
- const q=C.column(day,'ideal');assert.equal(q.total,4);assert.equal(q.deferred,1);assert.deepEqual(copy(q.items.filter(x=>x.deferred).map(x=>x.title)),['forward']);
+ const q=C.column(day,'ideal');assert.equal(q.total,4);assert.equal(q.deferred,0);assert.deepEqual(copy(q.items.filter(x=>x.deferred).map(x=>x.title)),[]);
 });
 test('173.9.1 on-time backfill wins over stale carry markers and day-scoped projects stay ordinary',async()=>{
  const b=browser();await b.S.load();const {M}=flowHarness(b),C=financeHarness(b),day=M.userDay(),old=M.shiftDay(day,-1);
  b.S.getDay(day).tasks.ideal=[{id:'on-time',text:'按时补记',done:true,originalDay:old,backfillDay:old,carried:true},{id:'late',text:'延期补记',done:true,originalDay:old,backfillDay:day}];
  b.S.data().memoProjects=[{id:'daily-project',text:'每日推进',createdDay:old,originalDay:old,carried:true,days:{[day]:Date.now()},memoCategoryDays:{[day]:'ideal'}}];
- const q=C.column(day,'ideal');assert.equal(q.total,3);assert.equal(q.lateDone,1);assert.deepEqual(copy(q.segments.map(x=>x.count)),[1,2,0,0]);
+ const q=C.column(day,'ideal');assert.equal(q.total,3);assert.equal(q.lateDone,1);assert.deepEqual(copy(q.segments.map(x=>x.count)),[1,0,2,0]);
 });
 
 test('174.2 required review carry synchronizes effective due, linked point and history exactly once',async()=>{

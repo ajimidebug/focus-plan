@@ -346,6 +346,10 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 /* 175.3: compact execution queue and global deadlines. */
 .mw-exec-board,.mw-deadlines{min-width:0;margin:12px 0;}
 .mw-exec-head,.mw-deadlines-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;}
+.mw-exec-head{flex-wrap:wrap;}
+.mw-exec-head h2{flex:1 1 112px;min-width:0;}
+.mw-reward-claim{display:flex;justify-content:flex-end;min-width:0;margin:6px 0 10px;}
+.mw-reward-claim .btn{white-space:normal;text-align:center;}
 .mw-exec-head h2,.mw-deadlines-head strong{margin:0;font-size:15px;}
 .mw-exec-head small{font-size:12px;font-weight:400;color:var(--muted);}
 .mw-exec-item{display:flex;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--line);padding:9px 0;min-width:0;}
