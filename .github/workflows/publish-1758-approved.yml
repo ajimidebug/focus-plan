@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   dispatch:
-    if: github.event.head_commit.message == 'release(175.8.0): authorized verified publish trigger'
+    if: "github.event.head_commit.message == 'release(175.8.0): authorized verified publish trigger'"
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
