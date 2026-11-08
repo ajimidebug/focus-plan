@@ -30,6 +30,17 @@ const server=http.createServer((req,res)=>{
   assert(initial.some(n=>n.key==='once:once-ideal'&&n.group==='g-math'),'dated one-off shown in Gantt');
   assert(initial.some(n=>n.key==='once:once-queue'),'unscheduled queue item shown in Gantt');
   assert(initial.some(n=>n.key==='once:once-ungrouped'&&n.group===''),'ungrouped one-off shown');
+  // 175.8: search is read-only and resolves to the one current task instance.
+  const searchBefore=await page.evaluate(()=>JSON.stringify({days:App.store.data().days,queue:App.store.data().queue,ledger:App.store.data().ledger}));
+  await page.locator('.mw-exec-head [data-mw="search"]').click();
+  await page.locator('#mw-search-text').fill('一次性数学测试');
+  assert.equal(await page.locator('#mw-search-results [data-search-id="once-ideal"]').count(),1,'search finds the current dated task once');
+  await page.locator('#mw-search-results [data-search-id="once-ideal"]').click();
+  assert.equal(await page.locator('#mw-title').inputValue(),'一次性数学测试','search result opens the matching task editor');
+  await page.locator('.modal [data-act="cancel"]').click();
+  await page.locator('.modal').waitFor({state:'detached'});
+  assert.equal(await page.evaluate(()=>JSON.stringify({days:App.store.data().days,queue:App.store.data().queue,ledger:App.store.data().ledger})),searchBefore,'search and navigation do not mutate tasks or points');
+
 
   // 175.6: one-screen overview, shared axis geometry, day/weekday markers and saved display mode.
   assert.equal(await page.locator('[data-gantt-display="detail"]').getAttribute('aria-pressed'),'true','existing users start in detailed mode');
