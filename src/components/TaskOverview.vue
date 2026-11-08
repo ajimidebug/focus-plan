@@ -75,7 +75,7 @@ const columns=computed(()=>{void props.revision;return lists.map(col=>{
           <q-btn v-for="h in col.habitDone" :key="'habit:done:'+h.it.id" flat no-caps class="habit-plan-row habit-plan-goal-done overview-habit" :data-habit-kind="h.mode" @click.stop="A().memoActions.checkin(h.it.id,day)"><span class="habit-plan-title">{{h.it.text}} ✓</span><span class="habit-plan-meta">{{h.n}}/{{h.target}} 次</span></q-btn>
         </details>
         <details v-if="col.historical.length" class="mw-history-section" :open="expanded(foldedKey(day,col.key,'history'))" @toggle="remember(foldedKey(day,col.key,'history'),$event)">
-          <summary>历史与改期记录（{{col.historical.length}}）</summary>
+          <summary>逾期顺延记录（{{col.historical.length}}）</summary>
           <OverviewTask v-for="x in col.historical" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" />
         </details>
         <q-btn flat dense no-caps class="overview-add" :aria-label="'概览：添加'+col.name+'任务'" @click.stop="A().memoWorkspace.editor(null,col.key)">＋ 添加</q-btn>
