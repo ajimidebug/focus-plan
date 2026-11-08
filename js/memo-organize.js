@@ -41,6 +41,7 @@ function change(ref,list){
  }else if(r.kind==='project'||r.kind==='daily'){
   (t.memoCategoryDays||(t.memoCategoryDays={}))[r.day]=list;
  }else A.memoFlow.moveCore(r,r.day||t.assignment?.day||M().userDay(),list);
+ A.memoActions?.reconcileRewards?.(r.day||t.assignment?.day);
  return A.memoSchedule.canonical(r);
 }
 function openGroups(){
