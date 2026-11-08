@@ -102,20 +102,11 @@
   }
   function withdrawRewards(dayKey) {
     const day=S().data().days[dayKey];if(!day)return;
-    const current=(day.rewards||[]).some(r=>r.scopeVersion===2)?rewardTargets(dayKey).flat():[];
     const lost=(day.rewards||[]).filter(r=>{
       if(!r.memoLedgerId)return false;
-      if(r.scopeVersion===2){
-        if(!Array.isArray(r.dependencies))return !eligible(dayKey,r.kind);
-        return r.dependencies.some(dep=>{
-          if(!dep||typeof dep.id!=='string')return true;
-          if(dep.kind==='checkin'){
-            const it=(S().data().checkins||[]).find(x=>'habit:'+x.id===dep.id);
-            return !it||Number(it.days?.[dayKey]||0)<Number(dep.goal||1);
-          }
-          return !current.some(item=>item.id===dep.id&&item.done);
-        });
-      }
+      // Eligibility follows the live goals after a deliberate reschedule.
+      // The original dependencies remain a historical snapshot only.
+      if(r.scopeVersion===2)return !eligible(dayKey,r.kind);
       if(!r.dependencies)return !legacyEligible(day,r.kind);
       const all=taskLists(day).flat();
       return r.dependencies.some(id=>!all.some(t=>t.id===id&&t.done));
@@ -123,6 +114,33 @@
     const ids=lost.map(r=>r.memoLedgerId);
     withdrawLedger(l=>ids.includes(l.id),'关联整组奖励撤回');
     day.rewards=(day.rewards||[]).filter(r=>!ids.includes(r.memoLedgerId));
+  }
+  function availableRewards(dayKey){
+    const day=S().data().days?.[dayKey],settings=S().settings(),groups=rewardTargets(dayKey);
+    return [['base','必做整组奖励','baseRewardPoints'],['perfect','前两栏全部完成奖励','perfectRewardPoints']]
+      .filter(([kind])=>rewardEligible(groups,kind)&&!day?.rewards?.some(r=>r.kind===kind))
+      .map(([kind,label,field])=>({kind,label,points:Number(settings[field]??0)}));
+  }
+  function claimRewardsCore(dayKey,choices){
+    if(S().status().readOnly)throw Error('记录保护中，暂不能领取奖励');
+    if(!M().validDate(dayKey)||!Array.isArray(choices)||!choices.length)throw Error('请选择有效奖励');
+    const available=new Set(availableRewards(dayKey).map(x=>x.kind)),day=S().getDay(dayKey),at=new Date().toISOString(),groups=rewardTargets(dayKey);
+    const unique=new Set();
+    for(const claim of choices){
+      const kind=claim.kind,points=Number(claim.points);
+      if(unique.has(kind)||!available.has(kind)||!rewardEligible(groups,kind))throw Error('奖励条件已改变，请刷新');
+      if(!Number.isFinite(points)||points<=0||points>1000000||Math.abs(Math.round(points*100)-points*100)>1e-7)throw Error('奖励积分须为大于0且不超过1000000的两位小数');
+      unique.add(kind);
+      const targets=(kind==='base'?groups.slice(0,1):groups).flat();
+      const id=S().uid(),dependencies=targets.map(x=>({id:x.id,kind:x.kind,...(x.kind==='checkin'?{goal:Number(x.goal)}:{})}));
+      S().data().ledger.push({id,operationId:'reward-claim:'+dayKey+':'+kind+':'+id,date:dayKey,type:'reward-'+kind,points,leisure:0,taskId:'',memoReward:true,at,note:kind==='base'?'保底奖励':'全部任务完成奖励'});
+      day.rewards=day.rewards||[];
+      day.rewards.push({kind,points,at,memoLedgerId:id,scopeVersion:2,dependencies});
+    }
+    return unique.size;
+  }
+  function reconcileRewards(dayKey){
+    if(M().validDate(dayKey)&&S().data().days?.[dayKey])withdrawRewards(dayKey);
   }
   function completeCore(spec, text, at = new Date().toISOString(), choices = []) {
     if (S().status().readOnly) throw new Error('记录保护中，暂不能勾选');
@@ -679,5 +697,5 @@
     });
   }
 
-  App.memoActions = { tick:()=>App.ui.query?.('.task-action-modal')?._timerTick?.(), deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, completeCore, timingSnapshot, undoCore, latest, passage, commit: transaction };
+  App.memoActions = { tick:()=>App.ui.query?.('.task-action-modal')?._timerTick?.(), deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, availableRewards, claimRewardsCore, reconcileRewards, completeCore, timingSnapshot, undoCore, latest, passage, commit: transaction };
 })();
