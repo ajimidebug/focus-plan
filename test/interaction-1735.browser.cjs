@@ -35,12 +35,11 @@ async function run(){
     App.app.switchView('tasks');App.memoWorkspace.enter('today',old);return {day,old};
    });
    check(await page.evaluate(old=>App.store.getDay(old).tasks.ideal[0].points,days.old)===10,'implicit old reward stays ten '+width);
-   const history=page.locator('#mw-today .mw-overview .mw-deferred');check(await history.count()===1,'original day retains one copy '+width);
-   await page.locator('#mw-today .mw-overview .mw-history-section > summary').click();
-   check((await history.innerText()).includes('原日期任务名称')&&(await history.innerText()).includes(days.day),'source title and destination visible '+width);
-   check(await history.locator('[data-mw="complete"],[data-schedule-command]').count()===0,'history is not another executable task '+width);
-   check(await page.locator('#mw-today .mw-overview [data-overview-list="ideal"] .mw-column-count').innerText()==='0/1','historical daily denominator retained '+width);
-   await history.locator('[data-deferred-open]').click();check(await page.locator('#mw-day').inputValue()===days.day,'history navigates to active continuation '+width);
+   const history=page.locator('#mw-today .mw-overview .mw-deferred');check(await history.count()===0,'manually moved source excluded from three columns '+width);
+   const saved=await page.evaluate(old=>App.memoFlow.deferred(old,'ideal')[0],days.old);
+   check(saved&&!saved.automatic&&saved.task.text==='原日期任务名称'&&saved.toDay===days.day,'source title and destination kept in history '+width);
+   check(await page.evaluate(old=>App.memoFinance.column(old,'ideal').total,days.old)===0,'original daily denominator reduced '+width);
+   await page.evaluate(day=>App.memoWorkspace.setDay(day),days.day);check(await page.locator('#mw-day').inputValue()===days.day,'navigate to active continuation '+width);
    check((await page.locator('#mw-today .mw-overview').innerText()).includes('目标日期修改后的名称'),'current copy has edited title '+width);
    await page.evaluate(()=>App.memoWorkspace.showPane('details'));await page.locator('#mw-column-ideal [data-mw="add-ideal"]').click();check(await page.locator('#mw-points').inputValue()==='1','new ideal form uses one '+width);
    await page.locator('#mw-title').fill('新建一分任务');await page.locator('.modal [data-act="save"]').click();await page.waitForFunction(()=>!document.querySelector('.modal'));
