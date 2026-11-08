@@ -8,15 +8,15 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',timezoneId:'Asia/Shanghai'}),page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));await page.clock.setFixedTime(new Date('2026-10-30T12:00:00+08:00'));
   await page.goto('http://127.0.0.1:'+server.address().port);await page.waitForFunction(()=>window.App?.app?.ready);
-  await page.evaluate(async()=>{const S=App.store,M=App.memoCore,day=M.userDay(),old=M.shiftDay(day,-1);for(const list of ['required','ideal','extra'])S.getDay(day).tasks[list]=[{id:list+'-late-done',text:list+'延期完成',done:true,originalDay:old,points:1},{id:list+'-done',text:list+'当日完成',done:true,points:1},{id:list+'-pending',text:list+'普通未完成',points:1},{id:list+'-late',text:list+'延期未完成',originalDay:old,points:1}];await S.save();App.app.switchView('tasks');App.memoWorkspace.enter('today',day);});
+  await page.evaluate(async()=>{const S=App.store,M=App.memoCore,day=M.userDay(),old=M.shiftDay(day,-1);for(const list of ['required','ideal','extra'])S.getDay(day).tasks[list]=[{id:list+'-late-done',text:list+'延期完成',done:true,originalDay:old,carried:true,points:1},{id:list+'-done',text:list+'当日完成',done:true,points:1},{id:list+'-pending',text:list+'普通未完成',points:1},{id:list+'-late',text:list+'延期未完成',originalDay:old,carried:true,points:1}];await S.save();App.app.switchView('tasks');App.memoWorkspace.enter('today',day);});
   for(const theme of ['default','dark']){
    await page.evaluate(t=>document.body.dataset.theme=t,theme);const grays=[];
    for(const list of ['required','ideal','extra']){
     const q=await page.locator('#mw-today [data-overview-list="'+list+'"] .mw-column-meter').evaluate(e=>({box:e.getBoundingClientRect().toJSON(),parts:[...e.children].map(c=>({state:c.dataset.progressState,width:c.getBoundingClientRect().width,left:c.getBoundingClientRect().left,right:c.getBoundingClientRect().right,color:getComputedStyle(c).backgroundColor}))}));
-    check(q.parts.map(x=>x.state).join(',')==='late-done,done,pending,deferred','four fixed states '+width+' '+theme+' '+list);
+    check(q.parts.map(x=>x.state).join(',')==='late-done,deferred,done,pending','four fixed states '+width+' '+theme+' '+list);
     check(q.parts.every((x,i)=>Math.abs(x.width-q.box.width/4)<1&&Math.abs(x.left-(q.box.left+q.box.width*i/4))<1),'equal quarter segments in the right order '+width+' '+list);
-    check(Math.abs(q.parts[3].right-q.box.right)<1,'pending deferral anchored at right '+width+' '+list);grays.push(q.parts[3].color);
-    const sum=c=>c.match(/[\d.]+/g).slice(0,3).reduce((n,v)=>n+Number(v),0)*(c.startsWith('color(srgb')?255:1);check(sum(q.parts[0].color)<sum(q.parts[1].color),'late completion darker in its own category '+width+' '+list);
+    check(Math.abs(q.parts[1].left-(q.box.left+q.box.width/4))<1,'overdue gray follows late completion at left '+width+' '+list);grays.push(q.parts[1].color);
+    const sum=c=>c.match(/[\d.]+/g).slice(0,3).reduce((n,v)=>n+Number(v),0)*(c.startsWith('color(srgb')?255:1);check(sum(q.parts[0].color)<sum(q.parts[2].color),'late completion darker in its own category '+width+' '+list);
    }
    check(grays.every(x=>x==='rgb(217, 221, 225)'),'same light gray in all categories '+width+' '+theme);
   }
@@ -35,9 +35,9 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   await page.locator('#ma-timer').click();await page.waitForFunction(()=>document.querySelector('#ma-timer')?.textContent.includes('继续计时')&&!document.querySelector('#ma-timer').disabled);
   if(width===320){await page.setViewportSize({width,height:350});await page.waitForFunction(()=>document.querySelector('.modal')?.getBoundingClientRect().bottom<=350);g=await geometry();check(g.primary.every(x=>x.bottom<=350)&&g.secondary.every(x=>x.top>=g.primary[0].bottom),'both rows reachable in short viewport: '+JSON.stringify(g));await page.setViewportSize({width,height:844});}
   await page.locator('.modal [data-act="commit"]').click();await page.getByRole('dialog').waitFor({state:'hidden'});
-  let values=await page.evaluate(()=>App.memoFinance.column(App.memoCore.userDay(),'ideal').segments.map(x=>x.count));check(values.join(',')==='2,1,1,0','completion moves the right gray segment to the far-left deep segment '+width);
+  let values=await page.evaluate(()=>App.memoFinance.column(App.memoCore.userDay(),'ideal').segments.map(x=>x.count));check(values.join(',')==='2,0,1,1','completion moves the left gray segment into completed category '+width);
   await page.evaluate(async()=>{const e=App.store.data().memoEvents.find(e=>e.active&&e.sourceId==='ideal-late');App.memoActions.undoCore(e.id);await App.store.save();App.memoWorkspace.render();});
-  values=await page.evaluate(()=>App.memoFinance.column(App.memoCore.userDay(),'ideal').segments.map(x=>x.count));check(values.join(',')==='1,1,1,1','undo restores rightmost pending deferral '+width);
+  values=await page.evaluate(()=>App.memoFinance.column(App.memoCore.userDay(),'ideal').segments.map(x=>x.count));check(values.join(',')==='1,1,1,1','undo restores the overdue gray segment '+width);
   await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);await page.evaluate(()=>App.app.switchView('tasks'));check(await page.locator('#mw-today [data-overview-list="ideal"] .mw-column-meter>[data-progress-state="deferred"]').evaluate(e=>parseFloat(e.style.width)===25),'four-segment projection survives reload '+width);
   check(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),'root width remains bounded '+width);check(errors.length===0,'no runtime errors '+width+': '+errors.join(';'));await context.close();
  }
