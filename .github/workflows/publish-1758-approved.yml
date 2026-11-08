@@ -1,0 +1,59 @@
+name: One-time approved 175.8.0 publish trigger
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-1758-approved.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: github.event.head_commit.message == 'release(175.8.0): authorized verified publish trigger'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Dispatch existing guarded publisher for the exact verified main commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            main_sha="$(gh api "repos/$REPO/branches/main" --jq '.commit.sha')"
+            if [ "$main_sha" != "$EXPECTED_SHA" ]; then
+              echo "::error::Main has changed. Refusing to publish an outdated candidate."
+              exit 1
+            fi
+            version="$(gh api "repos/$REPO/contents/package.json?ref=main" --jq '.content' | base64 -d | jq -r '.version')"
+            if [ "$version" != "175.8.0" ]; then
+              echo "::error::Release version changed; publish authorization does not apply."
+              exit 1
+            fi
+            run="$(gh api "repos/$REPO/actions/runs?event=push&head_sha=$EXPECTED_SHA&per_page=30" --jq '.workflow_runs[] | select(.name=="Validate focus-plan changes") | .id' | head -n 1)"
+            if [ -n "$run" ]; then
+              status="$(gh api "repos/$REPO/actions/runs/$run" --jq '.status')"
+              if [ "$status" = "completed" ]; then
+                result="$(gh api "repos/$REPO/actions/runs/$run" --jq '.conclusion')"
+                if [ "$result" != "success" ]; then
+                  echo "::error::Main validation failed: $result"
+                  exit 1
+                fi
+                verified="$(gh api "repos/$REPO/actions/runs/$run/jobs?per_page=100" --jq '[.jobs[] | select(.name=="Release verification" and .conclusion=="success")] | length')"
+                if [ "$verified" != "1" ]; then
+                  echo "::error::Required release verification job is missing."
+                  exit 1
+                fi
+                echo "Authorized main $EXPECTED_SHA validated by run $run. Dispatching guarded publication."
+                gh api -X POST "repos/$REPO/actions/workflows/publish.yml/dispatches" -f ref=main -f 'inputs[mode]=publish' -f "inputs[source_sha]=$EXPECTED_SHA" -f "inputs[validation_run]=$run"
+                exit 0
+              fi
+            fi
+            sleep 15
+          done
+          echo "::error::Timed out waiting for the exact main validation run."
+          exit 1
