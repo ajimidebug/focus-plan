@@ -410,7 +410,12 @@
     if (spec.kind === 'task') { const it = S().getDay(spec.day).tasks[spec.list].find(x => x.id === spec.id); previewPoints = ['ideal', 'extra'].includes(spec.list) ? Number(it.points ?? (spec.list === 'ideal' ? settings.idealPoints : settings.extPoints)) : 0; }
     m.querySelector('#memo-action-info').textContent = '本次积分 ' + (previewPoints > 0 ? '+' : '') + (previewPoints || 0) + '；写入 ' + day + ' 的笔记（04:00分日）。';
     if (spec.kind === 'checkin') m.querySelector('#memo-action-info').textContent += '（' + (App.memoCurrency?.ruleLabel?.() || '旧连续倍率') + '）';
-    bindCommit(m, () => {saveEstimate();const submittedAt=new Date().toISOString();const currentDay=M().userDay(submittedAt);if(currentDay!==day)throw Error('已跨过用户日，请关闭后重新打开任务');spec.remark=remark.value;applyCategory();const currentName=App.memoSchedule.find(ref)?.text;if(currentName)spec.title=currentName;const finalText=textarea.value===initialText?stamp(submittedAt,currentDay)+'【'+label+'】'+spec.title+suffix+'\n'+(remark.value.trim()?'本次备注：'+remark.value.trim()+'\n':'')+timingSnapshot(spec,Date.parse(submittedAt)).text:textarea.value;if(reviewChoice)spec.review=reviewChoice();const event=completeCore(spec,finalText,submittedAt,[...m.querySelectorAll('[data-reward]:checked')].map(x=>({kind:x.dataset.reward,points:m.querySelector('[data-reward-points="'+x.dataset.reward+'"]').value})));completionDrafts.delete(draftId);return event;}, spec.kind==='checkin'?()=>App.checkin?.focusItem?.(spec.id):null);
+    let queueAdvance=null;
+    bindCommit(m, () => {saveEstimate();const submittedAt=new Date().toISOString();const currentDay=M().userDay(submittedAt);if(currentDay!==day)throw Error('已跨过用户日，请关闭后重新打开任务');spec.remark=remark.value;applyCategory();const currentName=App.memoSchedule.find(ref)?.text;if(currentName)spec.title=currentName;const finalText=textarea.value===initialText?stamp(submittedAt,currentDay)+'【'+label+'】'+spec.title+suffix+'\n'+(remark.value.trim()?'本次备注：'+remark.value.trim()+'\n':'')+timingSnapshot(spec,Date.parse(submittedAt)).text:textarea.value;if(reviewChoice)spec.review=reviewChoice();queueAdvance=App.memoWorkspace?.captureQueueAdvance(ref)||null;const event=completeCore(spec,finalText,submittedAt,[...m.querySelectorAll('[data-reward]:checked')].map(x=>({kind:x.dataset.reward,points:m.querySelector('[data-reward-points="'+x.dataset.reward+'"]').value})));completionDrafts.delete(draftId);return event;}, spec.kind==='checkin'?()=>App.checkin?.focusItem?.(spec.id):null,async retrying=>{
+      if(!queueAdvance)return;
+      if(retrying)App.memoWorkspace?.timerEnded(ref);
+      else await App.memoWorkspace?.queueSettled(ref,queueAdvance);
+    });
     // Reuse the existing fixed footer and the original handlers. Only the body
     // scrolls, so starting a task stays reachable beneath long completion notes.
     m.classList.add('task-action-modal');
@@ -440,12 +445,16 @@
       '<button class="btn" data-act="cancel">保留完成</button><button class="btn btn-danger" data-act="commit">确认取消</button>', { lock: true });
     bindCommit(m, () => undoCore(event.id, m.querySelector('#memo-action-text').value),event.kind==='checkin'?()=>App.checkin?.focusItem?.(event.sourceId):null);
   }
-  function bindCommit(m, mutate, returnFocus) {
+  function bindCommit(m, mutate, returnFocus, onSaved) {
     App.ui.bindActions({ cancel: () => { if (!committing && !unsettled) {App.ui.closeModal();returnFocus?.();} }, commit: async button => {
       if (committing) return;
       button.disabled = true; m.querySelector('[data-act="cancel"]').disabled = true;
       try {
-        if (await transaction(mutate)) { App.ui.closeModal(); refresh(); returnFocus?.(); App.ui.toast('已保存'); }
+        const retrying=unsettled;
+        if (await transaction(mutate)) {
+          App.ui.closeModal(); refresh(); returnFocus?.(); App.ui.toast('已保存');
+          await onSaved?.(retrying);
+        }
       } catch (e) { m.querySelector('#memo-action-error').textContent = e.message; button.textContent = unsettled ? '重试保存' : '重新确认'; }
       finally { button.disabled = false; m.querySelector('[data-act="cancel"]').disabled = unsettled; }
     } });
