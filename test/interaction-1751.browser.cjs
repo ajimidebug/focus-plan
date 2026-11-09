@@ -204,8 +204,8 @@ const server=http.createServer((req,res)=>{
   assert.equal(afterHabit.count,1,'planned habit actually checks in');
   assert.equal(afterHabit.events,1,'habit checkin writes an event');
   assert.equal(await page.locator('.mw-exec-item').count(),0,'habit checkin removes only this execution');
-  // Reuse normal queue task to verify the actions dialog stays inside the viewport.
-  await page.evaluate(()=>App.memoWorkspace.execAdd({kind:'task',id:'once-ungrouped',day:'2026-11-06',list:'required'}));
+  // Reuse a still-pending task; once-ungrouped was completed in the 175.9 scenario.
+  await page.evaluate(()=>App.memoWorkspace.execAdd({kind:'task',id:'once-ideal',day:'2026-11-06',list:'ideal'}));
   await page.locator('.mw-exec-item [data-mw="exec-menu"]').click();
   assert.equal(await page.locator('[data-exec-action="pin"]').count(),1,'queue actions use a modal rather than an overflow popup');
   const menuRect=await page.locator('.mw-exec-menu-list').boundingBox();
