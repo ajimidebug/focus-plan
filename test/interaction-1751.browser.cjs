@@ -123,7 +123,7 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('.mw-exec-item [data-mw="exec-complete"]').count(),2,'queue has direct completed controls: '+JSON.stringify(entries1759));
   assert.equal(await page.locator('.mw-exec-item [data-schedule-command="pause"]').count(),0,'queue has no pause control');
   await page.locator('.mw-exec-item').first().locator('[data-schedule-command="start"]').click();
-  await page.waitForFunction(()=>App.memoSchedule.state().sessions.some(x=>x.ref.id==='once-ungrouped'&&x.status==='running'));
+  await page.waitForFunction(()=>!App.memoActions.busy()&&App.memoSchedule.state().sessions.some(x=>x.ref.id==='once-ungrouped'&&x.status==='running')&&document.querySelector('.mw-exec-board h2')?.textContent.includes('连续计时中'));
   assert.match(await page.locator('.mw-exec-board h2').innerText(),/连续计时中/,'queue entered sequential mode');
   await page.locator('.mw-exec-item').first().locator('[data-mw="exec-complete"]').click();
   assert.equal(await page.locator('.task-action-modal [data-act="commit"]').count(),1,'queue complete reuses confirmation modal');
