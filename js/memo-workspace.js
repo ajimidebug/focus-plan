@@ -136,7 +136,7 @@
       const category=isHabit?(A.memoFinance?.plans(ref.day).find(p=>p.it.id===ref.id)?.r.list||'extra'):ref.list||found.task.assignment?.list||((ref.kind==='project'||ref.kind==='daily')?found.task.memoCategoryDays?.[ref.day]||'extra':'queue');
       const session=A.memoSchedule.timing(ref).session;
       const live=session?.status==='running'?' · 执行中':session?.status==='paused'?' · 暂停中':'';
-      return '<div class="mw-exec-item" data-category="'+esc(category)+'"><i class="mw-exec-color" aria-hidden="true"></i><div class="mw-exec-info"><strong>'+(entry.pinned?'📌 ':'')+(i+1)+'. '+esc(found.task.text)+'</strong><small>'+esc(names[category]||'待安排')+(isHabit?' · 习惯':'')+(i===0?' · 当前':'')+live+(ref.day?' · '+esc(ref.day):'')+'</small></div><div class="mw-exec-actions"><button type="button" class="btn btn-small" data-schedule-command="start" data-schedule-ref="'+esc(JSON.stringify(ref))+'"'+(session?.status==='paused'?' data-session-id="'+esc(session.id)+'"':'')+'>▶ 开始／继续</button>'+(isHabit?button('exec-checkin','打卡',attr):'')+button('exec-skip','跳过',attr)+'</div>'+button('exec-menu','⋯',attr+' aria-label="队列操作：'+esc(found.task.text)+'"')+'</div>';
+      return '<div class="mw-exec-item" data-category="'+esc(category)+'"><i class="mw-exec-color" aria-hidden="true"></i><div class="mw-exec-info"><strong>'+(entry.pinned?'📌 ':'')+(i+1)+'. '+esc(found.task.text)+'</strong><small>'+esc(names[category]||'待安排')+(isHabit?' · 习惯':'')+(i===0?' · 当前':'')+live+(ref.day?' · '+esc(ref.day):'')+'</small></div><div class="mw-exec-actions"><button type="button" class="btn btn-small" data-schedule-command="start" data-schedule-ref="'+esc(JSON.stringify(ref))+'"'+(session?.status==='paused'?' data-session-id="'+esc(session.id)+'"':'')+'>▶ 开始／继续</button>'+(isHabit?button('exec-checkin','打卡',attr):button('exec-complete','完成',attr))+button('exec-skip','跳过',attr)+'</div>'+button('exec-menu','⋯',attr+' aria-label="队列操作：'+esc(found.task.text)+'"')+'</div>';
     };
     return '<section class="card mw-exec-board" aria-label="执行队列"><div class="mw-exec-head"><h2>执行队列 <small>· '+rows.length+' 项</small></h2>'+button('search','检索任务','aria-label="检索任务"')+button('exec-pick','＋ 添加任务')+'</div>'+(rows.length?visible.map(renderItem).join(''):'<p class="hint">尚无执行队列任务。可从三栏加入，不改变原安排。</p>')+(rows.length>5?button('exec-expand',execExpanded?'收起':'展开其余 '+(rows.length-5)+' 项'):'')+'</section>';
   }
@@ -213,32 +213,61 @@
 
   // Local read-only search: stable task identities; review rounds stay grouped by series.
   function taskSearch(){
-    const d=S().data(),rows=[],add=(type,id,title,note,status,date,ref,detail='')=>rows.push({type,id,title:String(title||''),note:String(note||''),status,date:date||'',ref,detail});
+    const d=S().data(),rows=[],add=(type,id,title,note,status,date,ref,detail='',keywords='')=>rows.push({type,id,title:String(title||''),note:String(note||''),status,date:date||'',ref,detail,keywords});
+    const recurrence=d.memoRecurrence||{series:[],occurrences:[]};
+    const occurrenceById=new Map((recurrence.occurrences||[]).map(o=>[o.id,o]));
+    const validSeries=new Set((recurrence.series||[]).map(s=>s.id));
+    const linkedOccurrence=id=>{const o=occurrenceById.get(id);return !!(o&&validSeries.has(o.seriesId));};
     Object.entries(d.days||{}).forEach(([day,data])=>['required','ideal','extra'].forEach(list=>(data.tasks?.[list]||[]).forEach(t=>{
-      if(t.fromQueue||t.fromDaily||t.memoProjectId||t.memoMovedTo||t.memoReviewRoundId)return;
+      if(t.fromQueue||t.fromDaily||t.memoProjectId||t.memoMovedTo||t.memoReviewRoundId||t.memoOccurrenceId&&linkedOccurrence(t.memoOccurrenceId))return;
       add('task',t.id,t.text,t.note,t.memoDismissed?'archived':t.done?'done':'pending',day,{kind:'task',id:t.id,day,list},names[list]);
     })));
     (d.queue||[]).concat(d.queueDone||[]).forEach(t=>{
-      if(t.memoReviewRoundId)return;
+      if(t.memoReviewRoundId||t.memoOccurrenceId&&linkedOccurrence(t.memoOccurrenceId))return;
       add('task',t.id,t.text,t.note,t.archived||t.memoDismissed?'archived':t.doneAt||t.doneDay?'done':'pending',t.assignment?.day||t.doneDay||'',{kind:'queue',id:t.id},t.assignment?names[t.assignment.list]:'待安排');
     });
     (d.memoReview?.series||[]).forEach(series=>{
       const rs=(d.memoReview.rounds||[]).filter(r=>r.seriesId===series.id).sort((a,b)=>a.n-b.n);
       const status=series.stoppedAt||series.paused?'archived':rs.length&&rs.every(r=>r.status==='done')?'done':'pending';
       const next=rs.find(r=>r.status==='pending');
-      add('review',series.id,series.text,series.note,status,next?.due?M().userDay(next.due):'',null,rs.map(r=>'第'+r.n+'轮 '+(r.status==='done'?'已完成':r.status==='cancelled'?'已取消':'待复习')).join(' · '));
+      const minutesText=n=>n<60?n+'分钟':n%1440===0?n/1440+'天':n%60===0?n/60+'小时':n+'分钟';
+      const rule=(series.intervals||[]).length?series.intervals.map(minutesText).join(' → '):'手动安排';
+      const history=(d.memoReview?.rounds||[]).filter(r=>r.seriesId===series.id).map(r=>{
+        const current=r.taskRef&&A.memoSchedule?.resolve(r.taskRef);
+        const original=r.taskRef?.kind==='task'?Object.values(d.days?.[r.taskRef.day]?.tasks||{}).flat().find(t=>t.id===r.taskRef.id):null;
+        return [current?.task?.text,current?.task?.note,original?.text,original?.note].filter(Boolean).join(' ');
+      }).join(' ');
+      add('review',series.id,series.text,series.note,status,next?.due?M().userDay(next.due):'',null,'间隔复习 · '+rule+' · 已有'+rs.length+'轮',history);
+    });
+    (recurrence.series||[]).forEach(series=>{
+      const today=M().userDay(),revisions=Array.isArray(series.revisions)?series.revisions:[];
+      const current=A.memoRecurrence?.config(series,today)||revisions.at(-1);
+      if(!current)return;
+      const history=(recurrence.occurrences||[]).filter(o=>o.seriesId===series.id);
+      const pending=history.filter(o=>o.status==='pending').sort((a,b)=>a.day.localeCompare(b.day));
+      const expected=!series.paused&&!series.stoppedAt?A.memoRecurrence?.nextDue(series,today):null;
+      const rule=A.memoRecurrence?.ruleText?.(current.rule)||'周期未定义';
+      const detail=(series.reviewMode?'持续周期复习':'周期任务')+' · '+rule+
+        (pending.length?' · 待做 '+pending.length+'期':expected?' · 预计下次 '+expected:'');
+      const historyTerms=history.map(o=>{
+        const found=A.memoRecurrence?.taskOf(o);
+        const archived=o.taskRef?.kind==='task'?Object.values(d.days?.[o.taskRef.day]?.tasks||{}).flat().find(t=>t.memoOccurrenceId===o.id):null;
+        return [found?.task?.text,found?.task?.note,archived?.text,archived?.note,o.day].filter(Boolean).join(' ');
+      });
+      const keywords=revisions.map(x=>[x.text,x.note].filter(Boolean).join(' ')).concat(historyTerms).join(' ');
+      add('cycle',series.id,current.text,current.note,series.stoppedAt||series.paused?'archived':'pending',pending[0]?.day||expected||'',null,detail,keywords);
     });
     (d.checkins||[]).forEach(t=>add('checkin',t.id,t.text,t.note,t.archived?'archived':'pending','',null,'习惯'));
     (d.memoProjects||[]).forEach(t=>add('project',t.id,t.text,t.note,t.archived?'archived':'pending','',null,'长期项目'));
     (d.daily||[]).forEach(t=>add('project',t.id,t.text,t.note,t.archived?'archived':'pending','',null,'基础任务'));
     (d.memoDeleted||[]).filter(x=>!x.restored).forEach(x=>add('deleted',x.id,x.payload?.text||'已删除任务','', 'archived',M().userDay(x.at),null,'删除记录'));
-    const m=A.ui.openModal('检索任务','<label>搜索名称或备注<input id="mw-search-text" type="search" autocomplete="off" placeholder="输入任务、复习名称……"></label><div class="schedule-fields"><label>类型<select id="mw-search-type"><option value="">全部</option><option value="task">普通任务</option><option value="review">复习系列</option><option value="checkin">习惯</option><option value="project">长期项目与基础任务</option><option value="deleted">已删除</option></select></label><label>状态<select id="mw-search-status"><option value="">全部状态</option><option value="pending">未完成</option><option value="done">已完成</option><option value="archived">暂停或停用</option></select></label></div><p id="mw-search-count" class="hint"></p><div id="mw-search-results" class="mw-queue-grid" style="max-height:55vh;overflow-y:auto"></div>','<button class="btn" data-act="cancel">关闭</button>');
+    const m=A.ui.openModal('检索任务','<label>搜索名称或备注<input id="mw-search-text" type="search" autocomplete="off" placeholder="输入任务、复习名称……"></label><div class="schedule-fields"><label>类型<select id="mw-search-type"><option value="">全部</option><option value="task">普通任务</option><option value="review">间隔复习</option><option value="cycle">周期任务与持续复习</option><option value="checkin">习惯</option><option value="project">长期项目与基础任务</option><option value="deleted">已删除</option></select></label><label>状态<select id="mw-search-status"><option value="">全部状态</option><option value="pending">未完成</option><option value="done">已完成</option><option value="archived">暂停或停用</option></select></label></div><p id="mw-search-count" class="hint"></p><div id="mw-search-results" class="mw-queue-grid" style="max-height:55vh;overflow-y:auto"></div>','<button class="btn" data-act="cancel">关闭</button>');
     const q=x=>m.querySelector(x),input=q('#mw-search-text'),type=q('#mw-search-type'),status=q('#mw-search-status');
     function draw(){
-      const term=input.value.trim().toLocaleLowerCase(),filtered=term?rows.filter(x=>(!type.value||x.type===type.value)&&(!status.value||x.status===status.value)&&[x.title,x.note,x.detail].join(' ').toLocaleLowerCase().includes(term)):[];
+      const term=input.value.trim().toLocaleLowerCase(),filtered=term?rows.filter(x=>(!type.value||x.type===type.value)&&(!status.value||x.status===status.value)&&[x.title,x.note,x.detail,x.keywords].join(' ').toLocaleLowerCase().includes(term)):[];
       filtered.sort((a,b)=>Number(a.status!=='pending')-Number(b.status!=='pending')||b.date.localeCompare(a.date));
       q('#mw-search-count').textContent=term?'找到 '+filtered.length+' 条结果'+(filtered.length>60?'，显示前60条':''):'输入关键词开始检索';
-      q('#mw-search-results').innerHTML=filtered.slice(0,60).map(x=>'<button type="button" class="btn mw-history-row" data-search-type="'+esc(x.type)+'" data-search-id="'+esc(x.id)+'" style="display:block;text-align:left;width:100%;white-space:normal"><strong>'+esc(x.title)+'</strong><small style="display:block">'+esc(({task:'普通任务',review:'复习系列',checkin:'习惯',project:'项目',deleted:'已删除'})[x.type]+' · '+({pending:'未完成',done:'已完成',archived:'已停用或暂停'})[x.status]+(x.date?' · '+x.date:'')+(x.detail?' · '+x.detail:''))+'</small></button>').join('')||(term?'<p class="hint">没有匹配结果</p>':'');
+      q('#mw-search-results').innerHTML=filtered.slice(0,60).map(x=>'<button type="button" class="btn mw-history-row" data-search-type="'+esc(x.type)+'" data-search-id="'+esc(x.id)+'" style="display:block;text-align:left;width:100%;white-space:normal"><strong>'+esc(x.title)+'</strong><small style="display:block">'+esc(({task:'普通任务',review:'间隔复习',cycle:'周期任务',checkin:'习惯',project:'项目',deleted:'已删除'})[x.type]+' · '+({pending:'未完成',done:'已完成',archived:'已停用或暂停'})[x.status]+(x.date?' · '+x.date:'')+(x.detail?' · '+x.detail:''))+'</small></button>').join('')||(term?'<p class="hint">没有匹配结果</p>':'');
     }
     input.addEventListener('input',draw);type.addEventListener('change',draw);status.addEventListener('change',draw);
     q('#mw-search-results').addEventListener('click',e=>{
@@ -246,6 +275,7 @@
       const x=rows.find(x=>x.type===button.dataset.searchType&&x.id===button.dataset.searchId);if(!x)return;
       A.ui.closeModal();
       if(x.type==='review')return A.memoReview?.manage(x.id);
+      if(x.type==='cycle')return A.memoRecurrence?.manage(x.id);
       if(x.type==='deleted')return A.memoActions.trash();
       if(x.type==='checkin'){A.app.switchView('checkin');return;}
       if(x.type==='project'){A.app.switchView('tasks');showPane('details');return;}
@@ -414,7 +444,7 @@
       else A.memoActions.deleteTask(ref);
     } });
   }
-  function complete(ref) { ref = A.memoSchedule.canonical(ref); const t = A.memoSchedule.find(ref); if (t) completionFocus = { ref, before: doneFor(t, ref) }; if (ref.kind === 'task') A.memoActions.task(ref.list, ref.id, ref.day); else if (ref.kind === 'queue') A.memoActions.queue(ref.id); else if (ref.kind === 'daily') A.memoActions.daily(ref.id, ref.day); else A.memoActions.project(ref.id, ref.day); }
+  function complete(ref) { ref = A.memoSchedule.canonical(ref); const t = A.memoSchedule.find(ref); if (t) completionFocus = { ref, before: doneFor(t, ref) }; if (ref.kind === 'task') A.memoActions.task(ref.list, ref.id, ref.day); else if (ref.kind === 'queue') A.memoActions.queue(ref.id); else if (ref.kind === 'daily') A.memoActions.daily(ref.id, ref.day); else if(ref.kind==='checkin') A.memoActions.checkin(ref.id,ref.day); else A.memoActions.project(ref.id, ref.day); }
 
   function datedTasks() {
     const rows = [];
@@ -503,7 +533,8 @@
         if(act==='exec-pick')return execPick();
         if(act==='exec-add')return execAdd(ref);
         if(act==='exec-menu')return execMenu(ref);
-        if(act==='exec-checkin')return A.memoActions.checkin(ref.id,ref.day);
+        if(act==='exec-checkin')return complete(ref);
+        if(act==='exec-complete')return complete(ref);
         if(act==='exec-expand'){execExpanded=!execExpanded;return renderTasks();}
         if(act==='search')return taskSearch();
         if(act==='claim-rewards')return claimDayRewards();
