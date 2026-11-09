@@ -110,12 +110,16 @@ const server=http.createServer((req,res)=>{
   assert.equal(afterSkip.events,beforeExec.events,'skip creates no completion event');
 
   // 175.9: user-started execution queue advances only after a real confirmation.
-  await page.evaluate(async()=>{
+  const entries1759=await page.evaluate(async()=>{
     const day='2026-11-06';
-    await App.memoWorkspace.execAdd({kind:'task',id:'once-ungrouped',day,list:'required'});
-    await App.memoWorkspace.execAdd({kind:'task',id:'once-ideal',day,list:'ideal'});
+    const first=await App.memoWorkspace.execAdd({kind:'task',id:'once-ungrouped',day,list:'required'});
+    const second=await App.memoWorkspace.execAdd({kind:'task',id:'once-ideal',day,list:'ideal'});
+    return {first,second,refs:(App.store.data().memoExecutionQueue||[]).map(x=>x.ref),
+      ideal:App.memoSchedule.resolve({kind:'task',id:'once-ideal',day,list:'ideal'})?.task?.done,
+      required:App.memoSchedule.resolve({kind:'task',id:'once-ungrouped',day,list:'required'})?.task?.done,
+      busy:App.memoActions.busy()};
   });
-  assert.equal(await page.locator('.mw-exec-item [data-mw="exec-complete"]').count(),2,'queue has direct completed controls');
+  assert.equal(await page.locator('.mw-exec-item [data-mw="exec-complete"]').count(),2,'queue has direct completed controls: '+JSON.stringify(entries1759));
   assert.equal(await page.locator('.mw-exec-item [data-schedule-command="pause"]').count(),0,'queue has no pause control');
   await page.locator('.mw-exec-item').first().locator('[data-schedule-command="start"]').click();
   await page.waitForFunction(()=>App.memoSchedule.state().sessions.some(x=>x.ref.id==='once-ungrouped'&&x.status==='running'));
