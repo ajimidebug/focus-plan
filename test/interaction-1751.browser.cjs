@@ -108,6 +108,7 @@ const server=http.createServer((req,res)=>{
   assert(afterSkip.task,'skip preserves original task');
   assert.equal(afterSkip.ledger,beforeExec.ledger,'skip creates no ledger entry');
   assert.equal(afterSkip.events,beforeExec.events,'skip creates no completion event');
+  await page.waitForFunction(()=>!App.memoActions.busy()); // skip commit must settle before enqueueing again
 
   // 175.9: user-started execution queue advances only after a real confirmation.
   const entries1759=await page.evaluate(async()=>{
