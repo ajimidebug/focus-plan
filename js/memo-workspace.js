@@ -495,7 +495,7 @@
         A.memoActions?.reconcileRewards?.(day);
       })){taskSaved=true;}else return;}
       if(begin){if(day!==M().userDay())throw Error('日期已改变，任务已保存，请关闭后重新开始');if(!await A.memoActions.commit(()=>A.memoSchedule.startRef(savedRef)))return;}
-      A.ui.closeModal();render();A.memoSchedule.render();if(begin)A.ui.toast('任务已保存，计时已开始或保持运行');
+      A.ui.closeModal();render();A.memoSchedule.render();if(begin){A.memoWorkspace?.timerStarted(savedRef,false);A.ui.toast('任务已保存，计时已开始或保持运行');}
       }catch(e){q('#mw-form-error').textContent=(taskSaved?'任务已保存；计时尚未保存成功。':'')+e.message;b.textContent=A.memoActions.busy()?'重试保存':taskSaved?'重试开始计时':'重新保存';}
       finally{submitting=false;const pending=A.memoActions.busy();actions.forEach(x=>x.disabled=pending||taskSaved);if(!pending){const cancel=q('[data-act="cancel"]');if(cancel)cancel.disabled=false;}if(b.isConnected)b.disabled=false;m.querySelectorAll('input,textarea,select').forEach(x=>x.disabled=pending||taskSaved);}
     }
