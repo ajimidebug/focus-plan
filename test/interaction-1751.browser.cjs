@@ -108,6 +108,63 @@ const server=http.createServer((req,res)=>{
   assert(afterSkip.task,'skip preserves original task');
   assert.equal(afterSkip.ledger,beforeExec.ledger,'skip creates no ledger entry');
   assert.equal(afterSkip.events,beforeExec.events,'skip creates no completion event');
+  await page.waitForFunction(()=>!App.memoActions.busy()); // skip commit must settle before enqueueing again
+
+  // 175.9: user-started execution queue advances only after a real confirmation.
+  const entries1759=await page.evaluate(async()=>{
+    const day='2026-11-06';
+    const first=await App.memoWorkspace.execAdd({kind:'task',id:'once-ungrouped',day,list:'required'});
+    const second=await App.memoWorkspace.execAdd({kind:'task',id:'once-ideal',day,list:'ideal'});
+    return {first,second,refs:(App.store.data().memoExecutionQueue||[]).map(x=>x.ref),
+      ideal:App.memoSchedule.resolve({kind:'task',id:'once-ideal',day,list:'ideal'})?.task?.done,
+      required:App.memoSchedule.resolve({kind:'task',id:'once-ungrouped',day,list:'required'})?.task?.done,
+      busy:App.memoActions.busy()};
+  });
+  assert.equal(await page.locator('.mw-exec-item [data-mw="exec-complete"]').count(),2,'queue has direct completed controls: '+JSON.stringify(entries1759));
+  assert.equal(await page.locator('.mw-exec-item [data-schedule-command="pause"]').count(),0,'queue has no pause control');
+  await page.locator('.mw-exec-item').first().locator('[data-schedule-command="start"]').click();
+  await page.waitForFunction(()=>!App.memoActions.busy()&&App.memoSchedule.state().sessions.some(x=>x.ref.id==='once-ungrouped'&&x.status==='running')&&document.querySelector('.mw-exec-board h2')?.textContent.includes('连续计时中'));
+  assert.match(await page.locator('.mw-exec-board h2').innerText(),/连续计时中/,'queue entered sequential mode');
+  await page.locator('.mw-exec-item').first().locator('[data-mw="exec-complete"]').click();
+  assert.equal(await page.locator('.task-action-modal [data-act="commit"]').count(),1,'queue complete reuses confirmation modal');
+  await page.locator('.task-action-modal [data-act="cancel"]').click();
+  await page.locator('.task-action-modal').waitFor({state:'hidden'});
+  assert.equal(await page.evaluate(()=>App.memoSchedule.state().sessions.find(s=>s.ref.id==='once-ungrouped')?.status),'running','cancel preserves current timer');
+  assert.equal(await page.evaluate(()=>!!App.store.data().days['2026-11-06'].tasks.required.find(t=>t.id==='once-ungrouped')?.done),false,'cancel does not mark task complete');
+  await page.locator('.mw-exec-item').first().locator('[data-mw="exec-complete"]').click();
+  await page.locator('.task-action-modal [data-act="commit"]').click();
+  await page.waitForFunction(()=>!App.memoActions.busy()&&App.memoSchedule.state().sessions.some(s=>s.ref.id==='once-ideal'&&s.status==='running'));
+  const nextInfo=await page.evaluate(()=>{
+    const d=App.store.data(),sessions=App.memoSchedule.state().sessions;
+    return {old:sessions.filter(x=>x.ref.id==='once-ungrouped').map(x=>x.status),next:sessions.filter(x=>x.ref.id==='once-ideal').map(x=>x.status),events:(d.memoEvents||[]).filter(x=>x.sourceId==='once-ungrouped'&&x.active).length,remaining:d.memoExecutionQueue.length,done:!!d.days['2026-11-06'].tasks.required.find(t=>t.id==='once-ungrouped').done};
+  });
+  assert(nextInfo.done&&nextInfo.events===1&&nextInfo.remaining===1&&nextInfo.old.every(x=>x==='ended')&&nextInfo.next.includes('running'),'confirmed completion closes exactly one item and starts the next: '+JSON.stringify(nextInfo));
+  await page.locator('.mw-exec-item [data-mw="exec-skip"]').click();
+  await page.waitForFunction(()=>!App.memoActions.busy()&&App.store.data().memoExecutionQueue.length===0);
+  const afterChainSkip=await page.evaluate(()=>({
+    status:App.memoSchedule.state().sessions.find(x=>x.ref.id==='once-ideal')?.status,
+    done:!!App.store.data().days['2026-11-06'].tasks.ideal.find(x=>x.id==='once-ideal').done,
+    event:(App.store.data().memoEvents||[]).filter(x=>x.sourceId==='once-ideal'&&x.active).length
+  }));
+  assert.deepEqual(afterChainSkip,{status:'ended',done:false,event:0},'skip ends current timer without completing original task');
+  // Search a recurring series as a single result while preserving old occurrence data.
+  await page.evaluate(()=>{
+    const d=App.store.data(),day='2026-11-06',id='cycle-demo:2026-11-06';
+    d.memoRecurrence={version:1,series:[{id:'cycle-demo',enabledDay:day,revisions:[{from:day,rule:{kind:'days',every:2,anchor:day},text:'重复环境背诵',note:'',list:'ideal',points:1,estimatedMinutes:20}]}],
+      occurrences:[{id,seriesId:'cycle-demo',day,status:'pending',taskRef:{kind:'task',id:'period:'+id,day,list:'ideal'}}]};
+    d.days[day].tasks.ideal.push({id:'period:'+id,text:'重复环境背诵',note:'旧备注',memoOccurrenceId:id,done:false});
+    App.memoWorkspace.render();
+  });
+  await page.locator('.mw-exec-head [data-mw="search"]').click();
+  await page.locator('#mw-search-text').fill('重复环境背诵');
+  assert.equal(await page.locator('#mw-search-results [data-search-type="cycle"]').count(),1,'one recurrence series row');
+  assert.equal(await page.locator('#mw-search-results [data-search-type="task"]').count(),0,'occurrence is not independently shown');
+  assert.match(await page.locator('#mw-search-results').innerText(),/每隔2天/,'actual cycle rule visible');
+  await page.locator('#mw-search-results [data-search-type="cycle"]').click();
+  assert.match(await page.locator('.modal').innerText(),/已有待做期次/,'search opens series manager');
+  await page.locator('.modal [data-act="close"]').click();
+  await page.evaluate(()=>{const d=App.store.data();d.memoRecurrence={version:1,series:[],occurrences:[]};d.days['2026-11-06'].tasks.ideal=d.days['2026-11-06'].tasks.ideal.filter(x=>!x.memoOccurrenceId);App.memoWorkspace.render();});
+
   // 175.4: habit in three-column plans becomes one execution, not a copied task.
   await page.evaluate(()=>{
     const A=App,d=A.store.data(),day='2026-11-06';
@@ -147,8 +204,8 @@ const server=http.createServer((req,res)=>{
   assert.equal(afterHabit.count,1,'planned habit actually checks in');
   assert.equal(afterHabit.events,1,'habit checkin writes an event');
   assert.equal(await page.locator('.mw-exec-item').count(),0,'habit checkin removes only this execution');
-  // Reuse normal queue task to verify the actions dialog stays inside the viewport.
-  await page.evaluate(()=>App.memoWorkspace.execAdd({kind:'task',id:'once-ungrouped',day:'2026-11-06',list:'required'}));
+  // Reuse a still-pending task; once-ungrouped was completed in the 175.9 scenario.
+  await page.evaluate(()=>App.memoWorkspace.execAdd({kind:'task',id:'once-ideal',day:'2026-11-06',list:'ideal'}));
   await page.locator('.mw-exec-item [data-mw="exec-menu"]').click();
   assert.equal(await page.locator('[data-exec-action="pin"]').count(),1,'queue actions use a modal rather than an overflow popup');
   const menuRect=await page.locator('.mw-exec-menu-list').boundingBox();

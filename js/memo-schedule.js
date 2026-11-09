@@ -351,7 +351,7 @@
   }
   function completeRef(ref) {
     const found = resolve(ref); if (!found) return App.ui.toast('原任务已移动或删除'); const r = found.ref;
-    return r.kind === 'project' ? App.memoActions.project(r.id, r.day) : r.kind === 'queue' ? App.memoActions.queue(r.id) : r.kind === 'daily' ? App.memoActions.daily(r.id, r.day) : App.memoActions.task(r.list, r.id, r.day);
+    return r.kind === 'checkin' ? App.memoActions.checkin(r.id,r.day) : r.kind === 'project' ? App.memoActions.project(r.id, r.day) : r.kind === 'queue' ? App.memoActions.queue(r.id) : r.kind === 'daily' ? App.memoActions.daily(r.id, r.day) : App.memoActions.task(r.list, r.id, r.day);
   }
   function confirmEnd(ref, sessionId = null) {
     if(App.memoActions.busy())return App.ui.toast('请先重试保存当前操作');
@@ -372,14 +372,18 @@
             const sessions=targets();if(!sessions.length)throw Error('计时状态已改变，请重新打开');
             const at=Date.now();sessions.forEach(x=>stopSession(x,at));
           },retry);
-          if(ok){App.ui.closeModal();App.ui.toast('计时已结束，任务仍未完成');}
+          if(ok){App.ui.closeModal();App.memoWorkspace?.timerEnded(ref);App.ui.toast('计时已结束，任务仍未完成');}
           else if(m.isConnected){m.querySelector('[role="alert"]').textContent=App.memoActions.busy()?'结束操作尚未保存，请重试保存':'计时操作失败，请重试';b.textContent=App.memoActions.busy()?'重试保存':'确认结束';}
         }catch(e){if(m.isConnected)m.querySelector('[role="alert"]').textContent=e.message;}
         finally{submitting=false;b.disabled=false;}
       }});
   }
-  function startUI(ref, itemId = null) {
-    const run = () => perform(() => startRef(ref, Date.now(), itemId));
+  function startUI(ref, itemId = null, fromQueue = false) {
+    const run = async () => {
+      const saved=await perform(() => startRef(ref, Date.now(), itemId));
+      if(saved)App.memoWorkspace?.timerStarted(ref,fromQueue);
+      return saved;
+    };
     if (App.memoActions.busy()) return App.ui.toast('请先重试保存当前操作');
     const current = active(); return current && (key(current.ref) !== key(ref) || (itemId && current.itemId !== itemId)) ? App.ui.confirm('暂停“' + esc(current.title) + '”，开始这项任务？', '切换计时', run) : run();
   }
@@ -552,7 +556,7 @@
         try {
           if (act === 'retry') ok = await perform(() => {}, true);
           else if (act === 'pause') ok = await perform(() => state().sessions.filter(s => key(s.ref) === key(ref) && s.status === 'running').forEach(s => pauseCore(s, Date.now())));
-          else { const session = state().sessions.find(s => s.id === button.dataset.sessionId); ok = await startUI(ref, session?.itemId || null); }
+          else { const session = state().sessions.find(s => s.id === button.dataset.sessionId); ok = await startUI(ref, session?.itemId || null, !!button.closest('.mw-exec-item')); }
         } finally {
           if (button.isConnected) { button.disabled = false; button.textContent = previousText;
             if (!ok && App.memoActions.busy()) { button.dataset.scheduleCommand = 'retry'; button.textContent = '重试保存'; const row = button.closest('.mw-task-timing') || button.parentElement; let error = row.querySelector('.mw-timing-error'); if (!error) { error = document.createElement('p'); error.className = 'mw-timing-error'; error.setAttribute('role', 'alert'); row.appendChild(error); } error.textContent = '计时操作尚未保存，请重试，不要刷新。'; }
