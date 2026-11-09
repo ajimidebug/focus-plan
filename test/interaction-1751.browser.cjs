@@ -133,14 +133,14 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>!!App.store.data().days['2026-11-06'].tasks.required.find(t=>t.id==='once-ungrouped')?.done),false,'cancel does not mark task complete');
   await page.locator('.mw-exec-item').first().locator('[data-mw="exec-complete"]').click();
   await page.locator('.task-action-modal [data-act="commit"]').click();
-  await page.waitForFunction(()=>App.memoSchedule.state().sessions.some(s=>s.ref.id==='once-ideal'&&s.status==='running'));
+  await page.waitForFunction(()=>!App.memoActions.busy()&&App.memoSchedule.state().sessions.some(s=>s.ref.id==='once-ideal'&&s.status==='running'));
   const nextInfo=await page.evaluate(()=>{
     const d=App.store.data(),sessions=App.memoSchedule.state().sessions;
     return {old:sessions.filter(x=>x.ref.id==='once-ungrouped').map(x=>x.status),next:sessions.filter(x=>x.ref.id==='once-ideal').map(x=>x.status),events:(d.memoEvents||[]).filter(x=>x.sourceId==='once-ungrouped'&&x.active).length,remaining:d.memoExecutionQueue.length,done:!!d.days['2026-11-06'].tasks.required.find(t=>t.id==='once-ungrouped').done};
   });
   assert(nextInfo.done&&nextInfo.events===1&&nextInfo.remaining===1&&nextInfo.old.every(x=>x==='ended')&&nextInfo.next.includes('running'),'confirmed completion closes exactly one item and starts the next: '+JSON.stringify(nextInfo));
   await page.locator('.mw-exec-item [data-mw="exec-skip"]').click();
-  await page.waitForFunction(()=>App.store.data().memoExecutionQueue.length===0);
+  await page.waitForFunction(()=>!App.memoActions.busy()&&App.store.data().memoExecutionQueue.length===0);
   const afterChainSkip=await page.evaluate(()=>({
     status:App.memoSchedule.state().sessions.find(x=>x.ref.id==='once-ideal')?.status,
     done:!!App.store.data().days['2026-11-06'].tasks.ideal.find(x=>x.id==='once-ideal').done,
