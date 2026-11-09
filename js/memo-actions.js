@@ -391,6 +391,7 @@
         if(await transaction(()=>{saveEstimate();if(active?.status==='running')App.memoSchedule.pauseCore(active,Date.now());else App.memoSchedule.startRef(ref);})){
           m.querySelector('#memo-action-error').textContent='';
           if(!wasRunning&&!pendingEdits){App.ui.closeModal();refresh();App.ui.toast(active?'已继续计时':'计时已开始；其他任务的运行计时会自动暂停');}
+          if(!wasRunning)App.memoWorkspace?.timerStarted(ref,false);
           else timerState();
         }else timerState();
       }catch(e){m.querySelector('#memo-action-error').textContent=e.message;if(unsettled)timerButton.textContent='重试保存';else timerState();}
