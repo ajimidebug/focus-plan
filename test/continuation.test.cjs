@@ -29,3 +29,12 @@ test('required overdue items precede higher-priority fresh items, and deletion s
  assert.equal(b.ctx.App.memoWorkspace.taskItems(day,'required')[0].task.id,'late');
  b.S.data().queue=[{id:'q',text:'删除',points:1}];const event=A.completeCore({kind:'queue',id:'q',title:'删除'},'活动文段',H.actionAt);A.deleteCore({kind:'queue',id:'q'},'',H.actionAt);assert.equal(A.passage(event),'');
 });
+test('legacy rolled required tasks render above fresh high-priority tasks',async()=>{
+ const b=H.browser();await b.S.load();const {F,M}=H.flowHarness(b),day=M.userDay();
+ const fs=require('node:fs'),vm=require('node:vm');vm.runInContext(fs.readFileSync(require('node:path').join(__dirname,'../js/memo-workspace.js'),'utf8'),b.ctx);
+ b.S.getDay(day).tasks.required=[{id:'fresh-high',text:'普通高优先级',priorityWeight:5},{id:'legacy-low',text:'旧版延期低优先级',rolled:true,priorityWeight:1},{id:'fresh-planned',text:'跨日普通',memoPlannedDueDay:day,originalDay:day,priorityWeight:4},{id:'legacy-done',text:'延期已完成',rolled:true,done:true}];
+ H.financeHarness(b);
+ const W=b.ctx.App.memoWorkspace;
+ assert.deepEqual(Array.from(W.taskItems(day,'required'),x=>x.task.id),['legacy-low','fresh-high','fresh-planned','legacy-done']);
+ const html=W.overviewHTML(day);assert(html.indexOf('旧版延期低优先级')<html.indexOf('普通高优先级'));assert.equal(F.isCarried({rolled:true}),true);assert.equal(F.isCarried({rolled:true,originalDay:day,backfillDay:day}),false);assert.equal(F.isCarried({memoPlannedDueDay:day,originalDay:day}),false);
+});

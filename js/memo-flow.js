@@ -137,7 +137,7 @@
   }
   function isCarried(t) {
     if (t.backfillDay && t.originalDay && t.backfillDay <= t.originalDay) return false;
-    return !!t.memoAutoCarry || !!(t.overdueEventId && S().data().memoFlow?.settlements.some(e => e.id === t.overdueEventId && e.taskId === t.id)) || !!t.carried;
+    return !!t.memoAutoCarry || !!(t.overdueEventId && S().data().memoFlow?.settlements.some(e => e.id === t.overdueEventId && e.taskId === t.id)) || !!t.carried || !!t.rolled;
   }
   function lateLabel(t) {
     if (t.backfillDay) return (t.backfillDay <= t.originalDay ? '已补记按时完成 · ' : '已补记延期完成 · ') + t.backfillDay;
