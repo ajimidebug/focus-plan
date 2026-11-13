@@ -45,6 +45,7 @@ const server=http.createServer((req,res)=>{
     App.store.getDay('2026-11-13').tasks.required=[
       {id:'fresh-high',text:'普通高优先级',priorityWeight:5},
       {id:'legacy-low',text:'旧版延期低优先级',rolled:true,priorityWeight:1},
+      {id:'current-late',text:'当前延期必做',memoAutoCarry:{kind:'required',origin:'2026-11-12'},priorityWeight:2},
       {id:'planned-fresh',text:'次日结束普通必做',memoPlannedDueDay:'2026-11-13',originalDay:'2026-11-13',priorityWeight:4},
       {id:'legacy-done',text:'旧版延期已完成',rolled:true,done:true}
     ];
@@ -53,15 +54,16 @@ const server=http.createServer((req,res)=>{
   for(const width of [320,390]){
     await page.setViewportSize({width,height:844});
     const column=page.locator('[data-overview-list="required"]');
-    const ids=await column.locator(':scope > [data-overview-ref]').evaluateAll(els=>els.map(el=>JSON.parse(el.dataset.overviewRef).id));
-    assert.deepEqual(ids,['legacy-low','fresh-high','planned-fresh'],'legacy overdue is first in actual three-column DOM');
+    const ids=await column.locator('[data-overview-ref]:not(.done)').evaluateAll(els=>els.map(el=>JSON.parse(el.dataset.overviewRef).id));
+    assert.deepEqual(ids,['current-late','legacy-low','fresh-high','planned-fresh'],'legacy overdue is first in actual three-column DOM');
+    assert.equal(await column.locator('.mw-late-section').isVisible(),true);
     const late=column.locator('[data-overview-ref]').filter({hasText:'旧版延期低优先级'}),fresh=column.locator('[data-overview-ref]').filter({hasText:'普通高优先级'});
     assert((await late.boundingBox()).y<(await fresh.boundingBox()).y,'legacy overdue is visibly above ordinary tasks');
-    assert.equal(await column.locator('[data-carried="true"]').count(),2,'legacy done remains marked inside completed fold');
+    assert.equal(await column.locator('[data-carried="true"]').count(),3,'legacy done remains marked inside completed fold');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth+1),true);
   }
   await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);await page.evaluate(()=>{App.app.switchView('tasks');App.memoWorkspace.setDay('2026-11-13');});
-  assert.equal(await page.locator('[data-overview-list="required"] > [data-overview-ref]').first().getAttribute('data-carried'),'true');
+  assert.equal(await page.locator('[data-overview-list="required"] [data-overview-ref]:not(.done)').first().getAttribute('data-carried'),'true');
   assert.equal(errors.length,0,errors.join('\n'));
  }finally{await browser.close();await new Promise(r=>server.close(r));}
  console.log('Retention, redo, persisted editing and search pagination passed');

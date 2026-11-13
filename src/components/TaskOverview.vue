@@ -54,21 +54,25 @@ const columns=computed(()=>{void props.revision;return lists.map(col=>{
       <q-card v-for="col in columns" :key="col.key" flat bordered class="cal-col" :data-overview-list="col.key" :data-category="col.key">
         <div class="cal-col-head"><span><span aria-hidden="true">{{col.symbol}} </span>{{col.name}}</span><span class="mw-column-count">{{col.progress.label}}</span></div>
         <div class="mw-column-meter" role="img" :aria-label="col.full+'：'+col.progress.label+'，未完成延期'+col.progress.deferred+'项；'+col.progress.segments.map((s:any)=>s.label+s.count+'项').join('，')"><span v-for="seg in col.progress.segments" :key="seg.state" :class="'mw-column-'+seg.state" :data-progress-state="seg.state" :style="{width:seg.percent+'%'}" aria-hidden="true" /></div>
-        <template v-if="col.key==='extra'">
-          <details v-for="g in col.grouped" :key="g.id" class="task-family family-compact" :data-family="'overview:'+g.id" :data-family-id="g.id" :open="expanded('task-group:overview:'+g.id,true)" @toggle="remember('task-group:overview:'+g.id,$event)">
-            <summary>{{g.name}} · {{g.rows.length}}</summary>
-            <div class="family-body"><OverviewTask v-for="x in visibleGroupRows(g)" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" /><button v-if="g.rows.length>8" class="btn btn-small overview-group-more" @click.stop="toggleGroup(g.id)">{{showAllGroup(g.id)?'收起到前5项':'展开其余 '+(g.rows.length-5)+' 项'}}</button></div>
+        <template v-for="section in col.key==='required' ? ['late','normal'] : ['normal','late']" :key="section">
+          <details v-if="section==='late' && col.late.length" class="mw-late-section" :open="expanded(foldedKey(day,col.key,'late'),true)" @toggle="remember(foldedKey(day,col.key,'late'),$event)">
+            <summary>延期待办（{{col.late.length}}）</summary>
+            <OverviewTask v-for="x in col.late" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" />
           </details>
+          <template v-else-if="section==='normal'">
+            <template v-if="col.key==='extra'">
+              <details v-for="g in col.grouped" :key="g.id" class="task-family family-compact" :data-family="'overview:'+g.id" :data-family-id="g.id" :open="expanded('task-group:overview:'+g.id,true)" @toggle="remember('task-group:overview:'+g.id,$event)">
+                <summary>{{g.name}} · {{g.rows.length}}</summary>
+                <div class="family-body"><OverviewTask v-for="x in visibleGroupRows(g)" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" /><button v-if="g.rows.length>8" class="btn btn-small overview-group-more" @click.stop="toggleGroup(g.id)">{{showAllGroup(g.id)?'收起到前5项':'展开其余 '+(g.rows.length-5)+' 项'}}</button></div>
+              </details>
+            </template>
+            <template v-else><OverviewTask v-for="x in col.normal" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" /></template>
+            <q-btn v-for="h in col.habitActive" :key="'habit:'+h.it.id" flat no-caps class="habit-plan-row overview-habit" :class="{'habit-plan-goal-done':h.achieved}" :data-habit-kind="h.mode" :data-category="col.key" :aria-label="'习惯打卡：'+h.it.text+'，'+h.n+'次，目标'+h.target+'次'" @click.stop="A().memoActions.checkin(h.it.id,day)">
+              <span class="habit-plan-title">{{h.it.text}}<small>{{h.mode==='punch'?'监督':h.achieved?' ✓ 已达标':h.target===0?'选做':'待达标'}}</small></span>
+              <span class="habit-plan-meta"><small>{{h.n}}/{{h.target}} 次<span v-if="h.continuing&&h.achieved"> · 可继续</span></small><strong>{{h.points>0?'+':''}}{{h.points}}分</strong></span>
+            </q-btn>
+          </template>
         </template>
-        <template v-else><OverviewTask v-for="x in col.normal" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" /></template>
-        <q-btn v-for="h in col.habitActive" :key="'habit:'+h.it.id" flat no-caps class="habit-plan-row overview-habit" :class="{'habit-plan-goal-done':h.achieved}" :data-habit-kind="h.mode" :data-category="col.key" :aria-label="'习惯打卡：'+h.it.text+'，'+h.n+'次，目标'+h.target+'次'" @click.stop="A().memoActions.checkin(h.it.id,day)">
-          <span class="habit-plan-title">{{h.it.text}}<small>{{h.mode==='punch'?'监督':h.achieved?' ✓ 已达标':h.target===0?'选做':'待达标'}}</small></span>
-          <span class="habit-plan-meta"><small>{{h.n}}/{{h.target}} 次<span v-if="h.continuing&&h.achieved"> · 可继续</span></small><strong>{{h.points>0?'+':''}}{{h.points}}分</strong></span>
-        </q-btn>
-        <details v-if="col.late.length" class="mw-late-section" :open="expanded(foldedKey(day,col.key,'late'),true)" @toggle="remember(foldedKey(day,col.key,'late'),$event)">
-          <summary>延期待办（{{col.late.length}}）</summary>
-          <OverviewTask v-for="x in col.late" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" />
-        </details>
         <details v-if="col.completeCount" class="mw-completed" :data-fold-key="'overview:'+day+':'+col.key" :open="expanded(foldedKey(day,col.key,'done'))" @toggle="remember(foldedKey(day,col.key,'done'),$event)">
           <summary>已完成（{{col.completeCount}}）</summary>
           <OverviewTask v-for="x in col.finished" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" done />
