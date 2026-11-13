@@ -225,7 +225,7 @@
   function scoreHTML(n){return n===null?'':(A.memoOrganize?.badge(n)||'')+'<small class="mw-score">+'+esc(n)+'分</small>';}
   function scoreBand(n){return n===null?'group':n===0?'zero':n<5?'low':n<10?'medium':'high';}
   function taskItems(day,list){
-    return A.memoSchedule.columnItems(day,list).concat((A.memoFlow.deferred?.(day,list)||[]).filter(x=>x.automatic)).map((x,i)=>({x,i})).sort((a,b)=>Number(a.x.done)-Number(b.x.done)||(!a.x.done&&!a.x.deferred&&!b.x.deferred&&list==='required'?priorityWeight(b.x.task)-priorityWeight(a.x.task):0)||(!a.x.done&&list!=='required'?score(b.x.task,b.x.ref)-score(a.x.task,a.x.ref):0)||a.i-b.i).map(v=>v.x);
+    return A.memoSchedule.columnItems(day,list).concat((A.memoFlow.deferred?.(day,list)||[]).filter(x=>x.automatic)).map((x,i)=>({x,i})).sort((a,b)=>Number(a.x.done)-Number(b.x.done)||(list==='required'?Number(!!(b.x.deferred||A.memoFlow.isCarried(b.x.task)))-Number(!!(a.x.deferred||A.memoFlow.isCarried(a.x.task))):0)||(!a.x.done&&!a.x.deferred&&!b.x.deferred&&list==='required'?priorityWeight(b.x.task)-priorityWeight(a.x.task):0)||(!a.x.done&&list!=='required'?score(b.x.task,b.x.ref)-score(a.x.task,a.x.ref):0)||a.i-b.i).map(v=>v.x);
   }
   function deferredHTML(x,compact=false){
     const t=x.task,current=A.memoSchedule.find(x.currentRef),attrs='data-deferred-source="'+esc(JSON.stringify(x.ref))+'"';
@@ -274,17 +274,25 @@
 
   // Local read-only search: stable task identities; review rounds stay grouped by series.
   function taskSearch(){
-    const d=S().data(),rows=[],add=(type,id,title,note,status,date,ref,detail='',keywords='')=>rows.push({type,id,title:String(title||''),note:String(note||''),status,date:date||'',ref,detail,keywords});
+    const d=S().data(),rows=[],byKey=new Map();
+    const add=(type,id,title,note,status,date,ref,detail='',keywords='')=>{
+      const rowKey=JSON.stringify([type,ref?.kind||type,ref?.kind==='task'?ref.day:'',id]);
+      const previous=byKey.get(rowKey);if(previous){previous.keywords+=' '+title+' '+note+' '+keywords;return;}
+      const row={rowKey,type,id,title:String(title||''),note:String(note||''),status,date:date||'',ref,detail,keywords};byKey.set(rowKey,row);rows.push(row);
+    };
     const recurrence=d.memoRecurrence||{series:[],occurrences:[]};
     const occurrenceById=new Map((recurrence.occurrences||[]).map(o=>[o.id,o]));
+    const reviewIds=new Set((d.memoReview?.series||[]).map(s=>s.id));
+    const linkedReview=id=>(d.memoReview?.rounds||[]).some(r=>r.id===id&&reviewIds.has(r.seriesId));
     const validSeries=new Set((recurrence.series||[]).map(s=>s.id));
     const linkedOccurrence=id=>{const o=occurrenceById.get(id);return !!(o&&validSeries.has(o.seriesId));};
     Object.entries(d.days||{}).forEach(([day,data])=>['required','ideal','extra'].forEach(list=>(data.tasks?.[list]||[]).forEach(t=>{
-      if(t.fromQueue||t.fromDaily||t.memoProjectId||t.memoMovedTo||t.memoReviewRoundId||t.memoOccurrenceId&&linkedOccurrence(t.memoOccurrenceId))return;
+      if(t.fromQueue||t.fromDaily||t.memoProjectId||t.memoReviewRoundId&&linkedReview(t.memoReviewRoundId)||t.memoOccurrenceId&&linkedOccurrence(t.memoOccurrenceId))return;
+      if(t.memoMovedTo){const f=A.memoSchedule.resolve({kind:'task',id:t.id,day,list});if(f){add('task',f.task.id,f.task.text,f.task.note,f.task.done||f.task.doneAt?'done':'pending',f.ref.day||f.task.assignment?.day||'',f.ref,names[list],t.text+' '+(t.note||''));return;}}
       add('task',t.id,t.text,t.note,t.memoDismissed?'archived':t.done?'done':'pending',day,{kind:'task',id:t.id,day,list},names[list]);
     })));
     (d.queue||[]).concat(d.queueDone||[]).forEach(t=>{
-      if(t.memoReviewRoundId||t.memoOccurrenceId&&linkedOccurrence(t.memoOccurrenceId))return;
+      if(t.memoReviewRoundId&&linkedReview(t.memoReviewRoundId)||t.memoOccurrenceId&&linkedOccurrence(t.memoOccurrenceId))return;
       add('task',t.id,t.text,t.note,t.archived||t.memoDismissed?'archived':t.doneAt||t.doneDay?'done':'pending',t.assignment?.day||t.doneDay||'',{kind:'queue',id:t.id},t.assignment?names[t.assignment.list]:'待安排');
     });
     (d.memoReview?.series||[]).forEach(series=>{
@@ -296,7 +304,7 @@
       const history=(d.memoReview?.rounds||[]).filter(r=>r.seriesId===series.id).map(r=>{
         const current=r.taskRef&&A.memoSchedule?.resolve(r.taskRef);
         const original=r.taskRef?.kind==='task'?Object.values(d.days?.[r.taskRef.day]?.tasks||{}).flat().find(t=>t.id===r.taskRef.id):null;
-        return [current?.task?.text,current?.task?.note,original?.text,original?.note].filter(Boolean).join(' ');
+        return [current?.task?.text,current?.task?.note,original?.text,original?.note,r.memoThis,r.memoNext,r.prepNote].filter(Boolean).join(' ');
       }).join(' ');
       add('review',series.id,series.text,series.note,status,next?.due?M().userDay(next.due):'',null,'间隔复习 · '+rule+' · 已有'+rs.length+'轮',history);
     });
@@ -320,33 +328,54 @@
     });
     (d.checkins||[]).forEach(t=>add('checkin',t.id,t.text,t.note,t.archived?'archived':'pending','',null,'习惯'));
     (d.memoProjects||[]).forEach(t=>add('project',t.id,t.text,t.note,t.archived?'archived':'pending','',null,'长期项目'));
-    (d.daily||[]).forEach(t=>add('project',t.id,t.text,t.note,t.archived?'archived':'pending','',null,'基础任务'));
+    (d.daily||[]).forEach(t=>add('daily',t.id,t.text,t.note,t.archived?'archived':'pending','',null,'基础任务'));
     (d.memoDeleted||[]).filter(x=>!x.restored).forEach(x=>add('deleted',x.id,x.payload?.text||'已删除任务','', 'archived',M().userDay(x.at),null,'删除记录'));
-    const m=A.ui.openModal('检索任务','<label>搜索名称或备注<input id="mw-search-text" type="search" autocomplete="off" placeholder="输入任务、复习名称……"></label><div class="schedule-fields"><label>类型<select id="mw-search-type"><option value="">全部</option><option value="task">普通任务</option><option value="review">间隔复习</option><option value="cycle">周期任务与持续复习</option><option value="checkin">习惯</option><option value="project">长期项目与基础任务</option><option value="deleted">已删除</option></select></label><label>状态<select id="mw-search-status"><option value="">全部状态</option><option value="pending">未完成</option><option value="done">已完成</option><option value="archived">暂停或停用</option></select></label></div><p id="mw-search-count" class="hint"></p><div id="mw-search-results" class="mw-queue-grid" style="max-height:55vh;overflow-y:auto"></div>','<button class="btn" data-act="cancel">关闭</button>');
+    rows.forEach(row=>{
+      const rounds=row.type==='review'?(d.memoReview?.rounds||[]).filter(r=>r.seriesId===row.id):row.type==='cycle'?(recurrence.occurrences||[]).filter(r=>r.seriesId===row.id):[];
+      row.matches=rounds.map(r=>{const f=r.taskRef&&A.memoSchedule.resolve(r.taskRef);return {id:r.id,text:[f?.task?.text,f?.task?.note,r.memoThis,r.memoNext,r.prepNote,r.reason,r.day].filter(Boolean).join(' '),label:r.n?'第'+r.n+'轮':r.day};});
+      (d.memoEvents||[]).filter(e=>e.sourceId===row.id).forEach(e=>{row.keywords+=' '+(e.remark||'');});
+    });
+    const m=A.ui.openModal('检索任务','<label>搜索名称或备注<input id="mw-search-text" type="search" autocomplete="off" placeholder="输入任务、复习名称……"></label><div class="schedule-fields"><label>类型<select id="mw-search-type"><option value="">全部</option><option value="task">普通任务</option><option value="review">间隔复习</option><option value="cycle">周期任务与持续复习</option><option value="checkin">习惯</option><option value="project">长期项目</option><option value="daily">基础任务</option><option value="deleted">已删除</option></select></label><label>状态<select id="mw-search-status"><option value="">全部状态</option><option value="pending">未完成</option><option value="done">已完成</option><option value="archived">暂停或停用</option></select></label></div><p id="mw-search-count" class="hint"></p><div id="mw-search-results" class="mw-queue-grid" style="max-height:55vh;overflow-y:auto"></div>','<button class="btn" data-act="cancel">关闭</button>');
     const q=x=>m.querySelector(x),input=q('#mw-search-text'),type=q('#mw-search-type'),status=q('#mw-search-status');
+    let limit=60;
+    const normalize=value=>String(value||'').trim().replace(/\s+/g,' ').toLocaleLowerCase();
+    const more=document.createElement('button');more.className='btn';more.id='mw-search-more';more.textContent='显示更多';q('#mw-search-results').after(more);
     function draw(){
-      const term=input.value.trim().toLocaleLowerCase(),filtered=term?rows.filter(x=>(!type.value||x.type===type.value)&&(!status.value||x.status===status.value)&&[x.title,x.note,x.detail,x.keywords].join(' ').toLocaleLowerCase().includes(term)):[];
-      filtered.sort((a,b)=>Number(a.status!=='pending')-Number(b.status!=='pending')||b.date.localeCompare(a.date));
-      q('#mw-search-count').textContent=term?'找到 '+filtered.length+' 条结果'+(filtered.length>60?'，显示前60条':''):'输入关键词开始检索';
-      q('#mw-search-results').innerHTML=filtered.slice(0,60).map(x=>'<button type="button" class="btn mw-history-row" data-search-type="'+esc(x.type)+'" data-search-id="'+esc(x.id)+'" style="display:block;text-align:left;width:100%;white-space:normal"><strong>'+esc(x.title)+'</strong><small style="display:block">'+esc(({task:'普通任务',review:'间隔复习',cycle:'周期任务',checkin:'习惯',project:'项目',deleted:'已删除'})[x.type]+' · '+({pending:'未完成',done:'已完成',archived:'已停用或暂停'})[x.status]+(x.date?' · '+x.date:'')+(x.detail?' · '+x.detail:''))+'</small></button>').join('')||(term?'<p class="hint">没有匹配结果</p>':'');
+      const term=normalize(input.value);
+      const rank=x=>normalize(x.title)===term?0:normalize(x.title).includes(term)?1:normalize(x.note).includes(term)?3:4;
+      const filtered=term?rows.filter(x=>(type.value?x.type===type.value:x.type!=='deleted')&&(!status.value||x.status===status.value)&&normalize([x.title,x.note,x.detail,x.keywords,...x.matches.map(m=>m.text)].join(' ')).includes(term)):[];
+      const distance=x=>x.date?Math.abs(Date.parse(x.date)-Date.parse(M().userDay())):Infinity;
+      filtered.sort((a,b)=>rank(a)-rank(b)||Number(a.status!=='pending')-Number(b.status!=='pending')||(distance(a)-distance(b)||0)||a.rowKey.localeCompare(b.rowKey));
+      q('#mw-search-count').textContent=term?'找到 '+filtered.length+' 条结果':'输入关键词开始检索';
+      q('#mw-search-results').innerHTML=filtered.slice(0,limit).map(x=>{
+        x.hit=x.matches.slice().reverse().find(m=>normalize(m.text).includes(term));
+        const source=x.hit?.text||x.note||x.keywords,index=normalize(source).indexOf(term),snippet=index>=0?source.slice(Math.max(0,index-15),index+term.length+55):'';
+        return '<button type="button" class="btn mw-history-row" data-search-type="'+esc(x.type)+'" data-search-id="'+esc(x.id)+'" data-search-key="'+esc(x.rowKey)+'" style="display:block;text-align:left;width:100%;white-space:normal"><strong>'+esc(x.title)+'</strong><small style="display:block">'+esc(x.detail+' · '+x.status+(x.date?' · '+x.date:''))+'</small>'+(snippet?'<small style="display:block">'+esc((x.hit?x.hit.label+' · ':'')+snippet)+'</small>':'')+'</button>';
+      }).join('')||(term?'<p class="hint">没有匹配结果</p>':'');
+      more.hidden=filtered.length<=limit;
     }
-    input.addEventListener('input',draw);type.addEventListener('change',draw);status.addEventListener('change',draw);
+    const redraw=()=>{limit=60;draw();};
+    input.addEventListener('input',redraw);type.addEventListener('change',redraw);status.addEventListener('change',redraw);more.onclick=()=>{limit+=60;draw();};
     q('#mw-search-results').addEventListener('click',e=>{
-      const button=e.target.closest('[data-search-type]');if(!button)return;
-      const x=rows.find(x=>x.type===button.dataset.searchType&&x.id===button.dataset.searchId);if(!x)return;
+      const button=e.target.closest('[data-search-key]');if(!button)return;
+      const x=byKey.get(button.dataset.searchKey);if(!x)return;
+      const saved={text:input.value,type:type.value,status:status.value,limit,scroll:q('#mw-search-results').scrollTop};
       A.ui.closeModal();
-      if(x.type==='review')return A.memoReview?.manage(x.id);
-      if(x.type==='cycle')return A.memoRecurrence?.manage(x.id);
-      if(x.type==='deleted')return A.memoActions.trash();
-      if(x.type==='checkin'){A.app.switchView('checkin');return;}
-      if(x.type==='project'){A.app.switchView('tasks');showPane('details');return;}
-      const found=A.memoSchedule.resolve(x.ref);if(!found)return A.ui.toast('任务关联已变化，请重新搜索');
-      const date=found.ref.day||found.task.assignment?.day;
-      A.app.switchView('tasks');
-      if(date)setDay(date);else showPane('queue');
-      editor(found.ref);
+      if(x.type==='review')A.memoReview?.manage(x.id,x.hit?.id);
+      else if(x.type==='cycle')A.memoRecurrence?.manage(x.id,x.hit?.id);
+      else if(x.type==='deleted')A.memoActions.trash();
+      else if(['checkin','project','daily'].includes(x.type)){
+        const item=(x.type==='checkin'?d.checkins:x.type==='project'?d.memoProjects:d.daily)?.find(t=>t.id===x.id);
+        A.ui.openModal(x.title,'<p>'+esc(item?.note||'')+'</p><p>'+esc(x.status)+'</p>','<button class="btn" data-act="close">关闭</button>');A.ui.bindActions({close:()=>A.ui.closeModal()});
+      }else{
+        const found=A.memoSchedule.resolve(x.ref);
+        if(!found){A.ui.openModal(x.title,'<p>历史关联已不可用</p><pre>'+esc(x.note)+'</pre>','<button class="btn" data-act="close">关闭</button>');A.ui.bindActions({close:()=>A.ui.closeModal()});}
+        else {const date=found.ref.day||found.task.assignment?.day;A.app.switchView('tasks');if(date)setDay(date);else showPane('queue');editor(found.ref);}
+      }
+      const dialog=A.ui.query?.('.modal');if(dialog){const back=document.createElement('button');back.className='btn';back.textContent='返回检索';back.onclick=()=>taskSearch(saved);dialog.querySelector('.modal-actions')?.append(back);}
     });
     A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();}});
+    if(arguments[0]){const saved=arguments[0];input.value=saved.text;type.value=saved.type;status.value=saved.status;limit=saved.limit;draw();q('#mw-search-results').scrollTop=saved.scroll;}
     input.focus();
   }
   function claimDayRewards(){
@@ -458,8 +487,14 @@
     if(existing&&A.memoRecurrence?.locate(ref)){const manage=document.createElement('button');manage.className='btn';manage.textContent='周期历史与后续规则';manage.onclick=()=>A.memoRecurrence.manage(A.memoRecurrence.locate(ref).series.id);m.querySelector('.modal-actions').prepend(manage);}
     q('#mw-title').focus();
     if (kind === 'project') { const hist = document.createElement('details'); hist.innerHTML = '<summary>每日完成记录</summary>' + Object.keys(existing.days || {}).sort().reverse().map(k => '<button type="button" class="btn" data-project-day="' + esc(k) + '">' + esc(k) + ' · 取消本日完成</button>').join(''); q('#mw-form-error').before(hist); hist.querySelectorAll('[data-project-day]').forEach(b => b.onclick = () => A.memoActions.project(ref.id, b.dataset.projectDay)); }
+    if(existing){
+      const history=(S().data().memoEvents||[]).filter(e=>!e.active&&e.sourceId===ref.id&&e.kind===ref.kind&&(ref.kind==='queue'||e.sourceDay===ref.day));
+      if(history.length){const details=document.createElement('details');details.innerHTML='<summary>已撤销记录</summary>'+history.map(e=>'<article><strong>'+esc(e.title)+' · '+esc(e.at)+'</strong><pre>'+esc(e.remark||'')+'</pre><pre>'+esc(e.noteInput?.mode==='custom'?e.noteInput.body:existing.summary?.at===e.at?existing.summary.text||'':'')+'</pre><button class="btn" type="button" data-restore-note="'+esc(e.id)+'">查看／恢复原日笔记</button></article>').join('');q('#mw-form-error').before(details);
+        details.querySelectorAll('[data-restore-note]').forEach(b=>b.onclick=async()=>{const event=history.find(e=>e.id===b.dataset.restoreNote),text=[event.remark,event.noteInput?.body,existing.summary?.at===event.at?existing.summary.text:null].filter(Boolean).join('\n');try{if(await A.memoActions.commit(()=>{if(A.memoActions.passage(event)||!text)return;const blocks=M().segments(M().read(event.noteDay));blocks.push({id:S().uid(),eventId:event.id,text:'\n'+event.title+'\n'+text+'\n'});M().write(event.noteDay,blocks.map(b=>b.text).join(''),new Date().toISOString(),blocks);})){A.ui.closeModal();A.app.switchView('memo');A.memo.show(event.noteDay);}}catch(e){A.ui.toast(e.message);}});
+      }
+    }
     const immediate=q('[data-act="save-start"]');
-    const running=existing&&A.memoSchedule.state().sessions.slice().reverse().find(s=>A.memoSchedule.key(s.ref)===A.memoSchedule.key(ref)&&s.status!=='ended');
+    const running=existing&&(S().data().memoSchedule?.sessions||[]).slice().reverse().find(s=>A.memoSchedule.key(s.ref)===A.memoSchedule.key(ref)&&s.status!=='ended');
     immediate.hidden=day!==M().userDay()||!!(existing&&(existing.archived||doneFor(existing,ref)));
     immediate.textContent=running?.status==='running'?'保存并返回':running?'保存并继续计时':'保存并立即开始';
     A.ui.dateContext(m, { day: kind==='queue'?(existing?.assignment?.day||null):day, saveSelector:'[data-act=save]', noStart:!!(existing&&(existing.archived||doneFor(existing,ref))) || day!==M().userDay() });

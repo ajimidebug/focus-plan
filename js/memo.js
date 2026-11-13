@@ -52,12 +52,12 @@
   }
   function exportBlocks(list) {
     const all = S().data().memoEvents;
-    const events = new Map((Array.isArray(all) ? all : []).filter(e => e && e.active).map(e => [e.id, e]));
+    const events = new Map((Array.isArray(all) ? all : []).filter(e => e).map(e => [e.id, e]));
     const sources = { queue: '任务队列', task: '当天任务', daily: '基础任务', project: '每日推进', checkin: '积分打卡' };
     return list.map(b => {
       const event = b.eventId && events.get(b.eventId);
       if (!event || !sources[event.kind]) return b.text;
-      const label = event.kind === 'checkin' ? '打卡生成' : '任务生成';
+      const label = !event.active ? event.title+' · 已撤销完成' : event.kind === 'checkin' ? '打卡生成' : '任务生成';
       // Keep every original character; wrappers are export-only and never saved into the memo.
       return '\n【' + label + '开始｜来源：' + sources[event.kind] + '】\n' + b.text +
         (b.text.endsWith('\n') ? '' : '\n') + '【' + label + '结束】\n';

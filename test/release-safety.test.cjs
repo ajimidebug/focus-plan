@@ -238,7 +238,7 @@ test('queue completion and exact undo survive reload, text editing, repricing an
   assert(h.A.passage(h.A.latest('queue', 'q1')).includes('另补一句'));
   h.A.undoCore(event.id);
   assert.equal(c.S.pointsTotal(), 3); assert.equal(c.S.data().queue[0].id, 'q1');
-  assert.equal(h.M.read('2026-10-19').text, '1055坐下来\n打算背英语\n1800这是独立手写说明');
+  assert(h.M.read('2026-10-19').text.includes('另补一句')); assert(h.M.read('2026-10-19').text.endsWith('1800这是独立手写说明'));
   assert(!c.S.data().ledger.some(l => l.memoEventId === event.id));
 });
 test('blank completion has points and state, but no passage; empty undo writes no cancellation', async () => {
@@ -257,7 +257,7 @@ test('repeat habit punches retain individual amounts and cancel just the selecte
   assert.equal(b.S.pointsTotal(), 16);
   A.undoCore(one.id, '', actionAt);
   assert.equal(b.S.pointsTotal(), 6); assert.equal(b.S.data().checkins[0].days['2026-10-19'], 1);
-  assert(!M.read('2026-10-19').text.includes('第一笔')); assert(M.read('2026-10-19').text.includes('第二笔'));
+  assert(M.read('2026-10-19').text.includes('第一笔')); assert(M.read('2026-10-19').text.includes('第二笔'));
   A.undoCore(two.id, '刚才点错了', actionAt); assert.equal(b.S.pointsTotal(), 0);
   assert(M.read('2026-10-19').text.includes('【取消勾选】喝水：刚才点错了'));
 });
@@ -268,7 +268,7 @@ test('backfill keeps the attributed day distinct from the operation-time note ac
   assert.equal(e.noteDay, '2026-10-18'); assert.equal(b.S.data().ledger[0].date, '2026-10-17');
   assert.equal(b.S.data().checkins[0].days['2026-10-17'], 1);
   A.undoCore(e.id, '补错日子', '2026-10-18T20:01:00.000Z');
-  assert.equal(M.read('2026-10-18').text, ''); assert(M.read('2026-10-19').text.includes('补错日子'));
+  assert(M.read('2026-10-18').text.includes('补记17日')); assert(M.read('2026-10-19').text.includes('补错日子'));
 });
 test('cancelled task withdraws only newly linked dependent rewards and cannot farm bonuses', async () => {
   const b = browser(); await b.S.load(); const { A } = actionHarness(b), day = b.S.getDay('2026-10-19');
@@ -320,7 +320,7 @@ test('removing a generated passage keeps separate handwritten lines separated', 
   const event = A.completeCore({ kind: 'queue', id: 'q', title: 'task' }, '1752【任务勾选】task', actionAt);
   const blocks = M.segments(M.read('2026-10-19')); blocks.push({ id: 'outside', text: '1800独立说明' });
   M.write('2026-10-19', blocks.map(b => b.text).join(''), actionAt, blocks);
-  A.undoCore(event.id, '', actionAt); assert.equal(M.read('2026-10-19').text, '1055坐下来\n1800独立说明');
+  A.undoCore(event.id, '', actionAt); assert(M.read('2026-10-19').text.includes('1752【任务勾选】task'));assert(M.read('2026-10-19').text.endsWith('1800独立说明'));
 });
 test('generated passage edges accept ordinary prose while edits inside remain owned', async () => {
   const b = browser(); await b.S.load(); const { E } = actionHarness(b);
@@ -347,7 +347,7 @@ test('exports include reliable provenance without rewriting notes or guessing ol
   assert.equal(M.exportBlocks([{ id: 'unknown', eventId: 'missing', text: '未知来源' }]), '未知来源');
   A.undoCore(event.id, '', actionAt);
   assert(!M.exportText(['2026-10-19']).includes('【任务生成开始'));
-  assert.equal(M.read('2026-10-19').text, '原话\n【任务生成】旧文字');
+  assert(M.read('2026-10-19').text.includes('1752【任务勾选】任务\n补充说明'));assert(M.exportText(['2026-10-19']).includes('任务 · 已撤销完成'));
 });
 
 test('over-target punches keep individual event amounts and exact undo', async () => {
@@ -357,7 +357,7 @@ test('over-target punches keep individual event amounts and exact undo', async (
   assert.equal(b.S.data().checkins[0].days['2026-10-19'], 3); assert.equal(b.S.pointsTotal(), 18);
   A.undoCore(events[1].id, '', actionAt);
   assert.equal(b.S.data().checkins[0].days['2026-10-19'], 2); assert.equal(b.S.pointsTotal(), 12);
-  assert(!M.read('2026-10-19').text.includes('记录1')); assert(M.read('2026-10-19').text.includes('记录2'));
+  assert(M.read('2026-10-19').text.includes('记录1')); assert(M.read('2026-10-19').text.includes('记录2'));
 });
 test('execution timestamps survive reload, exclude pauses, switch exclusively and end on completion', async () => {
   const b = browser(); await b.S.load(); const { A, P } = scheduleHarness(b), start = Date.parse(actionAt);
@@ -568,7 +568,7 @@ test('fixed habit awards respect zero reward limit and exact undo after target o
   assert.equal(one.points, 3); assert.equal(two.points, 0); assert.equal(one.award.version, 3); assert.equal(one.award.bonus, 0);
   habit.points = 100; habit.target = 4; habit.rewardLimit = 0;
   assert.equal(C.quote(habit, day).total, 0); A.undoCore(one.id); assert.equal(b.S.pointsTotal(), 0); assert.equal(habit.days[day], 1);
-  assert(!M.read(day).text.includes('一次')); assert(M.read(day).text.includes('超额'));
+  assert(M.read(day).text.includes('一次')); assert(M.read(day).text.includes('超额'));
 });
 test('switch to fixed habit rules retains ledger, task rules and original versioned awards', async () => {
   const b = browser(); await b.S.load(); const { A, M, C } = currencyHarness(b), day = M.userDay();
@@ -1491,7 +1491,7 @@ test('173.8 backfill suspends future plans and undo restores unchanged plans wit
  let handlers;const values={'#bf-day':{value:'2026-10-20'},'#bf-note':{value:''},'#bf-preview':{},'[role="alert"]':{}};b.ctx.App.ui={openModal:()=>({querySelector:s=>values[s]}),bindActions:h=>handlers=h,closeModal:()=>{}};b.ctx.App.memoWorkspace={render:()=>{}};b.ctx.App.app={refreshStats:()=>{}};P.render=()=>{};F.backfill(ref,'2026-10-20');await handlers.save({disabled:false});const event=d.memoEvents.find(e=>e.sourceId==='plan-bf');assert.equal(plan.suspendedByBackfill,event.id);A.undoCore(event.id);assert.equal(plan.suspendedByBackfill,undefined);assert.equal(P.canonical(ref).day,'2026-10-22');
 });
 test('173.8 completion remarks remain separate from task notes and survive empty passages and undo',async()=>{
- const b=browser();await b.S.load();const {A,M}=actionHarness(b),d=b.S.data(),day=M.userDay();d.queue=[{id:'remark',text:'任务',note:'长期说明',points:1}];const e=A.completeCore({kind:'queue',id:'remark',day,title:'任务',remark:'本次说明 <test>'},'');assert.equal(e.remark,'本次说明 <test>');assert.equal(d.queueDone[0].note,'长期说明');assert.equal(A.passage(e),'');A.undoCore(e.id);assert.equal(d.queue[0].note,'长期说明');assert.equal(e.remark,'本次说明 <test>');
+ const b=browser();await b.S.load();const {A,M}=actionHarness(b),d=b.S.data(),day=M.userDay();d.queue=[{id:'remark',text:'任务',note:'长期说明',points:1}];const e=A.completeCore({kind:'queue',id:'remark',day,title:'任务',remark:'本次说明 <test>'},'');assert.equal(e.remark,'本次说明 <test>');assert.equal(d.queueDone[0].note,'长期说明');assert(A.passage(e).includes('本次说明 <test>'));A.undoCore(e.id);assert.equal(d.queue[0].note,'长期说明');assert.equal(e.remark,'本次说明 <test>');
 });
 test('173.8 review templates advance by actual completion and stop after their final step',async()=>{
  const b=browser();await b.S.load();const {R,A}=reviewHarness(b),now=Date.now(),s=R.newSeriesCore({text:'模板',points:1,due:now+60000,intervals:[30,120]});const r=R.rounds(s.id)[0];assert.equal(R.suggestion(r).minutes,30);const e=A.completeCore({...r.taskRef,title:'模板',review:{mode:'relative',minutes:R.suggestion(r).minutes}},'',new Date(now).toISOString());const next=R.round(e.review.nextRoundId);assert.equal(next.due,now+1800000);assert.equal(next.templateStep,1);assert.equal(R.suggestion(next).minutes,120);assert(b.S.validate(b.S.data()));

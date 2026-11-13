@@ -1,0 +1,137 @@
+name: One-time 175.10.0 verified gh-pages fallback
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-gh-pages-17510.yml
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: focus-plan-production
+  cancel-in-progress: false
+jobs:
+  stage:
+    if: "github.event.head_commit.message == 'release(175.10.0): preserve notes and correct next-day tasks'"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    outputs:
+      verified_run: ${{ steps.validation.outputs.id }}
+      pages_sha: ${{ steps.publish.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Wait for exact successful source verification
+        id: validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p 'require("./package.json").version')" = "175.10.0"
+          for attempt in $(seq 1 90); do
+            test "$(gh api "repos/$REPO/branches/main" --jq '.commit.sha')" = "$SOURCE_SHA" || { echo "::error::Main changed before publishing"; exit 1; }
+            id="$(gh api "repos/$REPO/actions/runs?event=push&head_sha=$SOURCE_SHA&per_page=40" --jq '.workflow_runs[] | select(.name=="Validate focus-plan changes") | .id' | head -n 1)"
+            if [ -n "$id" ]; then
+              status="$(gh api "repos/$REPO/actions/runs/$id" --jq '.status')"
+              if [ "$status" = completed ]; then
+                test "$(gh api "repos/$REPO/actions/runs/$id" --jq '.conclusion')" = success || { echo "::error::Source verification did not pass"; exit 1; }
+                test "$(gh api "repos/$REPO/actions/runs/$id" --jq '[.workflow_runs] | length' 2>/dev/null || true)" != "ignore"
+                jobs="$(gh api "repos/$REPO/actions/runs/$id/jobs?per_page=100")"
+                echo "$jobs" | jq -e '[.jobs[] | select(.name=="Release verification" and .conclusion=="success")] | length == 1' >/dev/null
+                echo "$jobs" | jq -e '[.jobs[] | select(.name|test("^browser \\([ABC]\\)$")) | select(.conclusion=="success")] | length == 3' >/dev/null
+                echo "id=$id" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            fi
+            sleep 15
+          done
+          echo "::error::Timed out awaiting verified candidate"; exit 1
+      - uses: actions/download-artifact@v4
+        with:
+          name: candidate-spa
+          run-id: ${{ steps.validation.outputs.id }}
+          github-token: ${{ github.token }}
+          path: .release/candidate
+      - name: Verify exact candidate and original production branch
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_RUN: ${{ steps.validation.outputs.id }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/release-bundle.mjs check
+          git fetch origin gh-pages
+          test "$(git show origin/gh-pages:version.json | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const d=JSON.parse(s);if(d.id!=="175.9.0")process.exit(1)})')" = ""
+          if [ "$(git show origin/gh-pages:version.json | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>process.stdout.write(JSON.parse(s).id))')" = "175.10.0" ]; then
+            echo "::error::Same version already staged on gh-pages; do not overwrite without comparing bytes."
+            exit 1
+          fi
+      - name: Publish the unchanged verified candidate to existing gh-pages source
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach .release/pages-target origin/gh-pages
+          find .release/pages-target -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a .release/candidate/site/. .release/pages-target/
+          git -C .release/pages-target add -A
+          git -C .release/pages-target -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "pages: 175.10.0 from verified source ${{ github.sha }}"
+          git -C .release/pages-target push origin HEAD:gh-pages
+          echo "sha=$(git -C .release/pages-target rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Confirm live manifest and critical assets after GitHub Pages propagation
+        env:
+          SITE_URL: https://ajimidebug.github.io/focus-plan/
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if node scripts/verify-online.mjs "$SITE_URL"; then exit 0; fi
+            sleep 12
+          done
+          echo "::error::GitHub Pages did not serve the verified 175.10.0 content"; exit 1
+  online-browser:
+    needs: stage
+    runs-on: ubuntu-24.04
+    container: mcr.microsoft.com/playwright:v1.57.0-noble
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify isolated online startup
+        env:
+          SITE_URL: https://ajimidebug.github.io/focus-plan/
+          EXPECTED_SHA: ${{ github.sha }}
+        run: node scripts/online-smoke.mjs
+  archive:
+    needs: [stage, online-browser]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: candidate-spa
+          run-id: ${{ needs.stage.outputs.verified_run }}
+          github-token: ${{ github.token }}
+          path: .release/candidate
+      - name: Archive identical verified site for rollback
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/archive-release.mjs save

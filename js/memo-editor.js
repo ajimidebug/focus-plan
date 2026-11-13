@@ -116,7 +116,7 @@
     const frag = document.createDocumentFragment();
     blocks.forEach((x,index) => {
       const span = document.createElement('span'); span.dataset.block = x.id;
-      if (x.eventId) { span.className = 'memo-generated'; span.dataset.event = x.eventId; span.dataset.inlineSource=String(/【(?:积分打卡|任务勾选|补记完成)】/.test(x.text)); span.dataset.label = x.label || '打卡生成'; span.title = '此文段由勾选生成；取消对应勾选时删除，段内补充也会删除'; }
+      if (x.eventId) { span.className = 'memo-generated'; span.dataset.event = x.eventId; span.dataset.inlineSource=String(/【(?:积分打卡|任务勾选|补记完成)】/.test(x.text)); const event=(App.store.data().memoEvents||[]).find(e=>e.id===x.eventId); if(event&&!event.active)span.dataset.inlineSource='false'; span.dataset.label = event&&!event.active?(event.title+' · 已撤销完成'):(x.label || '打卡生成'); span.title = '此文段由勾选生成；取消完成后保留原文'; }
       if (x.eventId && x.text.startsWith('\n')) { frag.appendChild(document.createTextNode('\n')); span.textContent = x.text.slice(1); }
       else span.textContent = x.text;
       frag.appendChild(span);

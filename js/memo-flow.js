@@ -40,6 +40,7 @@
     if (!M().validDate(day) || !['required', 'ideal', 'extra'].includes(list)) throw new Error('请选择有效日期和任务栏目');
     const found = A.memoSchedule.resolve(ref); if (!found) throw new Error('任务已移动或删除');
     const t = found.task, r = found.ref;
+    if(reason==='manual'&&((r.day||t.assignment?.day)!==day||target==='queue'))delete t.memoPlannedDueDay;
     A.memoSchedule.invalidate?.();
     if (t.done || t.doneAt || t.archived || t.memoDismissed) throw new Error('请先恢复未完成状态');
     if (r.kind === 'queue') {
@@ -71,6 +72,23 @@
     A.memoActions?.reconcileRewards?.(r.day);
     if(day!==r.day)A.memoActions?.reconcileRewards?.(day);
   }
+  function requiredDueDay(ref, day) {
+    const found=A.memoSchedule.resolve(ref);if(!found)return day;
+    const task=found.task;
+    if(task.overdueEventId||task.memoPlannedDueDay)return task.memoPlannedDueDay||day;
+    const key=A.memoSchedule.key(found.ref);
+    return (S().data().memoSchedule?.items||[]).filter(p=>p.day===day&&p.type==='span'&&!p.deleted&&!p.suspendedByArchive&&!p.suspendedByBackfill&&!p.suspendedByReview&&Number.isFinite(p.end)&&p.end>p.start&&A.memoSchedule.key(p.ref)===key)
+      .reduce((due,p)=>{const end=M().userDay(p.end);return end>due?end:due;},day);
+  }
+  function plannedPending(now=Date.now()) {
+    const today=M().userDay(now),out=[];
+    Object.entries(S().data().days||{}).forEach(([day,d])=>{if(day>=today)return;(d.tasks?.required||[]).forEach(t=>{
+      const ref={kind:'task',id:t.id,day,list:'required'};
+      if(!t.done&&!t.memoMovedTo&&!t.memoDismissed&&!t.memoNoAutoCarry&&!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!A.memoReview?.skipCarry(t)&&requiredDueDay(ref,day)>day)out.push({ref,day});
+    });});
+    (S().data().queue||[]).forEach(t=>{const day=t.assignment?.day,ref={kind:'queue',id:t.id};if(day&&day<today&&t.assignment.list==='required'&&!t.doneAt&&!t.archived&&!t.memoDismissed&&!t.memoNoAutoCarry&&!A.memoReview?.skipCarry(t)&&requiredDueDay(ref,day)>day)out.push({ref,day});});
+    return out;
+  }
   function overdue(now = Date.now()) {
     const today = M().userDay(now), f = state(), out = [];
     Object.entries(S().data().days).filter(([day]) => day >= f.startedDay && day < today).sort(([a], [b]) => a.localeCompare(b)).forEach(([day, d]) => {
@@ -90,6 +108,10 @@
   function settleCore(now = Date.now()) {
     const f = state(), today = M().userDay(now), at = new Date(now).toISOString();
     A.memoRecurrence?.ensureCore(M().userDay(now),now);
+    plannedPending(now).forEach(({ref,day})=>{
+      const due=requiredDueDay(ref,day);moveCore(ref,due,'required','task','planned-next-day');
+      const current=A.memoSchedule.resolve(ref)?.task;if(current){current.memoPlannedDueDay=due;current.originalDay=due;}
+    });
     longOverdue(now).forEach(({task:t,ref,day})=>{t.originalDay=t.originalDay||day;t.memoAutoCarry={kind:'extra',at,origin:t.memoAutoCarry?.origin||day};moveCore(ref,today,'extra','task','automatic');});
     overdue(now).forEach(({ task: t, ref, day }) => {
       const dueDay = day || ref.day, origin = t.originalDay || dueDay;
@@ -119,7 +141,7 @@
   }
   function lateLabel(t) {
     if (t.backfillDay) return (t.backfillDay <= t.originalDay ? '已补记按时完成 · ' : '已补记延期完成 · ') + t.backfillDay;
-    if (!t.originalDay) return '';
+    if (!t.originalDay || !isCarried(t)) return '';
     const e = S().data().memoFlow?.settlements.find(x => x.id === t.overdueEventId);
     const days = Math.max(0, Math.round((Date.parse(M().userDay() + 'T00:00Z') - Date.parse(t.originalDay + 'T00:00Z')) / 86400000));
     return (t.done || t.doneAt ? '延期完成' : '顺延') + '自' + t.originalDay + ' · ' + days + '天' + (e ? e.forgivenAt ? ' · 扣分已撤销' : ' · 已扣' + e.points + '分' : '');
@@ -187,12 +209,12 @@
   let settling = false;
   async function settle() {
     if (settling || A.memoEditor?.busy() || A.memoActions.busy() || S().status().readOnly) return;
-    if (S().data().memoFlow && A.memoEconomy?.state() && !overdue().length && !longOverdue().length && !A.memoPenalty?.hasPending() && !A.memoEconomy?.hasPending() && !A.memoRecurrence?.needsEnsure()) return;
+    if (S().data().memoFlow && A.memoEconomy?.state() && !plannedPending().length && !overdue().length && !longOverdue().length && !A.memoPenalty?.hasPending() && !A.memoEconomy?.hasPending() && !A.memoRecurrence?.needsEnsure()) return;
     settling = true;
     try { if (await A.memoActions.commit(() => { enableCore(); settleCore(); A.memoPenalty?.settleCore(); A.memoEconomy?.enableCore(); A.memoEconomy?.settleCore(); })) { A.memoWorkspace?.render(); A.app?.refreshStats(); } }
     catch (e) { A.ui.toast(e.message); const el = document.getElementById('flow-save-error'); if (el) { el.hidden = false; el.textContent = '跨日处理尚未保存 · 点此重试'; el.onclick = async () => { try { if (await A.memoActions.commit(() => {})) { el.hidden = true; await settle(); A.memoWorkspace.render(); } } catch (err) { A.ui.toast(err.message); } }; } }
     finally { settling = false; }
   }
   async function init() { await settle(); setInterval(settle, 30000); document.addEventListener('visibilitychange', () => { if (!document.hidden) settle(); }); }
-  A.memoFlow = { restoreBackfillCore, backfill, state, enableCore, queues, assignment, assigned, deferred, moveCore, longOverdue, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
+  A.memoFlow = { requiredDueDay, plannedPending, restoreBackfillCore, backfill, state, enableCore, queues, assignment, assigned, deferred, moveCore, longOverdue, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
 })();
