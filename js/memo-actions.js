@@ -124,6 +124,7 @@
   function claimRewardsCore(dayKey,choices){
     if(S().status().readOnly)throw Error('记录保护中，暂不能领取奖励');
     if(!M().validDate(dayKey)||!Array.isArray(choices)||!choices.length)throw Error('请选择有效奖励');
+    if(App.memoFlow?.plannedPending?.().length)App.memoFlow.settleCore();
     const available=new Set(availableRewards(dayKey).map(x=>x.kind)),day=S().getDay(dayKey),at=new Date().toISOString(),groups=rewardTargets(dayKey);
     const unique=new Set();
     for(const claim of choices){
@@ -211,7 +212,11 @@
     if (S().status().readOnly) throw new Error('记录保护中，暂不能取消');
     const d = S().data(), event = events(d).find(e => e.id === id && e.active);
     if (!event) throw new Error('这次勾选已经取消，请重新打开');
-    const blocks = noteBlocks(event.noteDay); // Refuse malformed note data before changing points or state.
+    const blocks = noteBlocks(event.noteDay);
+    if(notePolicy==='retain'&&event.remark&&blocks.some(b=>b.eventId===id)&&!blocks.filter(b=>b.eventId===id).some(b=>b.text.includes(event.remark))){
+      const index=blocks.map(b=>b.eventId===id).lastIndexOf(true);
+      blocks.splice(index+1,0,{id:S().uid(),eventId:id,text:'\n本次备注：'+event.remark+'\n'});
+    } // Refuse malformed note data before changing points or state.
     if (event.kind === 'queue') {
       const idx = (d.queueDone || []).findIndex(it => it.memoCompletionId === id);
       if (idx < 0) throw new Error('已完成任务已移动，请先检查任务记录');
@@ -357,7 +362,7 @@
     else if(App.memoReview&&['task','queue'].includes(spec.kind)){const link=document.createElement('button');link.type='button';link.className='btn';link.textContent='建立间隔复习';link.onclick=()=>{if(!App.memoActions.busy())App.memoReview?.newEditor(spec);};m.querySelector('.action-task-title').after(link);}
     let initialText=textarea.value;
     const remark=m.querySelector('#ma-remark'),draftId=draftKey(spec);
-    const prior=(S().data().memoEvents||[]).slice().reverse().find(e=>!e.active&&e.kind===spec.kind&&e.sourceId===spec.id&&(spec.kind==='queue'||e.sourceDay===spec.day)&&spec.kind!=='checkin');
+    const prior=(S().data().memoEvents||[]).slice().reverse().find(e=>!e.active&&e.kind===spec.kind&&e.sourceId===spec.id&&(spec.kind==='queue'||e.sourceDay===spec.day)&&(spec.kind!=='checkin'||e.id===spec.redoEventId));
     const draft=completionDrafts.get(draftId)||(prior?{remark:prior.remark||'',text:prior.noteInput?.mode==='auto'?textarea.value:prior.noteInput?.body??'',custom:prior.noteInput?.mode!=='auto',estimate:initialEstimate}:null);
     let customInput=!!draft?.custom;
     textarea.addEventListener('input',()=>{customInput=true;});
@@ -524,9 +529,9 @@
     if (it.days?.[day]) { const e = latest('daily', id, day); e ? cancelEvent(e) : legacyCancel(spec); } else complete(spec);
   }
   function checkinHistory(id) {
-    const list = events(S().data()).filter(e => e.kind === 'checkin' && e.sourceId === id && e.active).slice(-50).reverse();
-    const m = App.ui.openModal('打卡记录', '<p class="hint">可取消本版生成的某一次打卡，包括补卡。</p>' + (list.length ? list.map(e => '<div class="memo-queue-row"><p>' + E(e.sourceDay + ' · ' + e.title) + '</p><small>勾选于 ' + E(M().naturalDay(e.at) + ' ' + M().clock(e.at)) + ' · 原次积分 ' + (e.points>0?'+':'') + e.points + '</small><p class="memo-queue-note">' + E(passage(e).trim().slice(0, 120) || '未写入文段') + '</p><button class="btn btn-small" data-act="undo-event" data-event="' + E(e.id) + '">取消这次打卡</button></div>').join('') : '<p>暂无本版打卡记录。旧版当天打卡仍可用“撤销”处理。</p>'), '<button class="btn" data-act="close">关闭</button>');
-    App.ui.bindActions({ close: App.ui.closeModal, 'undo-event': b => { const e = list.find(x => x.id === b.dataset.event); if (e) cancelEvent(e); } });
+    const list = events(S().data()).filter(e => e.kind === 'checkin' && e.sourceId === id).slice(-50).reverse();
+    const m = App.ui.openModal('打卡记录', '<p class="hint">可取消本版生成的某一次打卡，包括补卡。</p>' + (list.length ? list.map(e => '<div class="memo-queue-row"><p>' + E(e.sourceDay + ' · ' + e.title+(e.active?'':' · 已撤销')) + '</p><small>勾选于 ' + E(M().naturalDay(e.at) + ' ' + M().clock(e.at)) + ' · 原次积分 ' + (e.points>0?'+':'') + e.points + '</small><p class="memo-queue-note">' + E(passage(e).trim().slice(0, 120) || '未写入文段') + '</p><button class="btn btn-small" data-act="undo-event" data-event="' + E(e.id) + '">'+(e.active?'取消这次打卡':'重新填写')+'</button></div>').join('') : '<p>暂无本版打卡记录。旧版当天打卡仍可用“撤销”处理。</p>'), '<button class="btn" data-act="close">关闭</button>');
+    App.ui.bindActions({ close: App.ui.closeModal, 'undo-event': b => { const e = list.find(x => x.id === b.dataset.event); if(e){if(e.active)cancelEvent(e);else complete({kind:e.kind,id:e.sourceId,day:e.sourceDay,title:e.title,redoEventId:e.id});} } });
   }
   function recover(error) {
     App.ui.toast(error.message);

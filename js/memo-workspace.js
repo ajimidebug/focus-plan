@@ -333,7 +333,7 @@
     rows.forEach(row=>{
       const rounds=row.type==='review'?(d.memoReview?.rounds||[]).filter(r=>r.seriesId===row.id):row.type==='cycle'?(recurrence.occurrences||[]).filter(r=>r.seriesId===row.id):[];
       row.matches=rounds.map(r=>{const f=r.taskRef&&A.memoSchedule.resolve(r.taskRef);return {id:r.id,text:[f?.task?.text,f?.task?.note,r.memoThis,r.memoNext,r.prepNote,r.reason,r.day].filter(Boolean).join(' '),label:r.n?'第'+r.n+'轮':r.day};});
-      (d.memoEvents||[]).filter(e=>e.sourceId===row.id).forEach(e=>{row.keywords+=' '+(e.remark||'');});
+      (d.memoEvents||[]).filter(e=>e.sourceId===row.id&&e.kind===(row.ref?.kind||row.type)&&(row.ref?.kind!=='task'||e.sourceDay===row.ref.day)).forEach(e=>{row.keywords+=' '+(e.remark||'');});
     });
     const m=A.ui.openModal('检索任务','<label>搜索名称或备注<input id="mw-search-text" type="search" autocomplete="off" placeholder="输入任务、复习名称……"></label><div class="schedule-fields"><label>类型<select id="mw-search-type"><option value="">全部</option><option value="task">普通任务</option><option value="review">间隔复习</option><option value="cycle">周期任务与持续复习</option><option value="checkin">习惯</option><option value="project">长期项目</option><option value="daily">基础任务</option><option value="deleted">已删除</option></select></label><label>状态<select id="mw-search-status"><option value="">全部状态</option><option value="pending">未完成</option><option value="done">已完成</option><option value="archived">暂停或停用</option></select></label></div><p id="mw-search-count" class="hint"></p><div id="mw-search-results" class="mw-queue-grid" style="max-height:55vh;overflow-y:auto"></div>','<button class="btn" data-act="cancel">关闭</button>');
     const q=x=>m.querySelector(x),input=q('#mw-search-text'),type=q('#mw-search-type'),status=q('#mw-search-status');
@@ -350,7 +350,7 @@
       q('#mw-search-results').innerHTML=filtered.slice(0,limit).map(x=>{
         x.hit=x.matches.slice().reverse().find(m=>normalize(m.text).includes(term));
         const source=x.hit?.text||x.note||x.keywords,index=normalize(source).indexOf(term),snippet=index>=0?source.slice(Math.max(0,index-15),index+term.length+55):'';
-        return '<button type="button" class="btn mw-history-row" data-search-type="'+esc(x.type)+'" data-search-id="'+esc(x.id)+'" data-search-key="'+esc(x.rowKey)+'" style="display:block;text-align:left;width:100%;white-space:normal"><strong>'+esc(x.title)+'</strong><small style="display:block">'+esc(x.detail+' · '+x.status+(x.date?' · '+x.date:''))+'</small>'+(snippet?'<small style="display:block">'+esc((x.hit?x.hit.label+' · ':'')+snippet)+'</small>':'')+'</button>';
+        return '<button type="button" class="btn mw-history-row" data-search-type="'+esc(x.type)+'" data-search-id="'+esc(x.id)+'" data-search-key="'+esc(x.rowKey)+'" style="display:block;text-align:left;width:100%;white-space:normal"><strong>'+esc(x.title)+'</strong><small style="display:block">'+esc(x.detail+' · '+({pending:'未完成',done:'已完成',archived:'已停用或暂停'}[x.status]||x.status)+(x.date?' · '+x.date:''))+'</small>'+(snippet?'<small style="display:block">'+esc((x.hit?x.hit.label+' · ':'')+snippet)+'</small>':'')+'</button>';
       }).join('')||(term?'<p class="hint">没有匹配结果</p>':'');
       more.hidden=filtered.length<=limit;
     }
@@ -372,7 +372,7 @@
         if(!found){A.ui.openModal(x.title,'<p>历史关联已不可用</p><pre>'+esc(x.note)+'</pre>','<button class="btn" data-act="close">关闭</button>');A.ui.bindActions({close:()=>A.ui.closeModal()});}
         else {const date=found.ref.day||found.task.assignment?.day;A.app.switchView('tasks');if(date)setDay(date);else showPane('queue');editor(found.ref);}
       }
-      const dialog=A.ui.query?.('.modal');if(dialog){const back=document.createElement('button');back.className='btn';back.textContent='返回检索';back.onclick=()=>taskSearch(saved);dialog.querySelector('.modal-actions')?.append(back);}
+      const dialog=A.ui.query?.('.modal');if(dialog){if(x.hit){const hit=document.createElement('p');hit.textContent=x.hit.label+' · '+x.hit.text;dialog.querySelector('.modal-body')?.prepend(hit);}const back=document.createElement('button');back.className='btn';back.textContent='返回检索';back.onclick=()=>taskSearch(saved);dialog.querySelector('.modal-actions')?.append(back);}
     });
     A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())A.ui.closeModal();}});
     if(arguments[0]){const saved=arguments[0];input.value=saved.text;type.value=saved.type;status.value=saved.status;limit=saved.limit;draw();q('#mw-search-results').scrollTop=saved.scroll;}

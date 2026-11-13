@@ -1,9 +1,7 @@
-name: One-time 175.10.0 verified gh-pages fallback
+name: One-time 175.10.1 verified gh-pages fallback
 on:
   push:
     branches: [main]
-    paths:
-      - .github/workflows/publish-gh-pages-17510.yml
 permissions:
   contents: write
   actions: read
@@ -12,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   stage:
-    if: "github.event.head_commit.message == 'release(175.10.0): preserve notes and correct next-day tasks'"
+    if: "github.event.head_commit.message == 'release(175.10.1): preserve notes and correct next-day tasks'"
     runs-on: ubuntu-24.04
     timeout-minutes: 24
     outputs:
@@ -35,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(node -p 'require("./package.json").version')" = "175.10.0"
+          test "$(node -p 'require("./package.json").version')" = "175.10.1"
           for attempt in $(seq 1 90); do
             test "$(gh api "repos/$REPO/branches/main" --jq '.commit.sha')" = "$SOURCE_SHA" || { echo "::error::Main changed before publishing"; exit 1; }
             id="$(gh api "repos/$REPO/actions/runs?event=push&head_sha=$SOURCE_SHA&per_page=40" --jq '.workflow_runs[] | select(.name=="Validate focus-plan changes") | .id' | head -n 1)"
@@ -70,8 +68,8 @@ jobs:
           set -euo pipefail
           node scripts/release-bundle.mjs check
           git fetch origin gh-pages
-          test "$(git show origin/gh-pages:version.json | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const d=JSON.parse(s);if(d.id!=="175.9.0")process.exit(1)})')" = ""
-          if [ "$(git show origin/gh-pages:version.json | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>process.stdout.write(JSON.parse(s).id))')" = "175.10.0" ]; then
+          test "$(git show origin/gh-pages:version.json | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const d=JSON.parse(s);if(d.id!=="175.10.0")process.exit(1)})')" = ""
+          if [ "$(git show origin/gh-pages:version.json | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>process.stdout.write(JSON.parse(s).id))')" = "175.10.1" ]; then
             echo "::error::Same version already staged on gh-pages; do not overwrite without comparing bytes."
             exit 1
           fi
@@ -84,7 +82,7 @@ jobs:
           find .release/pages-target -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -a .release/candidate/site/. .release/pages-target/
           git -C .release/pages-target add -A
-          git -C .release/pages-target -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "pages: 175.10.0 from verified source ${{ github.sha }}"
+          git -C .release/pages-target -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "pages: 175.10.1 from verified source ${{ github.sha }}"
           git -C .release/pages-target push origin HEAD:gh-pages
           echo "sha=$(git -C .release/pages-target rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Confirm live manifest and critical assets after GitHub Pages propagation
@@ -97,7 +95,7 @@ jobs:
             if node scripts/verify-online.mjs "$SITE_URL"; then exit 0; fi
             sleep 12
           done
-          echo "::error::GitHub Pages did not serve the verified 175.10.0 content"; exit 1
+          echo "::error::GitHub Pages did not serve the verified 175.10.1 content"; exit 1
   online-browser:
     needs: stage
     runs-on: ubuntu-24.04
