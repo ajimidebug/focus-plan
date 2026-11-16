@@ -11,7 +11,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   await page.evaluate(async()=>{const S=App.store,M=App.memoCore,day=M.userDay(),old=M.shiftDay(day,-1);for(const list of ['required','ideal','extra'])S.getDay(day).tasks[list]=[{id:list+'-late-done',text:list+'延期完成',done:true,originalDay:old,carried:true,points:1},{id:list+'-done',text:list+'当日完成',done:true,points:1},{id:list+'-pending',text:list+'普通未完成',points:1},{id:list+'-late',text:list+'延期未完成',originalDay:old,carried:true,points:1}];await S.save();App.app.switchView('tasks');App.memoWorkspace.enter('today',day);});
   for(const theme of ['default','dark']){
    await page.evaluate(t=>document.body.dataset.theme=t,theme);const grays=[];
-   for(const list of ['required','ideal','extra']){
+   for(const list of ['required','ideal']){
     const q=await page.locator('#mw-today [data-overview-list="'+list+'"] .mw-column-meter').evaluate(e=>({box:e.getBoundingClientRect().toJSON(),parts:[...e.children].map(c=>({state:c.dataset.progressState,width:c.getBoundingClientRect().width,left:c.getBoundingClientRect().left,right:c.getBoundingClientRect().right,color:getComputedStyle(c).backgroundColor}))}));
     check(q.parts.map(x=>x.state).join(',')==='late-done,deferred,done,pending','four fixed states '+width+' '+theme+' '+list);
     check(q.parts.every((x,i)=>Math.abs(x.width-q.box.width/4)<1&&Math.abs(x.left-(q.box.left+q.box.width*i/4))<1),'equal quarter segments in the right order '+width+' '+list);

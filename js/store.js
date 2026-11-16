@@ -286,6 +286,19 @@
       if(f.factCarry!==undefined&&(!object(f.factCarry)||!/^\d{4}-\d{2}-\d{2}$/.test(f.factCarry.day)||
         !/^\d{4}-\d{2}-\d{2}$/.test(f.factCarry.selected)||!checkpoint(f.factCarry.base)))throw new Error('复制补记基线结构异常');
     }
+    if (clean.memoThree !== undefined) {
+      const x=clean.memoThree, validDay=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&!Number.isNaN(Date.parse(d));
+      if(!x||x.version!==1||!validDay(x.anchor)||!Number.isSafeInteger(x.settledRound)||x.settledRound<0||
+        !Array.isArray(x.tasks)||!Array.isArray(x.history)||x.history.length!==x.settledRound||
+        x.history.some((h,i)=>h?.index!==i)||
+        new Set(x.tasks.map(t=>t?.id)).size!==x.tasks.length||
+        x.tasks.some(t=>!t||typeof t.id!=='string'||typeof t.text!=='string'||!validDay(t.createdDay)||
+          !Number.isSafeInteger(t.originRound)||t.originRound<0||typeof t.done!=='boolean'||
+          !Number.isFinite(t.points)||t.points<0||!Number.isFinite(t.estimatedMinutes)||t.estimatedMinutes<0||t.estimatedMinutes>1440||
+          (t.done&&!Number.isFinite(Date.parse(t.doneAt))))||
+        x.history.some(h=>!h||!Number.isSafeInteger(h.index)||h.index<0||!Array.isArray(h.rows)||h.rows.some(r=>!r||typeof r.id!=='string'||typeof r.text!=='string'||typeof r.done!=='boolean'||typeof r.delayed!=='boolean')))
+        throw new Error('三天计划记录结构异常或版本不支持');
+    }
     if (clean.memoSchedule !== undefined) {
       const x = clean.memoSchedule;
       if (!x || x.version !== 1 || !Array.isArray(x.items) || !Array.isArray(x.sessions) ||

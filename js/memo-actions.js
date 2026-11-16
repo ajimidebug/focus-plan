@@ -171,6 +171,11 @@
       // Retire old materialized copies. The queue item itself remains the source of its configuration.
       Object.values(d.days).forEach(day => Object.values(day.tasks || {}).forEach(list => { for (let i = list.length - 1; i >= 0; i--) if (list[i].fromQueue === it.id && !list[i].done) list.splice(i, 1); }));
       ledger(event, 'earn-queue', assignment?.list === 'required' ? 0 : it.points == null ? (S().settings().queuePoints ?? 5) : it.points, '队列完成：' + it.text);
+    } else if (spec.kind === 'three') {
+      const task=App.memoThree.find(spec.id);if(!task||task.done)throw Error('任务状态已改变，请重新打开');
+      event.sourceDay=M().userDay(at);event.sourceList='three';event.threeRound=App.memoThree.round(event.sourceDay).index;
+      task.done=true;task.memoCompletionId=event.id;task.doneAt=at;task.summary={done:true,text,at};
+      ledger(event,'earn-three',Number(task.points)||0,'三天计划完成：'+task.text);
     } else if (spec.kind === 'task') {
       const task = S().getDay(event.sourceDay).tasks[spec.list].find(t => t.id === spec.id);
       if (!task || task.done) throw new Error('任务状态已改变，请重新打开');
@@ -225,6 +230,9 @@
       let pos = d.queue.findIndex(x => x.id === event.afterId);
       if (pos < 0) { const prev = d.queue.findIndex(x => x.id === event.beforeId); pos = prev >= 0 ? prev + 1 : Math.min(event.queuePosition || 0, d.queue.length); }
       d.queue.splice(pos, 0, it); App.memoWorkspace?.orderQueue();
+    } else if (event.kind === 'three') {
+      const task=App.memoThree.find(event.sourceId);if(!task||task.memoCompletionId!==event.id)throw Error('原任务状态已改变');
+      task.done=false;delete task.doneAt;delete task.memoCompletionId;if(task.summary)task.summary.done=false;
     } else if (event.kind === 'task') {
       const task = locateTask({ kind: 'task', id: event.sourceId, day: event.sourceDay, list: event.sourceList });
       if (!task) throw new Error('原任务已移动，暂不能自动取消');
@@ -297,7 +305,7 @@
       }
       if (!await App.memo.flush()) throw new Error('笔记尚未安全保存，请先复制或下载');
       const d = S().data(), before = copy(d);
-      try { mutate(); App.memoWorkspace?.pruneExec?.(); } catch (e) { Object.keys(d).forEach(k => delete d[k]); Object.assign(d, before); throw e; }
+      try { App.memoThree?.settleCore(); App.memoWorkspace?.clearPinsCore?.(); mutate(); App.memoWorkspace?.pruneExec?.(); } catch (e) { Object.keys(d).forEach(k => delete d[k]); Object.assign(d, before); throw e; }
       if (!await S().save()) { unsettled = true; throw new Error('此次操作尚未保存；文字仍在，请点“重试保存”，不要刷新'); }
       return true;
     } finally { committing = false; }
@@ -364,7 +372,7 @@
     else if(App.memoReview&&['task','queue'].includes(spec.kind)){const link=document.createElement('button');link.type='button';link.className='btn';link.textContent='建立间隔复习';link.onclick=()=>{if(!App.memoActions.busy())App.memoReview?.newEditor(spec);};m.querySelector('.action-task-title').after(link);}
     let initialText=textarea.value;
     const remark=m.querySelector('#ma-remark'),draftId=draftKey(spec);
-    const prior=(S().data().memoEvents||[]).slice().reverse().find(e=>!e.active&&e.kind===spec.kind&&e.sourceId===spec.id&&(spec.kind==='queue'||e.sourceDay===spec.day)&&(spec.kind!=='checkin'||e.id===spec.redoEventId));
+    const prior=(S().data().memoEvents||[]).slice().reverse().find(e=>!e.active&&e.kind===spec.kind&&e.sourceId===spec.id&&(['queue','three'].includes(spec.kind)||e.sourceDay===spec.day)&&(spec.kind!=='checkin'||e.id===spec.redoEventId));
     const draft=completionDrafts.get(draftId)||(prior?{remark:prior.remark||'',text:prior.noteInput?.mode==='auto'?textarea.value:prior.noteInput?.body??'',custom:prior.noteInput?.mode!=='auto',estimate:initialEstimate}:null);
     let customInput=!!draft?.custom;
     textarea.addEventListener('input',()=>{customInput=true;});
@@ -421,7 +429,7 @@
     };
     let chosenList=habitPlan?.r?.list||spec.list||sourceTask?.assignment?.list||sourceTask?.memoCategoryDays?.[spec.day]||'extra';
     function applyCategory(){if(!App.memoOrganize)return;const latest=App.memoSchedule.resolve(ref);const current=(spec.kind==='checkin'&&App.memoFinance?.plans(spec.day).find(x=>x.it.id===spec.id)?.r.list)||latest?.ref.list||latest?.task.assignment?.list||latest?.task.memoCategoryDays?.[spec.day]||'extra';if(chosenList!==current){const updated=App.memoOrganize.change(ref,chosenList);Object.assign(ref,updated);Object.assign(spec,updated);if(spec.kind==='task')spec.list=chosenList;}}
-    if(App.memoOrganize&&sourceTask&&!sourceTask.done&&!sourceTask.doneAt&&!sourceTask.days?.[spec.day]&&(spec.kind!=='checkin'||habitPlan)){
+    if(spec.kind!=='three'&&App.memoOrganize&&sourceTask&&!sourceTask.done&&!sourceTask.doneAt&&!sourceTask.days?.[spec.day]&&(spec.kind!=='checkin'||habitPlan)){
       const field=document.createElement('fieldset');field.className='category-choices';field.innerHTML='<legend>任务分类</legend>'+[['required','必做'],['ideal','理想'],['extra','长期拓展']].map(([k,v])=>'<button type="button" class="btn" data-category-choice="'+k+'" aria-pressed="'+(k===chosenList)+'">'+v+'</button>').join('');m.querySelector('.action-task-title').after(field);field.onclick=e=>{const b=e.target.closest('[data-category-choice]');if(!b)return;chosenList=b.dataset.categoryChoice;pendingEdits=true;if(chosenList==='required'&&!m.querySelector('[data-reward=base]')){const label=document.createElement('label');label.innerHTML='<input type="checkbox" data-reward="base" checked> 满足条件时领取必做整组奖励<input type="number" min="0" data-reward-points="base" value="'+Number(settings.baseRewardPoints||0)+'">';m.querySelector('.action-passage').append(label);}field.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));const points=chosenList==='required'&&['task','queue'].includes(spec.kind)?0:sourceTask.points??(chosenList==='ideal'?settings.idealPoints:settings.extPoints)??0;m.querySelector('#memo-action-info').textContent='本次任务积分 +'+points+'；分类在保存后生效';};
       const save=document.createElement('button');save.className='btn';save.textContent='保存修改';save.onclick=async()=>{save.disabled=true;try{if(await transaction(()=>{saveEstimate();applyCategory();})){App.ui.closeModal();refresh();}}catch(e){m.querySelector('#memo-action-error').textContent=e.message;save.textContent=unsettled?'重试保存':'重新保存';}finally{save.disabled=false;}};m.querySelector('.modal-actions').prepend(save);
     }
@@ -429,6 +437,7 @@
     if (spec.kind === 'queue') { const it = S().data().queue.find(x => x.id === spec.id); previewPoints = it?.assignment?.list === 'required' ? 0 : Number(it?.points ?? settings.queuePoints ?? 5); }
     if (spec.kind === 'checkin') { const it = S().data().checkins.find(x => x.id === spec.id); previewPoints = App.checkin.memoPoints(it, spec.day); }
     if (spec.kind === 'daily') { const it = S().data().daily.find(x => x.id === spec.id); previewPoints = Number(it?.points ?? settings.dailyPoints ?? 2); }
+    if (spec.kind === 'three') previewPoints=Number(sourceTask?.points)||0;
     if (spec.kind === 'project') previewPoints = Number((S().data().memoProjects || []).find(x => x.id === spec.id)?.points || 0);
     if (spec.kind === 'task') { const it = S().getDay(spec.day).tasks[spec.list].find(x => x.id === spec.id); previewPoints = ['ideal', 'extra'].includes(spec.list) ? Number(it.points ?? (spec.list === 'ideal' ? settings.idealPoints : settings.extPoints)) : 0; }
     m.querySelector('#memo-action-info').textContent = '本次积分 ' + (previewPoints > 0 ? '+' : '') + (previewPoints || 0) + '；写入 ' + day + ' 的笔记（04:00分日）。';
@@ -508,6 +517,11 @@
     const spec = { kind: 'task', id, day, list, title: t.text };
     if (!t.done) complete(spec); else { const e = latest('task', id, day); e ? cancelEvent(e) : legacyCancel(spec); }
   }
+  function three(id) {
+    const task=App.memoThree.find(id);if(!task)return;
+    if(task.done){const event=latest('three',id);if(event)cancelEvent(event);}
+    else complete({kind:'three',id,list:'three',day:M().userDay(),title:task.text});
+  }
   function project(id, day = M().userDay()) {
     const it = (S().data().memoProjects || []).find(x => x.id === id); if (!it) return;
     const event = latest('project', id, day);
@@ -576,12 +590,13 @@
 
   function locateTask(spec) {
     const d = S().data();
+    if(spec.kind==='three')return App.memoThree.find(spec.id);
     return spec.kind === 'queue' ? (d.queue || []).concat(d.queueDone || []).find(t => t.id === spec.id) : Object.values(d.days[spec.day]?.tasks || {}).flat().find(t => t.id === spec.id);
   }
   function linkedEvent(spec, task) {
     if (task.fromQueue) return latest('queue', task.fromQueue);
     if (task.fromDaily) return latest('daily', task.fromDaily, spec.day);
-    return latest(spec.kind, spec.id, spec.day);
+    return latest(spec.kind, spec.id, spec.kind==='three'?undefined:spec.day);
   }
   const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const snapshotValue = value => value === undefined ? undefined : copy(value);
@@ -603,7 +618,7 @@
       }
       changes.push({ op: 'field', path, before: snapshotValue(a), after: snapshotValue(b), had: a !== undefined });
     }
-    ['queue', 'queueDone', 'daily', 'checkins', 'ledger', 'memoEvents', 'memoSchedule', 'memoReview', 'memoRecurrence', 'days', 'memoNotes'].forEach(k => walk(before[k] || (k === 'memoNotes' ? {} : before[k]), after[k] || (k === 'memoNotes' ? {} : after[k]), [k]));
+    ['queue', 'queueDone', 'daily', 'checkins', 'ledger', 'memoEvents', 'memoSchedule', 'memoReview', 'memoRecurrence', 'memoThree', 'days', 'memoNotes'].forEach(k => walk(before[k] || (k === 'memoNotes' ? {} : before[k]), after[k] || (k === 'memoNotes' ? {} : after[k]), [k]));
     return changes;
   }
   function pathValue(root, path) { let value = root; for (const part of path) value = typeof part === 'object' ? value?.find(x => x.id === part.id) : value?.[part]; return value; }
@@ -670,6 +685,8 @@
     if (canonical.kind === 'queue') {
       d.queue = (d.queue || []).filter(t => t.id !== canonical.id); d.queueDone = (d.queueDone || []).filter(t => t.id !== canonical.id);
       Object.values(d.days).forEach(day => Object.values(day.tasks || {}).forEach(list => { for (let i = list.length - 1; i >= 0; i--) if (list[i].fromQueue === canonical.id) list.splice(i, 1); }));
+    } else if(canonical.kind==='three') {
+      d.memoThree.tasks=d.memoThree.tasks.filter(t=>t.id!==canonical.id);
     } else {
       const list = d.days[spec.day]?.tasks[spec.list], index = list?.findIndex(t => t.id === spec.id); if (index >= 0) list.splice(index, 1);
       withdrawRewards(spec.day);
@@ -688,6 +705,9 @@
       if (spec.kind === 'queue') {
         if ((d.queue || []).concat(d.queueDone || []).some(x => x.id === spec.id)) throw new Error('任务已存在');
         t.id = spec.id; delete t.fromQueue; delete t.doneDay; delete t.doneAt; delete t.memoCompletionId; t.done = false; d.queue.push(t);
+      } else if(spec.kind==='three') {
+        if(App.memoThree.find(t.id))throw Error('任务已存在');
+        t.done=false;delete t.doneAt;delete t.memoCompletionId;if(t.summary)t.summary.done=false;App.memoThree.state().tasks.push(t);
       } else {
         const list = S().getDay(spec.day).tasks[spec.list]; if (list.some(x => x.id === t.id)) throw new Error('任务已存在');
         t.done = false; delete t.memoCompletionId; if (t.summary) t.summary.done = false; list.push(t);
@@ -729,5 +749,5 @@
     });
   }
 
-  App.memoActions = { tick:()=>App.ui.query?.('.task-action-modal')?._timerTick?.(), deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, availableRewards, claimRewardsCore, reconcileRewards, completeCore, timingSnapshot, undoCore, latest, passage, commit: transaction };
+  App.memoActions = { three, tick:()=>App.ui.query?.('.task-action-modal')?._timerTick?.(), deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, availableRewards, claimRewardsCore, reconcileRewards, completeCore, timingSnapshot, undoCore, latest, passage, commit: transaction };
 })();
