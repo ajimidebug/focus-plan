@@ -25,6 +25,7 @@
     "interaction-1751.browser.cjs",
     "safety.browser.cjs",
     "retention.browser.cjs",
-    "timer-navigation.browser.cjs"
+    "timer-navigation.browser.cjs",
+    "three-day.browser.cjs"
   ]
 }

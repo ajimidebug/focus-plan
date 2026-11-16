@@ -3,7 +3,8 @@
   'use strict';
   const App = window.App = window.App || {}, S = () => App.store, M = () => App.memoCore;
   const $ = id => document.getElementById(id), esc = value => S().esc(String(value ?? ''));
-  let selectedDay, mode = false, interval, view = 'combined', rangeHours = 6, keyword = '', showLegacy = true, showHidden = false;
+  let selectedDay, mode = false, interval, view = 'combined', rangeHours = 24, keyword = '', showLegacy = true, showHidden = false;
+  let fullDayHeight = null;
   const clone = x => JSON.parse(JSON.stringify(x));
   function state() {
     const d = S().data();
@@ -17,6 +18,7 @@
     const token = JSON.stringify(ref); if (visited.has(token)) return null; visited.add(token);
     if (!ref) return null;
     const d = S().data();
+    if (ref.kind === 'three') { const task=App.memoThree?.find(ref.id);return task?{task,ref:{kind:'three',id:task.id,list:'three'}}:null; }
     if (ref.kind === 'checkin') {const task=(d.checkins||[]).find(t=>t.id===ref.id);return task?{task,ref:{kind:'checkin',id:task.id,day:ref.day||M().userDay()}}:null;}
     if (ref.kind === 'queue') { const task = (d.queue || []).concat(d.queueDone || []).find(t => t.id === ref.id); return task && !task.memoDismissed ? { task, ref: { kind: 'queue', id: task.id } } : null; }
     if (ref.kind === 'project') { const task = (d.memoProjects || []).find(t => t.id === ref.id); return task ? { task, ref: { kind: 'project', id: task.id, day: ref.day || M().userDay() } } : null; }
@@ -35,13 +37,14 @@
   }
   function find(ref) { return resolve(ref)?.task; }
   function canonical(ref) { return resolve(ref)?.ref || ref; }
-  function key(ref) { const r = canonical(ref); return JSON.stringify([r.kind, r.id, r.kind === 'queue' ? '' : r.day || '']); }
+  function key(ref) { const r = canonical(ref); return JSON.stringify([r.kind, r.id, ['queue','three'].includes(r.kind) ? '' : r.day || '']); }
   const repeats = ref => ['project', 'daily', 'checkin'].includes(ref.kind);
   // Statistics can span dates; completion and ledger identities remain dated.
   function timerKey(ref) { const r = canonical(ref); return repeats(r) ? JSON.stringify([r.kind, r.id]) : key(r); }
   function sources(forDay) {
     const d = S().data(), out = [], dayKey = forDay || selectedDay || M().userDay();
     (d.queue || []).filter(t=>!t.memoDismissed&&!t.archived&&!App.memoReview?.hidden(t,t.assignment?.list)&&(!t.assignment||t.assignment.day===dayKey)).forEach(t => out.push({ ref: { kind: 'queue', id: t.id }, title: t.text, label: '队列 · ' + t.text }));
+    (App.memoThree?.items(dayKey)||[]).filter(x=>!x.task.done).forEach(x=>out.push({ref:x.ref,title:x.task.text,label:'三天计划 · '+x.task.text}));
     const day = S().getDay(dayKey);
     ['required', 'ideal', 'extra'].forEach(list => (day.tasks[list] || []).filter(t => !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed && !App.memoReview?.hidden(t,list)).forEach(t => { const found = resolve({ kind: 'task', id: t.id, day: dayKey, list }); if (found) out.push({ ref: found.ref, title: found.task.text, label: '当天 · ' + found.task.text }); }));
     (d.daily || []).filter(t=>!t.archived).forEach(t => out.push({ ref: { kind: 'daily', id: t.id, day: dayKey }, title: t.text, label: '基础 · ' + t.text }));
@@ -306,7 +309,8 @@
   function frame(day, now = Date.now()) {
     const dayMs = dayStart(day), focus = focusMinute == null ? (day === (S().data().memoFlow ? M().userDay(now) : M().naturalDay(now)) ? (now - dayMs) / 60000 : 720) : focusMinute;
     const span = rangeHours * 60, from = Math.max(0, Math.min(1440 - span, Math.floor((focus - span / 3) / 30) * 30));
-    return { dayMs, from, to: from + span, scale: 1.2 };
+    const height = Math.max(240, Math.min(660, (window.visualViewport?.height || window.innerHeight || 844) - 330));
+    return { dayMs, from, to: from + span, scale: rangeHours === 24 ? (fullDayHeight ?? height) / 1440 : 1.2 };
   }
   function legacyRecords(day) {
     const user = !!S().data().memoFlow, base = dayStart(day), end = base + 86400000;
@@ -363,7 +367,7 @@
   }
   function completeRef(ref) {
     const found = resolve(ref); if (!found) return App.ui.toast('原任务已移动或删除'); const r = found.ref;
-    return r.kind === 'checkin' ? App.memoActions.checkin(r.id,r.day) : r.kind === 'project' ? App.memoActions.project(r.id, r.day) : r.kind === 'queue' ? App.memoActions.queue(r.id) : r.kind === 'daily' ? App.memoActions.daily(r.id, r.day) : App.memoActions.task(r.list, r.id, r.day);
+    return r.kind === 'three' ? App.memoActions.three(r.id) : r.kind === 'checkin' ? App.memoActions.checkin(r.id,r.day) : r.kind === 'project' ? App.memoActions.project(r.id, r.day) : r.kind === 'queue' ? App.memoActions.queue(r.id) : r.kind === 'daily' ? App.memoActions.daily(r.id, r.day) : App.memoActions.task(r.list, r.id, r.day);
   }
   function confirmEnd(ref, sessionId = null) {
     if(App.memoActions.busy())return App.ui.toast('请先重试保存当前操作');
@@ -512,12 +516,19 @@
           return '<button type="button" class="schedule-block ' + (isExecution?'schedule-execution ':'') + (marker ? 'completion-marker ' : e.legacy ? 'schedule-legacy ' : 'schedule-new ') + (e.planned ? 'schedule-is-plan ' : '') + (e.aggregate ? 'schedule-aggregate ' : '') + (e.members ? 'schedule-density-group ' : '') + (e.type === 'point' ? 'schedule-point ' : '') + (short ? 'schedule-short ' : '') + (liveStart != null ? 'schedule-running ' : '') + '" style="top:' + ((e.start-f.from)*f.scale) + 'px;height:' + (marker ? 42 : height) + 'px;left:' + (e.column*100/e.columns) + '%;width:calc(' + (100/e.columns) + '% - 3px)" data-task-token="'+esc(e.taskToken||'')+'" data-sc="' + (group === null ? 'card' : 'density-group') + '" data-density="' + group + '" data-card="' + esc(e.card) + '" title="' + esc(label + ' · ' + displayTitle + (e.members ? '；展开查看每条起止时间' : '')) + '" aria-label="查看：' + esc(label + ' · ' + displayTitle + (e.members ? '；展开查看每条起止时间' : '')) + '"' + (liveStart != null ? ' data-live-start="' + liveStart + '"' : '') + '><small>' + esc(marker ? stamp : liveStart != null ? '执行中 · '+stamp : e.members ? '展开查看' : isExecution?stamp+'—'+time(e.originalEnd):kind) + '</small><span>' + esc((e.part?'第'+e.part+'段 · ':'')+displayTitle) + '</span></button>';
         }).join('');
       }
-      const chart = '<div class="schedule-chart" data-mode="' + view + '"><div class="schedule-legend"><span class="schedule-time-heading">时间</span><strong class="schedule-plan-heading">预计</strong><strong class="schedule-actual-heading">计时</strong><strong class="schedule-completion-heading">完成</strong></div><div class="schedule-axis" style="height:' + (f.to - f.from) * f.scale + 'px"><div class="schedule-hours">' + Array.from({ length: Math.floor((f.to - f.from) / 60) + 1 }, (_, i) => { const minute = f.from + i * 60; return '<span style="top:' + i * 60 * f.scale + 'px">' + ((S().data().memoFlow && minute >= 1200 ? '次日' : '') + S().hhmmOf((minute + (S().data().memoFlow ? 240 : 0)) % 1440)) + '</span>'; }).join('') + '</div><div class="schedule-lane schedule-plan-lane" aria-label="预计安排">' + blocks(planned) + '</div><div class="schedule-lane schedule-actual-lane" aria-label="实际计时与来源记录">' + blocks(actual) + '</div><div class="schedule-lane schedule-completion-lane" aria-label="完成时刻">' + blocks(completed, true) + '</div><div id="schedule-now"></div></div></div>';
+      const chart = '<div class="schedule-chart" data-mode="' + view + '" data-range="' + rangeHours + '" style="--schedule-hour:' + (60*f.scale) + 'px"><div class="schedule-legend"><span class="schedule-time-heading">时间</span><strong class="schedule-plan-heading">预计</strong><strong class="schedule-actual-heading">计时</strong><strong class="schedule-completion-heading">完成</strong></div><div class="schedule-axis" style="height:' + (f.to - f.from) * f.scale + 'px"><div class="schedule-hours">' + Array.from({ length: Math.floor((f.to - f.from) / 60) + 1 }, (_, i) => { const minute = f.from + i * 60; return '<span style="top:' + i * 60 * f.scale + 'px">' + ((S().data().memoFlow && minute >= 1200 ? '次日' : '') + S().hhmmOf((minute + (S().data().memoFlow ? 240 : 0)) % 1440)) + '</span>'; }).join('') + '</div><div class="schedule-lane schedule-plan-lane" aria-label="预计安排">' + blocks(planned) + '</div><div class="schedule-lane schedule-actual-lane" aria-label="实际计时与来源记录">' + blocks(actual) + '</div><div class="schedule-lane schedule-completion-lane" aria-label="完成时刻">' + blocks(completed, true) + '</div><div id="schedule-now"></div></div></div>';
       const status = { running: '执行中', paused: '已暂停', ended: '本段已结束' };
       const button = (act, id, text, primary = false) => '<button class="btn btn-small' + (primary ? ' btn-primary' : '') + '" data-sc="' + act + '" data-id="' + esc(id) + '">' + text + '</button>';
       const allWaiting=unscheduled(selectedDay),waiting=allWaiting.filter(x=>!keyword||x.title.toLocaleLowerCase().includes(keyword.toLocaleLowerCase()));
       root.innerHTML = '<div class="schedule-header"><h2>时间轴</h2><div class="memo-queue-actions">' + button('add', '', '＋ 安排时间', true) + button('legacy-add', '', '补记时段') + '</div></div><p class="hint schedule-explanation">北京时间04:00分日 · 预计安排、实际计时、完成时刻分轨；完成点不代表用时。</p><div class="schedule-toolbar"><input type="date" id="schedule-date" aria-label="时间线日期" data-transient="true" value="' + selectedDay + '">' + button('today', '', '今天') + button('now', '', '现在') + '<select id="schedule-view" aria-label="时间轴视图"><option value="combined">综合：预计／计时／完成</option><option value="compare">对照：计时／预计／完成</option><option value="plan">图表：计划</option><option value="actual">图表：计时与完成</option></select><select id="schedule-range" aria-label="显示时间范围"><option value="4">附近4小时</option><option value="8">附近8小时</option><option value="24">全天</option></select>' + button('prev', '', '前一段') + button('next', '', '后一段') + '</div><details class="schedule-filters"><summary>筛选与备份</summary><input type="search" id="schedule-keyword" aria-label="筛选时间记录" placeholder="搜索任务或记录" data-transient="true"><label><input type="checkbox" id="schedule-legacy">显示旧时间记录</label><label><input type="checkbox" id="schedule-hidden">包括已隐藏记录</label>' + button('backup', '', '下载完整备份') + button('import', '', '导入完整备份') + button('csv', '', '导出旧记录CSV') + '</details><button class="btn btn-small" id="schedule-retry" data-sc="retry" hidden>重试保存</button>' + chart + '<div class="schedule-cards">' + records.completions.map(e => '<article class="schedule-card" id="schedule-card-c-' + esc(e.id) + '"><span class="schedule-kind">勾选完成</span><strong>' + esc(e.title) + '</strong><p>' + esc(M().naturalDay(e.at) + ' ' + time(Date.parse(e.at))) + (e.sourceDay !== selectedDay ? ' · 任务日期 ' + esc(e.sourceDay) : '') + '</p>'+executionHTML(e.timing)+'</article>').join('') + records.plans.map(p => '<article class="schedule-card" id="schedule-card-p-' + esc(p.id) + '"><span class="schedule-kind">计划</span><strong>' + esc(find(p.ref)?.text || p.title) + '</strong><p>' + esc(time(p.start) + (p.end ? '—' + (M().naturalDay(p.end) !== p.day ? '次日' : '') + time(p.end) : ' · 时间点')) + ' · <span data-plan-clock="' + esc(p.id) + '"></span></p><div class="memo-queue-actions">' + (find(p.ref) ? (isDone(p) ? '' : button('start', p.id, '开始本段')) + button('complete', p.id, isDone(p) ? '取消任务完成' : '完成任务', true) : '<span>原任务已移动或删除</span>') + button('edit', p.id, '改时间') + button('unschedule', p.id, '移除安排') + '</div></article>').join('') + records.sessions.map(s => '<article class="schedule-card" id="schedule-card-s-' + esc(s.id) + '"><span class="schedule-kind">执行' + (s.itemId ? ' · 关联计划' : ' · 未预先安排') + '</span><strong>' + esc(s.title) + '</strong><p>' + status[s.status] + ' · <span data-schedule-elapsed="' + esc(s.id) + '">' + duration(elapsed(s)) + '</span></p><details class="execution-detail"><summary>执行片段（'+s.chunks.length+'段）</summary><p class="hint">' + s.chunks.map(c => esc(M().naturalDay(c.start) + ' ' + time(c.start) + '—' + (c.end == null ? '进行中' : (M().naturalDay(c.end) !== M().naturalDay(c.start) ? M().naturalDay(c.end) + ' ' : '') + time(c.end)))).join('；') + '</p></details><div class="memo-queue-actions">' + (s.status === 'running' ? button('pause-session', s.id, '暂停') : s.status === 'paused' ? button('resume-session', s.id, '继续计时') : '') + (s.status !== 'ended' ? button('stop-session', s.id, '结束本段') : '') + (find(s.ref) ? button('complete-session', s.id, isDone(s) ? '取消任务完成' : '完成任务') : '<span>原任务已删除；执行记录保留</span>') + '</div></article>').join('') + (showLegacy ? records.legacy.map(x => '<article class="schedule-card schedule-old-card" id="schedule-card-l-' + esc(x.id) + '"><span class="schedule-kind">' + (x.record.hourPlanId ? '小时代汇总 · 不重复累计' : x.record.auto ? '原版自动记录' : '手动时间记录') + (x.record.memoHidden ? ' · 已隐藏' : '') + '</span><strong>' + esc(x.record.content) + '</strong><p>' + esc(S().hhmmOf(x.record.start) + '—' + S().hhmmOf(x.record.end)) + ' · 原记录 ' + esc(x.record.minutes ?? 0) + ' 分钟</p>' + button('legacy-edit', x.id, '查看／编辑') + '</article>').join('') : '') + '</div><details class="card schedule-waiting"><summary>未排时间（' + (keyword?'匹配 '+waiting.length+'／共 '+allWaiting.length:allWaiting.length) + '）</summary>' + waiting.map((x, i) => '<div class="memo-queue-row"><small>'+esc(x.ref.kind==='queue'&&!find(x.ref)?.assignment?'尚未安排到当天的队列':'所选日期任务')+'</small><strong>' + esc(x.title) + '</strong> <button class="btn btn-small" data-sc="arrange" data-index="' + i + '">安排时间</button><button class="btn btn-small" data-sc="start-now" data-index="' + i + '">现在开始</button></div>').join('') + '</details>';
       foldDetails(root, records, expanded); root.dataset.foldDay = selectedDay;
+      const toolbar=root.querySelector('.schedule-toolbar'), controls=document.createElement('div');
+      controls.className='schedule-display-controls';controls.setAttribute('aria-label','时间轴显示选项');
+      [...toolbar.children].filter(el=>!['schedule-date'].includes(el.id)&&el.dataset.sc!=='today').forEach(el=>controls.appendChild(el));
+      root.querySelector('.schedule-chart').after(controls);
+      root.querySelector('.schedule-filters').before(root.querySelector('.schedule-chart'));
+      root.querySelector('.schedule-filters').before(controls);
+      controls.querySelectorAll('[data-sc=prev],[data-sc=next]').forEach(el=>el.hidden=rangeHours===24);
       const q = id => root.querySelector('#' + id); q('schedule-view').value = view; q('schedule-range').value = String(rangeHours); q('schedule-keyword').value = keyword; q('schedule-legacy').checked = showLegacy; q('schedule-hidden').checked = showHidden;
       q('schedule-date').onchange = e => { if (M().validDate(e.target.value)) { selectedDay = e.target.value; focusMinute = null; render(); } };
       q('schedule-view').onchange = e => { view = e.target.value; render(); }; q('schedule-range').onchange = e => { rangeHours = Number(e.target.value); render(); };
@@ -548,13 +559,22 @@
         if (act === 'point-group') { const items = pointGroups[Number(b.dataset.group)] || []; App.ui.openModal('同刻任务', items.map(item => '<p>' + esc(item.title) + '</p>').join(''), '<button class="btn" data-act="close">关闭</button>'); App.ui.bindActions({ close: App.ui.closeModal }); return; }
         if (act === 'card') { const card = document.getElementById('schedule-card-' + b.dataset.card); for (let el = card?.parentElement; el && el !== root; el = el.parentElement) if (el.tagName === 'DETAILS') el.open = true; card?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
       };
+      if(rangeHours===24&&root.getBoundingClientRect().height>0){
+        const graph=root.querySelector('.schedule-chart'),axis=root.querySelector('.schedule-axis');
+        const graphBox=graph.getBoundingClientRect(),axisBox=axis.getBoundingClientRect();
+        const viewportHeight=window.visualViewport?.height||window.innerHeight;
+        const navHeight=document.querySelector('.app-bottom-nav')?.getBoundingClientRect().height||64;
+        const available=Math.max(180,Math.min(660,viewportHeight-navHeight-16-(graphBox.top+window.scrollY)-(graphBox.height-axisBox.height)));
+        if(fullDayHeight===null||Math.abs(fullDayHeight-available)>1){fullDayHeight=available;return render();}
+      }
       tick();
     } catch (e) { root.textContent = e.message; }
   }
   function setMode(value) { mode = value; $('memo-schedule-panel').hidden = !value; if (value) render(); }
-  function open(options = {}) { selectedDay = options.day || selectedDay || M().userDay(); focusMinute = options.focusMinute ?? null; if (options.legacy) { showLegacy = true; view = 'combined'; } if (!options.workspace) { App.app.switchView('timeline'); return open(Object.assign({}, options, { workspace: true })); } setMode(true); }
+  function open(options = {}) { if(options.workspace && !options.day && options.focusMinute==null){rangeHours=24;view='combined';}else if(options.focusMinute!=null)rangeHours=4; selectedDay = options.day || selectedDay || M().userDay(); focusMinute = options.focusMinute ?? null; if (options.legacy) { showLegacy = true; view = 'combined'; } if (!options.workspace) { App.app.switchView('timeline'); return open(Object.assign({}, options, { workspace: true })); } setMode(true); }
   function init() {
-    selectedDay = M().userDay(); rangeHours = 4; view = 'combined'; $('task-list-switch').onclick = () => setMode(false); $('task-schedule-switch').onclick = () => open(); $('memo-trash-open').onclick = () => App.memoActions.trash();
+    window.addEventListener('resize',()=>{if(mode&&rangeHours===24)render();});
+    selectedDay = M().userDay(); rangeHours = 24; view = 'combined'; $('task-list-switch').onclick = () => setMode(false); $('task-schedule-switch').onclick = () => open(); $('memo-trash-open').onclick = () => App.memoActions.trash();
     $('schedule-active').onclick = () => { const d = state(), session = active() || d.sessions.find(s => s.status === 'paused'); if (session) { selectedDay = M().userDay(session.chunks[session.chunks.length - 1].start); focusMinute = (session.chunks[session.chunks.length - 1].start - dayStart(selectedDay)) / 60000; App.app?.switchView('tasks'); open({ day: selectedDay, focusMinute, focusCard: 's-' + session.id }); } };
     document.addEventListener('click', async e => {
       const button = e.target.closest('[data-schedule-command]'); if (!button) return;

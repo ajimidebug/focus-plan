@@ -14,10 +14,11 @@ function manage(){
  const ref=found.ref,timing=A.memoSchedule.timing(ref),session=timing.session;
  const attrs=' data-schedule-ref="'+A.store.esc(JSON.stringify(ref))+'"';
  const end=session&&session.status!=='ended'?'<button type="button" class="btn" data-schedule-command="end"'+attrs+'>结束计时</button>':'';
- const m=A.ui.openModal('计时管理 · '+found.task.text,'<p>'+A.store.esc(found.task.text)+'</p><p>'+(selected.status==='waiting'?'待开始':session?.status==='running'?'正在计时':'已暂停')+' · 累计 '+clock(timing.totalMs)+'</p><button type="button" class="btn btn-primary" data-schedule-command="'+(session?.status==='running'?'pause':'start')+'" data-queue-start="'+!!A.memoWorkspace?.currentQueueItem()+'"'+attrs+'>'+(session?.status==='running'?'暂停计时':session?.status==='paused'?'继续计时':'开始计时')+'</button>'+end+'<button class="btn" data-float-task>任务、备注与完成</button>','<button class="btn" data-act="close">关闭</button>');
+ const m=A.ui.openModal('计时管理 · '+found.task.text,'<p>'+A.store.esc(found.task.text)+'</p><p>'+(selected.status==='waiting'?'待开始':session?.status==='running'?'正在计时':'已暂停')+' · 累计 '+clock(timing.totalMs)+'</p><button type="button" class="btn btn-primary" data-schedule-command="'+(session?.status==='running'?'pause':'start')+'" data-queue-start="'+!!A.memoWorkspace?.currentQueueItem()+'"'+attrs+'>'+(session?.status==='running'?'暂停计时':session?.status==='paused'?'继续计时':'开始计时')+'</button>'+end+'<div class="float-task-actions"><button class="btn" data-float-task>任务与备注</button><button class="btn btn-primary" data-float-complete>完成任务</button></div>','<button class="btn" data-act="close">关闭</button>');
  m.classList.add('float-management-modal');
  A.ui.bindActions({close:()=>A.ui.closeModal()});
- m.querySelector('[data-float-task]').onclick=()=>{A.ui.closeModal();if(ref.kind==='checkin')A.memoActions.checkin(ref.id,ref.day);else A.memoWorkspace.complete(ref);};
+ m.querySelector('[data-float-task]').onclick=()=>{A.ui.closeModal();if(ref.kind==='checkin')A.memoActions.checkin(ref.id,ref.day);else A.memoWorkspace.editor(ref);};
+ m.querySelector('[data-float-complete]').onclick=()=>{A.ui.closeModal();A.memoWorkspace.complete(ref);};
 }
 const clock = ms => { const s = Math.floor(Math.max(0, ms) / 1000); return Math.floor(s / 3600) + ':' + String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
 // Anchor to the visible viewport, including when a mobile keyboard reduces it.

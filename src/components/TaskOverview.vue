@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import OverviewTask from './OverviewTask.vue'
+import ThreeDayColumn from './ThreeDayColumn.vue'
 const props=defineProps<{day:string;revision:number}>()
 const A=()=>window.App
 const lists=[{key:'required',name:'必须',symbol:'✅',full:'必做任务'},{key:'ideal',name:'理想',symbol:'⭐',full:'理想任务'},{key:'extra',name:'拓展',symbol:'🌱',full:'长期拓展'}]
@@ -23,7 +24,7 @@ function habitRow(it:any,r:any,n:number,day:string){
  const points=A().checkin?.memoPoints(it,day)??0
  return {it,r,n,mode,target,achieved,continuing,points,limit:limits.rewardLimit}
 }
-const columns=computed(()=>{void props.revision;return lists.map(col=>{
+const columns=computed(()=>{void props.revision;return lists.filter(col=>col.key!=='extra').map(col=>{
  const items=A().memoWorkspace.taskItems(props.day,col.key)
  const active=items.filter((x:any)=>!x.deferred&&!done(x))
  const normal=active.filter((x:any)=>!A().memoFinance.deferredTarget(x.task,x.ref,props.day))
@@ -84,6 +85,7 @@ const columns=computed(()=>{void props.revision;return lists.map(col=>{
         </details>
         <q-btn flat dense no-caps class="overview-add" :aria-label="'概览：添加'+col.name+'任务'" @click.stop="A().memoWorkspace.editor(null,col.key)">＋ 添加</q-btn>
       </q-card>
+      <ThreeDayColumn :day="day" :revision="revision" />
     </div>
   </section>
 </template>
