@@ -61,12 +61,12 @@ for(const width of [320,390,1280]){
    App.memoSchedule.startRef({kind:'task',id:'priority-high',day:'2026-11-04',list:'required'},Date.now()-67*60000);
    App.memoSchedule.tick();
  });
- await page.locator('#mw-live .float-toggle').click();
+ await page.locator('#mw-live [data-float-mode=full]').click();
  assert(await page.locator('#mw-live .float-hour-note').isVisible(),'second-hour hint is visible');
  assert(await page.locator('#mw-live .float-complete').isVisible(),'task and completion shortcut visible');
  assert((await page.locator('#mw-live .float-meter-track').evaluate(el=>el.getBoundingClientRect().height))>=8,'timer ruler is visible');
  assert.equal(await page.locator('#mw-live [data-schedule-command=pause]').count(),1,'pause is available');
- await page.evaluate(()=>{App.memoSchedule.stopRef({kind:'task',id:'priority-high',day:'2026-11-04',list:'required'});App.memoSchedule.tick();});
+ await page.evaluate(()=>{App.memoSchedule.stopRef({kind:'task',id:'priority-high',day:'2026-11-04',list:'required'});App.memoSchedule.tick();App.memoFloat.setMode('mini');});
  const axe=await new AxeBuilder({page}).include('.app-topbar').include('.app-bottom-nav').include('.framework-overview').withTags(['wcag2a','wcag2aa']).analyze();fs.writeFileSync('test-results/axe-'+width+'.json',JSON.stringify(axe,null,2));assert.deepEqual(axe.violations.filter(v=>['critical','serious'].includes(v.impact)).map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[],'new framework accessibility');
  await page.screenshot({path:'test-results/tasks-'+width+'.png',fullPage:true});
  for(const view of ['memo','timeline','checkin','memo-history','calendar','stats','cards','mistakes','sport','memo-review','settings','tasks']){

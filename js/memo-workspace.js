@@ -20,61 +20,50 @@
   let execExpanded=false;
   function execEntries(){const x=S().data().memoExecutionQueue;if(x===undefined)return [];if(!Array.isArray(x))throw Error('执行队列数据异常，请下载备份');return x;}
   const execKey=ref=>A.memoSchedule.key(ref);
-  // Session-local intent. Reload restores recorded time but never auto-starts next task.
-  let queueExecution=null;
-  const currentQueueSession=()=>queueExecution&&A.memoSchedule.state().sessions.find(s=>s.id===queueExecution.sessionId);
+  function currentQueueItem(){
+    const ref=S().data().memoExecutionCurrent;
+    if(!ref)return null;
+    const entry=execEntries().find(e=>{const x=execResolve(e);return x&&execKey(x.ref)===execKey(ref);});
+    const found=entry&&execResolve(entry);
+    return found&&!doneFor(found.task,found.ref)?found:null;
+  }
+  function selectQueueCore(ref){
+    if(!execHas(ref))return;
+    S().data().memoExecutionCurrent=A.memoSchedule.canonical(ref);
+    delete S().data().memoExecutionWaiting;
+  }
   function captureQueueAdvance(ref){
-    if(!queueExecution||queueExecution.key!==execKey(ref))return null;
-    const session=currentQueueSession();
-    if(!session||!['running','paused'].includes(session.status)||execKey(session.ref)!==queueExecution.key)return null;
-    return {key:queueExecution.key,sessionId:session.id,running:session.status==='running'};
+    const current=currentQueueItem();
+    if(current)return execKey(current.ref)===execKey(ref)?{key:execKey(ref)}:null;
+    const first=execEntries().map(execResolve).find(x=>x&&!doneFor(x.task,x.ref));
+    if(first&&execKey(first.ref)===execKey(ref))return {key:execKey(ref)};
+    const running=(S().data().memoSchedule?.sessions||[]).find(s=>s.status==='running'&&execKey(s.ref)===execKey(ref));
+    return running&&execHas(ref)?{key:execKey(ref)}:null;
   }
-  function timerStarted(ref,fromQueue=false){
-    const key=execKey(ref);
-    const running=A.memoSchedule.state().sessions.find(s=>s.status==='running'&&execKey(s.ref)===key);
-    if(fromQueue){
-      if(!running||!execEntries().some(e=>{const x=execResolve(e);return x&&execKey(x.ref)===key;}))return;
-      queueExecution={key,sessionId:running.id};
-    }else if(queueExecution){
-      if(key!==queueExecution.key)queueExecution=null;
-      else if(running)queueExecution.sessionId=running.id;
-    }
-    render();
+  function advanceQueueCore(captured){
+    if(!captured)return;
+    const next=execEntries().map(execResolve).find(x=>x&&!doneFor(x.task,x.ref));
+    if(next){S().data().memoExecutionCurrent=next.ref;S().data().memoExecutionWaiting=true;}
+    else {delete S().data().memoExecutionCurrent;delete S().data().memoExecutionWaiting;}
   }
-  function timerEnded(ref){
-    if(queueExecution&&queueExecution.key===execKey(ref)){queueExecution=null;render();}
+  function waitingQueue(){
+    const found=currentQueueItem();if(!found)return null;
+    const session=A.memoSchedule.timing(found.ref).session;
+    if(!S().data().memoExecutionWaiting&&session&&session.status!=='ended')return null;
+    return found;
   }
-  async function queueSettled(ref,captured){
-    if(!captured||!queueExecution||queueExecution.key!==captured.key||queueExecution.sessionId!==captured.sessionId)return;
-    queueExecution=null;
-    if(!captured.running||A.memoActions.busy())return;
-    const candidates=execEntries().map(execResolve).filter(Boolean).filter(x=>!doneFor(x.task,x.ref));
-    for(const item of candidates){
-      if(A.memoSchedule.state().sessions.some(s=>s.status==='running'))return;
-      try{A.memoReview?.assertExecutable(item.ref);}catch(_){continue;}
-      let started=null;const startAt=Date.now();
-      try{
-        const saved=await A.memoActions.commit(()=>{started=A.memoSchedule.startRef(item.ref,startAt);});
-        if(!saved){render();return;}
-        if(started?.status==='running'){
-          queueExecution={key:execKey(item.ref),sessionId:started.id};
-          render();A.memoSchedule.render();return;
-        }
-      }catch(error){
-        if(A.memoActions.busy()){
-          // A failed save may leave the proposed chunk in memory: freeze it
-          // at its start rather than show an unconfirmed running timer.
-          if(started?.status==='running')A.memoSchedule.pauseCore(started,startAt);
-          const message='上一项已保存，下一项计时尚未确认保存。请重试保存，再手动继续。';
-          if($('mw-error'))$('mw-error').textContent=message;
-          A.ui.toast(message);render();A.memoSchedule.render();return;
-        }
-        if(!A.memoSchedule.resolve(item.ref))continue;
-        A.ui.toast('下一项计时未启动：'+error.message);
-        render();return;
-      }
-    }
-    render();
+  function timerStarted(){render();A.memoSchedule.tick();}
+  function timerEnded(){render();A.memoSchedule.tick();}
+  async function queueSettled(){render();A.memoSchedule.tick();}
+  function clearExecCore(now=Date.now()){
+    const keys=new Set(execEntries().map(execResolve).filter(Boolean).map(x=>execKey(x.ref)));
+    (S().data().memoSchedule?.sessions||[]).filter(s=>s.status==='running'&&keys.has(execKey(s.ref))).forEach(s=>A.memoSchedule.pauseCore(s,now));
+    S().data().memoExecutionQueue=[];
+    delete S().data().memoExecutionCurrent;delete S().data().memoExecutionWaiting;
+  }
+  function clearExec(){
+    const count=execEntries().length;if(!count)return;
+    A.ui.confirm('清空执行队列中的 '+count+' 项安排？队列中正在计时的项目将暂停，已记录时段和原任务保留。','清空队列',()=>commit(()=>clearExecCore()));
   }
   function execResolve(entry){
     if(!entry?.ref||typeof entry.ref!=='object')return null;
@@ -93,11 +82,13 @@
   }
   function pruneExec(){
     if(S().data().memoExecutionQueue===undefined)return;
+    const hadCurrent=!!S().data().memoExecutionCurrent;
     const seen=new Set();
     S().data().memoExecutionQueue=execEntries().filter(e=>{
       const x=execResolve(e);if(!x||doneFor(x.task,x.ref))return false;
       const key=execKey(x.ref);if(seen.has(key))return false;seen.add(key);return true;
     });
+    if(hadCurrent&&!currentQueueItem())advanceQueueCore({});
   }
   function execAppend(refs){
     const existing=new Set(execEntries().map(execResolve).filter(Boolean).map(x=>execKey(x.ref)));
@@ -108,6 +99,7 @@
       const key=execKey(x.ref);
       if(!existing.has(key)){const entry={ref:x.ref,pinned:false};if(x.ref.kind==='checkin')entry.habitCount=Number(x.task.days?.[x.ref.day])||0;(S().data().memoExecutionQueue||(S().data().memoExecutionQueue=[])).push(entry);existing.add(key);}
     }
+    if(!currentQueueItem())advanceQueueCore({});
   }
   function execAdd(ref){
     if(A.memoActions.busy())return A.ui.toast('请先重试保存');
@@ -119,14 +111,14 @@
     const saved=await commit(()=>{
       const arr=execEntries(),key=execKey(ref),i=arr.findIndex(e=>{const x=execResolve(e);return x&&execKey(x.ref)===key;});
       if(i<0)throw Error('这项任务已经移出队列');
-      if(act==='skip'){captured=captureQueueAdvance(ref);if(captured)A.memoSchedule.stopRef(ref);arr.splice(i,1);return;}
+      if(act==='skip'){captured=captureQueueAdvance(ref);if(captured)A.memoSchedule.stopRef(ref);arr.splice(i,1);advanceQueueCore(captured);return;}
       if(act==='pin'){arr[i].pinned=!arr[i].pinned;arr.sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned));return;}
       if(act==='tail'){const item=arr.splice(i,1)[0];item.pinned=false;arr.push(item);return;}
       const j=i+(act==='up'?-1:1);
       if(j>=0&&j<arr.length&&!!arr[i].pinned===!!arr[j].pinned)[arr[i],arr[j]]=[arr[j],arr[i]];
     });
     if(saved&&act==='skip'&&captured)await queueSettled(ref,captured);
-    if(!saved&&captured)queueExecution=null;
+
     return saved;
   }
   function execPick(){
@@ -195,11 +187,11 @@
       const ref=found.ref,attr=refAttrs(ref),isHabit=ref.kind==='checkin';
       const category=isHabit?(A.memoFinance?.plans(ref.day).find(p=>p.it.id===ref.id)?.r.list||'extra'):ref.list||found.task.assignment?.list||((ref.kind==='project'||ref.kind==='daily')?found.task.memoCategoryDays?.[ref.day]||'extra':'queue');
       const session=A.memoSchedule.timing(ref).session;
-      const live=session?.status==='running'?' · 执行中':session?.status==='paused'?' · 暂停中':'';
-      const current=queueExecution?.key===execKey(ref);
-      return '<div class="mw-exec-item" data-category="'+esc(category)+'"><i class="mw-exec-color" aria-hidden="true"></i><div class="mw-exec-info"><strong>'+(entry.pinned?'📌 ':'')+(i+1)+'. '+esc(found.task.text)+'</strong><small>'+esc(names[category]||'待安排')+(isHabit?' · 习惯':'')+(current?' · 当前计时':'')+live+(ref.day?' · '+esc(ref.day):'')+'</small></div><div class="mw-exec-actions"><button type="button" class="btn btn-small" data-schedule-command="start" data-schedule-ref="'+esc(JSON.stringify(ref))+'"'+(session?.status==='paused'?' data-session-id="'+esc(session.id)+'"':'')+(session?.status==='running'?' disabled aria-label="正在计时"':'')+'>▶ 开始／继续</button>'+(isHabit?button('exec-checkin','打卡',attr):button('exec-complete','完成',attr))+button('exec-skip','跳过',attr)+'</div>'+button('exec-menu','⋯',attr+' aria-label="队列操作：'+esc(found.task.text)+'"')+'</div>';
+      const current=currentQueueItem()&&execKey(currentQueueItem().ref)===execKey(ref);
+      const live=current&&waitingQueue()?' · 待开始':session?.status==='running'?' · 执行中':session?.status==='paused'?' · 暂停中':'';
+      return '<div class="mw-exec-item" data-category="'+esc(category)+'"><i class="mw-exec-color" aria-hidden="true"></i><div class="mw-exec-info"><strong>'+(entry.pinned?'📌 ':'')+(i+1)+'. '+esc(found.task.text)+'</strong><small>'+esc(names[category]||'待安排')+(isHabit?' · 习惯':'')+(current?' · 当前项':'')+live+(ref.day?' · '+esc(ref.day):'')+'</small></div><div class="mw-exec-actions"><button type="button" class="btn btn-small" data-schedule-command="start" data-schedule-ref="'+esc(JSON.stringify(ref))+'"'+(session?.status==='paused'?' data-session-id="'+esc(session.id)+'"':'')+(session?.status==='running'?' disabled aria-label="正在计时"':'')+'>▶ 开始／继续</button>'+(isHabit?button('exec-checkin','打卡',attr):button('exec-complete','完成',attr))+button('exec-skip','跳过',attr)+'</div>'+button('exec-menu','⋯',attr+' aria-label="队列操作：'+esc(found.task.text)+'"')+'</div>';
     };
-    return '<section class="card mw-exec-board" aria-label="执行队列"><div class="mw-exec-head"><h2>执行队列 <small>· '+rows.length+' 项'+(queueExecution?' · '+(currentQueueSession()?.status==='paused'?'已暂停':'连续计时中'):'')+'</small></h2>'+button('search','检索任务','aria-label="检索任务"')+button('exec-pick','＋ 添加任务')+'</div>'+(rows.length?visible.map(renderItem).join(''):'<p class="hint">尚无执行队列任务。可从三栏加入，不改变原安排。</p>')+(rows.length>5?button('exec-expand',execExpanded?'收起':'展开其余 '+(rows.length-5)+' 项'):'')+'</section>';
+    return '<section class="card mw-exec-board" aria-label="执行队列"><div class="mw-exec-head"><h2>执行队列 <small>· '+rows.length+' 项'+(currentQueueItem()?' · '+(waitingQueue()?'待开始':'已选择当前项'):'')+'</small></h2>'+button('search','检索任务','aria-label="检索任务"')+button('exec-pick','＋ 添加任务')+(rows.length?button('exec-clear','清空队列'):'')+'</div>'+(rows.length?visible.map(renderItem).join(''):'<p class="hint">尚无执行队列任务。可从三栏加入，不改变原安排。</p>')+(rows.length>5?button('exec-expand',execExpanded?'收起':'展开其余 '+(rows.length-5)+' 项'):'')+'</section>';
   }
 
   async function commit(fn, retry = false) { if (A.memoActions.busy() && !retry) { A.ui.toast('请先重试保存当前操作'); return false; } try { if (await A.memoActions.commit(fn)) { $('mw-error').textContent = ''; render(); A.app.refreshStats(); A.memoSchedule.render(); return true; } }
@@ -627,6 +619,7 @@
       if (b) { e.preventDefault(); e.stopImmediatePropagation(); const act = b.dataset.mw, ref = b.dataset.ref ? JSON.parse(b.dataset.ref) : null;
         if(act==='open-queue')return showPane('queue');
         if(act==='exec-pick')return execPick();
+        if(act==='exec-clear')return clearExec();
         if(act==='exec-add')return execAdd(ref);
         if(act==='exec-menu')return execMenu(ref);
         if(act==='exec-checkin')return complete(ref);
@@ -664,5 +657,5 @@
     A.memoReview?.init();A.memoRecurrence?.init();
     render();
   }
-  A.memoWorkspace = { captureQueueAdvance, queueSettled, timerStarted, timerEnded, pruneExec, execAdd, execHas, execHTML, setDay, assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
+  A.memoWorkspace = { currentQueueItem, selectQueueCore, advanceQueueCore, waitingQueue, clearExecCore, captureQueueAdvance, queueSettled, timerStarted, timerEnded, pruneExec, execAdd, execHas, execHTML, setDay, assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
 })();

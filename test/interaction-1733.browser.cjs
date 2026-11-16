@@ -63,7 +63,7 @@ async function run(){
    check(await meter.getAttribute('aria-valuenow')===null,'overtime has no completion percent '+width);
    check(Math.abs(await page.locator('.float-meter-fill').evaluate(e=>parseFloat(e.style.width))-65)<1,'cumulative 52 minutes fills 65 percent of 80 minute axis '+width);
    check(await meter.evaluate(e=>getComputedStyle(e,'::after').backgroundImage!=='none'),'ticks overlay fill '+width);
-   if(await page.locator('#mw-live').evaluate(e=>e.classList.contains('float-collapsed')))await page.locator('[data-float-toggle]').click();
+   if(await page.locator('#mw-live').evaluate(e=>e.classList.contains('float-collapsed')))await page.locator('[data-float-mode="full"]').click();
    check(/40分钟 · 超时 12分/.test(await page.locator('.float-meter-text').innerText()),'overtime scope explicit '+width);
    await page.evaluate(()=>{const P=App.memoSchedule,s=P.timing({kind:'queue',id:'meter'}).session;P.pauseCore(s,Date.now());P.tick();});
    const paused=await page.locator('.float-meter-fill').evaluate(e=>e.style.width);await page.clock.runFor(2500);await page.evaluate(()=>App.memoSchedule.tick());

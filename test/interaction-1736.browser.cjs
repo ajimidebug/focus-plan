@@ -105,7 +105,7 @@ async function run(){
    const float=page.locator('#mw-live');check(await float.isVisible(),'timer shown '+width);
    const anchor=await float.boundingBox();check(anchor.y>=0&&anchor.y+anchor.height<=height-40,'float is inside viewport '+width);
    if(height>=600)check(anchor.y>=144&&anchor.y>=height*.2,'float moved to upper middle '+width);
-   await page.locator('[data-float-toggle]').click();check(Math.abs((await float.boundingBox()).y-anchor.y)<1,'expansion keeps top anchor '+width);
+   await page.locator('[data-float-toggle]').click();await page.locator('.modal [data-act=close]').click();check(Math.abs((await float.boundingBox()).y-anchor.y)<1,'expansion keeps top anchor '+width);
    check(await float.getAttribute('data-meter-state')==='overtime','existing overtime projection preserved '+width);
    const expanded=await float.boundingBox();check(expanded.y+expanded.height<=height-40,'expanded float stays above navigation '+width);
    const session=await page.evaluate(()=>App.memoSchedule.state().sessions.find(s=>s.status==='running').id);

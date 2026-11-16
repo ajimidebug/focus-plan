@@ -209,6 +209,8 @@
     summaryCache = null; const d = state(), found = resolve(ref); if (!found || found.task.archived) throw new Error('任务已删除或停用，请重新选择');
     App.memoReview?.assertExecutable(found.ref);
     if (isDone({ ref: found.ref })) throw new Error('任务已完成；取消完成后再计时');
+    const focused=App.memoWorkspace?.currentQueueItem?.();
+    if(focused&&key(focused.ref)===key(found.ref))App.memoWorkspace.selectQueueCore(found.ref);
     const running = active(); if (running && timerKey(running.ref) === timerKey(found.ref) && (itemId == null || running.itemId === itemId)) return running;
     if (running) pauseCore(running, now);
     let session = d.sessions.slice().reverse().find(s => key(s.ref) === key(found.ref) && s.status === 'paused' && (s.itemId || null) === itemId);
@@ -328,12 +330,22 @@
         const value = stat.querySelector('.stat-value');
         if (value) value.textContent = S().fmtDur(dayExecutionMs(M().userDay(now), now) / 60000);
       }
-      const live = $('schedule-live'); if (live) live.textContent = current ? '执行中 · ' + current.title + ' ' + duration(elapsed(current, now)) : paused.length ? '有 ' + paused.length + ' 项计时已暂停' : '';
-      const controls = $('mw-live-controls'), shown = current || paused[0];
-      if (controls) { const signature = shown ? shown.id + ':' + shown.status : ''; if (controls.dataset.session !== signature) { controls.dataset.session = signature; const ref = shown && esc(JSON.stringify(shown.ref)); controls.innerHTML = shown ? (shown.status === 'running' ? '<button class="btn btn-small" data-schedule-command="pause" data-schedule-ref="' + ref + '">Ⅱ 暂停</button>' : '<button class="btn btn-small" data-schedule-command="start" data-session-id="' + esc(shown.id) + '" data-schedule-ref="' + ref + '">▶ 继续</button>') + '<button class="btn btn-small" data-schedule-command="end" data-schedule-ref="' + ref + '">结束计时</button>' : ''; } }
-      App.memoFloat?.update(current||paused[0],paused);
+      const pending=App.memoWorkspace?.waitingQueue?.();
+      const waiting=pending?{id:'waiting:'+key(pending.ref),ref:pending.ref,title:pending.task.text,status:'waiting'}:null;
+      const shown=current||waiting||paused[0];
+      const live=$('schedule-live');if(live)live.textContent=current?'执行中 · '+current.title+' '+duration(elapsed(current,now)):waiting?'待开始 · '+waiting.title:paused.length?'有 '+paused.length+' 项计时已暂停':'';
+      const controls=$('mw-live-controls');
+      if(controls){
+        const signature=shown?shown.id+':'+shown.status:'';
+        if(controls.dataset.session!==signature){
+          controls.dataset.session=signature;
+          const ref=shown&&esc(JSON.stringify(shown.ref));
+          controls.innerHTML=shown?(shown.status==='running'?'<button class="btn btn-small" data-schedule-command="pause" data-schedule-ref="'+ref+'">Ⅱ 暂停</button>':'<button class="btn btn-small" data-schedule-command="start" data-queue-start="'+!!waiting+'"'+(!waiting?' data-session-id="'+esc(shown.id)+'"':'')+' data-schedule-ref="'+ref+'">▶ '+(waiting?'开始':'继续')+'</button>')+(!waiting?'<button class="btn btn-small" data-schedule-command="end" data-schedule-ref="'+ref+'">结束计时</button>':''):'';
+        }
+      }
+      App.memoFloat?.update(shown,paused);
       App.memoActions?.tick?.();
-      const back = $('schedule-active'); if (back) back.hidden = !current && !paused.length;
+      const back=$('schedule-active');if(back)back.hidden=!shown;
       document.querySelectorAll('[data-task-timing]').forEach(el=>{const t=timing(JSON.parse(el.dataset.taskTiming),now);el.textContent=timingText(t);});
       if (!mode || document.hidden || !$('view-memo-timeaxis')?.classList.contains('active') && !$('view-tasks')?.classList.contains('active')) return;
       const f = frame(selectedDay, now);
@@ -380,7 +392,7 @@
   }
   function startUI(ref, itemId = null, fromQueue = false) {
     const run = async () => {
-      const saved=await perform(() => startRef(ref, Date.now(), itemId));
+      const saved=await perform(() => {startRef(ref, Date.now(), itemId);if(fromQueue)App.memoWorkspace?.selectQueueCore?.(ref);});
       if(saved)App.memoWorkspace?.timerStarted(ref,fromQueue);
       return saved;
     };
@@ -556,8 +568,9 @@
         try {
           if (act === 'retry') ok = await perform(() => {}, true);
           else if (act === 'pause') ok = await perform(() => state().sessions.filter(s => key(s.ref) === key(ref) && s.status === 'running').forEach(s => pauseCore(s, Date.now())));
-          else { const session = state().sessions.find(s => s.id === button.dataset.sessionId); ok = await startUI(ref, session?.itemId || null, !!button.closest('.mw-exec-item')); }
+          else { const session = state().sessions.find(s => s.id === button.dataset.sessionId); ok = await startUI(ref, session?.itemId || null, !!button.closest('.mw-exec-item')||button.dataset.queueStart==='true'); }
         } finally {
+          if(ok&&button.closest('.float-management-modal'))App.ui.closeModal();
           if (button.isConnected) { button.disabled = false; button.textContent = previousText;
             if (!ok && App.memoActions.busy()) { button.dataset.scheduleCommand = 'retry'; button.textContent = '重试保存'; const row = button.closest('.mw-task-timing') || button.parentElement; let error = row.querySelector('.mw-timing-error'); if (!error) { error = document.createElement('p'); error.className = 'mw-timing-error'; error.setAttribute('role', 'alert'); row.appendChild(error); } error.textContent = '计时操作尚未保存，请重试，不要刷新。'; }
           }

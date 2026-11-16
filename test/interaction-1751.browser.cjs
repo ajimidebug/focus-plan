@@ -123,8 +123,8 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.locator('.mw-exec-item [data-mw="exec-complete"]').count(),2,'queue has direct completed controls: '+JSON.stringify(entries1759));
   assert.equal(await page.locator('.mw-exec-item [data-schedule-command="pause"]').count(),0,'queue has no pause control');
   await page.locator('.mw-exec-item').first().locator('[data-schedule-command="start"]').click();
-  await page.waitForFunction(()=>!App.memoActions.busy()&&App.memoSchedule.state().sessions.some(x=>x.ref.id==='once-ungrouped'&&x.status==='running')&&document.querySelector('.mw-exec-board h2')?.textContent.includes('连续计时中'));
-  assert.match(await page.locator('.mw-exec-board h2').innerText(),/连续计时中/,'queue entered sequential mode');
+  await page.waitForFunction(()=>!App.memoActions.busy()&&App.memoSchedule.state().sessions.some(x=>x.ref.id==='once-ungrouped'&&x.status==='running')&&document.querySelector('.mw-exec-board h2')?.textContent.includes('已选择当前项'));
+  assert.match(await page.locator('.mw-exec-board h2').innerText(),/已选择当前项/,'queue entered sequential mode');
   await page.locator('.mw-exec-item').first().locator('[data-mw="exec-complete"]').click();
   assert.equal(await page.locator('.task-action-modal [data-act="commit"]').count(),1,'queue complete reuses confirmation modal');
   await page.locator('.task-action-modal [data-act="cancel"]').click();
@@ -133,12 +133,12 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>!!App.store.data().days['2026-11-06'].tasks.required.find(t=>t.id==='once-ungrouped')?.done),false,'cancel does not mark task complete');
   await page.locator('.mw-exec-item').first().locator('[data-mw="exec-complete"]').click();
   await page.locator('.task-action-modal [data-act="commit"]').click();
-  await page.waitForFunction(()=>!App.memoActions.busy()&&App.memoSchedule.state().sessions.some(s=>s.ref.id==='once-ideal'&&s.status==='running'));
+  await page.waitForFunction(()=>!App.memoActions.busy()&&App.memoWorkspace.waitingQueue()?.ref.id==='once-ideal');
   const nextInfo=await page.evaluate(()=>{
     const d=App.store.data(),sessions=App.memoSchedule.state().sessions;
     return {old:sessions.filter(x=>x.ref.id==='once-ungrouped').map(x=>x.status),next:sessions.filter(x=>x.ref.id==='once-ideal').map(x=>x.status),events:(d.memoEvents||[]).filter(x=>x.sourceId==='once-ungrouped'&&x.active).length,remaining:d.memoExecutionQueue.length,done:!!d.days['2026-11-06'].tasks.required.find(t=>t.id==='once-ungrouped').done};
   });
-  assert(nextInfo.done&&nextInfo.events===1&&nextInfo.remaining===1&&nextInfo.old.every(x=>x==='ended')&&nextInfo.next.includes('running'),'confirmed completion closes exactly one item and starts the next: '+JSON.stringify(nextInfo));
+  assert(nextInfo.done&&nextInfo.events===1&&nextInfo.remaining===1&&nextInfo.old.every(x=>x==='ended')&&nextInfo.next.length===0,'confirmed completion closes exactly one item and selects the next without starting: '+JSON.stringify(nextInfo));
   await page.locator('.mw-exec-item [data-mw="exec-skip"]').click();
   await page.waitForFunction(()=>!App.memoActions.busy()&&App.store.data().memoExecutionQueue.length===0);
   const afterChainSkip=await page.evaluate(()=>({
@@ -146,7 +146,7 @@ const server=http.createServer((req,res)=>{
     done:!!App.store.data().days['2026-11-06'].tasks.ideal.find(x=>x.id==='once-ideal').done,
     event:(App.store.data().memoEvents||[]).filter(x=>x.sourceId==='once-ideal'&&x.active).length
   }));
-  assert.deepEqual(afterChainSkip,{status:'ended',done:false,event:0},'skip ends current timer without completing original task');
+  assert.deepEqual(afterChainSkip,{status:undefined,done:false,event:0},'skip pending item adds no timer or completion');
   // Search a recurring series as a single result while preserving old occurrence data.
   await page.evaluate(()=>{
     const d=App.store.data(),day='2026-11-06',id='cycle-demo:2026-11-06';

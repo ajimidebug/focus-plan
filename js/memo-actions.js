@@ -155,6 +155,7 @@
     const latestTitle=App.memoSchedule?.find({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list})?.text;
     if(latestTitle)spec=Object.assign({},spec,{title:latestTitle});
     App.memoRecurrence?.ensureCore(spec.day||M().userDay(at),Date.parse(at));
+    const queueAdvance=App.memoWorkspace?.captureQueueAdvance?.(spec);
     const d = S().data(), event = { id: S().uid(), kind: spec.kind, sourceId: spec.id, sourceDay: spec.day || M().userDay(at), sourceList: spec.list || '', noteDay: M().userDay(at), at, active: true, ledgerIds: [], points: 0, title: spec.title };
     event.noteInput=spec.noteInput || {version:1,mode:text ? 'custom':'empty',body:text};event.redoOf=spec.redoOf||null;event.remark=String(spec.remark||'');if(spec.backfillDay)event.backfillDay=spec.backfillDay;
     event.timing = timingSnapshot(spec, Date.parse(at));
@@ -206,7 +207,7 @@
       while(ancestor&&!passage(ancestor)&&ancestor.redoOf&&!seen.has(ancestor.id)){seen.add(ancestor.id);ancestor=d.memoEvents.find(e=>e.id===ancestor.redoOf);}
       if(ancestor&&passage(ancestor))text=stamp(at,event.noteDay)+'【重新完成】'+event.title+'\n原文见本日先前记录。\n'+event.timing.text;
     }
-    events(d).push(event); grantRewards(event, choices); const actual=d.ledger.filter(e=>e.memoEventId===event.id||e.memoReward&&e.taskId===event.sourceId&&e.at===event.at).reduce((n,e)=>n+e.points,0); append(event, text.trim()?text+'\n本次实际获得积分：'+actual+'分':text); return event;
+    events(d).push(event); grantRewards(event, choices); const actual=d.ledger.filter(e=>e.memoEventId===event.id||e.memoReward&&e.taskId===event.sourceId&&e.at===event.at).reduce((n,e)=>n+e.points,0); append(event, text.trim()?text+'\n本次实际获得积分：'+actual+'分':text); App.memoWorkspace?.advanceQueueCore?.(queueAdvance); return event;
   }
   function undoCore(id, reason = '', at = new Date().toISOString(), notePolicy = 'retain') {
     if (S().status().readOnly) throw new Error('记录保护中，暂不能取消');
@@ -285,6 +286,7 @@
     App.memo?.history(); App.tasks?.renderAll(); App.queue?.render(); App.checkin?.render(); App.memoSchedule?.render(); App.app?.refreshStats();
   }
   async function transaction(mutate) {
+    if(App.updates?.applying?.())throw new Error('正在保存并更新，请稍候');
     if (S().status().readOnly) throw new Error('记录处于保护状态，未进行修改');
     if (committing) return false;
     committing = true;
@@ -432,7 +434,7 @@
     m.querySelector('#memo-action-info').textContent = '本次积分 ' + (previewPoints > 0 ? '+' : '') + (previewPoints || 0) + '；写入 ' + day + ' 的笔记（04:00分日）。';
     if (spec.kind === 'checkin') m.querySelector('#memo-action-info').textContent += '（' + (App.memoCurrency?.ruleLabel?.() || '旧连续倍率') + '）';
     let queueAdvance=null;
-    bindCommit(m, () => {saveEstimate();const submittedAt=new Date().toISOString();const currentDay=M().userDay(submittedAt);if(currentDay!==day)throw Error('已跨过用户日，请关闭后重新打开任务');spec.remark=remark.value;spec.redoOf=prior?.id;spec.noteInput={version:1,mode:textarea.value===''?'empty':customInput?'custom':'auto',body:textarea.value};applyCategory();const currentName=App.memoSchedule.find(ref)?.text;if(currentName)spec.title=currentName;const finalText=textarea.value===initialText?stamp(submittedAt,currentDay)+'【'+label+'】'+spec.title+suffix+'\n'+(remark.value.trim()?'本次备注：'+remark.value.trim()+'\n':'')+timingSnapshot(spec,Date.parse(submittedAt)).text:textarea.value;if(reviewChoice)spec.review=reviewChoice();queueAdvance=App.memoWorkspace?.captureQueueAdvance(ref)||null;const event=completeCore(spec,finalText,submittedAt,[...m.querySelectorAll('[data-reward]:checked')].map(x=>({kind:x.dataset.reward,points:m.querySelector('[data-reward-points="'+x.dataset.reward+'"]').value})));completionDrafts.delete(draftId);return event;}, spec.kind==='checkin'?()=>App.checkin?.focusItem?.(spec.id):null,async retrying=>{
+    bindCommit(m, () => {saveEstimate();const submittedAt=new Date().toISOString();const currentDay=M().userDay(submittedAt);if(currentDay!==day)throw Error('已跨过用户日，请关闭后重新打开任务');spec.remark=remark.value;spec.redoOf=prior?.id;spec.noteInput={version:1,mode:textarea.value===''?'empty':customInput?'custom':'auto',body:textarea.value};applyCategory();const currentName=App.memoSchedule.find(ref)?.text;if(currentName)spec.title=currentName;const finalText=textarea.value===initialText?stamp(submittedAt,currentDay)+'【'+label+'】'+spec.title+suffix+'\n'+(remark.value.trim()?'本次备注：'+remark.value.trim()+'\n':'')+timingSnapshot(spec,Date.parse(submittedAt)).text:textarea.value;if(reviewChoice)spec.review=reviewChoice();queueAdvance=App.memoWorkspace?.captureQueueAdvance?.(ref)||null;const event=completeCore(spec,finalText,submittedAt,[...m.querySelectorAll('[data-reward]:checked')].map(x=>({kind:x.dataset.reward,points:m.querySelector('[data-reward-points="'+x.dataset.reward+'"]').value})));completionDrafts.delete(draftId);return event;}, spec.kind==='checkin'?()=>App.checkin?.focusItem?.(spec.id):null,async retrying=>{
       if(!queueAdvance)return;
       if(retrying)App.memoWorkspace?.timerEnded(ref);
       else await App.memoWorkspace?.queueSettled(ref,queueAdvance);

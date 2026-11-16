@@ -13,12 +13,12 @@
     if (byId('apply-update')) byId('apply-update').hidden = !(registration && registration.waiting) || applying;
     if (byId('storage-status')) byId('storage-status').dataset.state = status.phase;
   }
-  function busyReason() {
+  function busyReason(allowExecution = false) {
     if (App.framework?.busy()) return '请先保存并关闭正在操作的窗口';
     if (!ready) return '正在读取记录';
     if (App.store.status().readOnly) return '记录处于保护状态';
     if (App.memo && App.memo.busy()) return '笔记尚未安全保存';
-    if (App.memoSchedule && App.memoSchedule.busy()) return '执行计时尚未结束，请结束后更新';
+    if (!allowExecution && App.memoSchedule && App.memoSchedule.busy()) return '有未结束的执行计时，可手动点击更新';
     const T = App.tasks;
     if (T && ((T.getTimer && T.getTimer()) || (T.getCdTimer && T.getCdTimer()))) return '正在计时，请结束本段后更新';
     const day = App.store.getDay(App.store.todayKey());
@@ -42,12 +42,13 @@
   }
   async function applyUpdate(manual) {
     if (applying || !registration || !registration.waiting) return false;
-    const why = busyReason();
+    const why = busyReason(!!manual);
     if (why) { lastMessage = '新版已下载；' + why; render(); return false; }
     if (!manual && interacted) { lastMessage = '新版已下载，可在空闲时保存并更新'; render(); return false; }
     applying = true;
     lastMessage = '正在保存并准备更新'; render();
     const epoch = inputEpoch;
+    const sessions=JSON.stringify(App.store.data().memoSchedule?.sessions||[]);
     try {
       if (App.memo && !await App.memo.flush()) throw new Error('笔记保存未完成，暂未更新');
       const saved = await App.store.save();
@@ -57,7 +58,7 @@
       if (!saved || !flushed || !photosSaved) throw new Error('保存未完成，暂未切换版本；请先备份');
       const snapshot = await App.backup.snap('manual');
       if (!snapshot) throw new Error('更新前快照未保存，暂未切换版本');
-      if (epoch !== inputEpoch || busyReason()) throw new Error('检测到新的操作，稍后再更新');
+      if (epoch !== inputEpoch || busyReason(!!manual) || sessions!==JSON.stringify(App.store.data().memoSchedule?.sessions||[])) throw new Error('检测到新的操作，稍后再更新');
       if (App.tasks && App.tasks.saveTimerSnap) App.tasks.saveTimerSnap();
       registration.waiting.postMessage({ type: 'ACTIVATE_RELEASE' });
       return true;
@@ -127,5 +128,5 @@
     ready = true; render(); check(true);
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
   }
-  App.updates = { init: init, appReady: appReady, check: check, apply: applyUpdate, busyReason: busyReason, showBlocked: showBlocked };
+  App.updates = { applying:()=>applying, init: init, appReady: appReady, check: check, apply: applyUpdate, busyReason: busyReason, showBlocked: showBlocked };
 })();

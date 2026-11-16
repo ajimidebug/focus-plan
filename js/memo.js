@@ -200,6 +200,28 @@
       App.ui.bindActions({ copy: () => copyText($('memo-export-preview').value), download: () => download('备忘录-' + from + '-' + to + '.txt', $('memo-export-preview').value), close: App.ui.closeModal });
     } catch (e) { App.ui.toast(e.message); }
   }
+  function initCopyMenu(){
+    const menu=$('memo-copy-menu'),panel=menu.querySelector('.memo-copy-options');
+    const host=document.createElement('div');host.className='legacy-host';
+    const layer=document.createElement('div');layer.className='memo-popup-layer';layer.hidden=true;
+    layer.append(panel);host.append(layer);document.body.append(host);
+    const close=(focus=false)=>{menu.open=false;layer.hidden=true;if(focus)menu.querySelector('summary').focus({preventScroll:true});};
+    function place(){
+      if(!menu.open)return;
+      const viewport=window.visualViewport,left=viewport?.offsetLeft||0,top=viewport?.offsetTop||0,width=viewport?.width||window.innerWidth,height=viewport?.height||window.innerHeight;
+      panel.style.width=Math.min(280,width-16)+'px';panel.style.maxHeight=Math.max(44,height-16)+'px';
+      const anchor=menu.getBoundingClientRect(),box=panel.getBoundingClientRect();
+      const x=Math.max(left+8,Math.min(anchor.right-box.width,left+width-box.width-8));
+      const below=anchor.bottom+6,y=below+box.height<=top+height-8?below:anchor.top-box.height-6;
+      panel.style.left=x+'px';panel.style.top=Math.max(top+8,Math.min(y,top+height-box.height-8))+'px';
+    }
+    menu.addEventListener('toggle',()=>{layer.hidden=!menu.open;if(menu.open)place();});
+    panel.addEventListener('click',e=>{if(e.target.closest('button'))close();});
+    document.addEventListener('pointerdown',e=>{if(menu.open&&!menu.contains(e.target)&&!panel.contains(e.target))close();});
+    document.addEventListener('keydown',e=>{if(menu.open&&e.key==='Escape'){e.preventDefault();close(true);}});
+    window.visualViewport?.addEventListener('resize',place);window.visualViewport?.addEventListener('scroll',place);
+    window.addEventListener('resize',place);window.addEventListener('scroll',place,{passive:true});
+  }
   function init() {
     selected = userDay();
     App.memoEditor.init($('memo-editor'), persist);
@@ -216,6 +238,7 @@
     const paper=$('memo-editor').parentElement; paper.querySelectorAll('.memo-help').forEach(el=>paper.before(el));
     $('memo-copy-full').onclick = copyFull;
     $('memo-copy-again').onclick = () => { const last=S().data().memoFlow?.lastCopy; last ? copyText(last.text) : App.ui.toast('还没有完整复制记录'); };
+    initCopyMenu();
     copyStatus();
     $('memo-search').oninput = history;
     $('memo-from').value = shiftDay(userDay(), -6); $('memo-to').value = userDay();

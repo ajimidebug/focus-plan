@@ -2,8 +2,23 @@
 (function () {
 'use strict';
 const A = window.App;
-let selected = null, collapsed = true, lastPlacement = '';
-try { collapsed = localStorage.getItem('focusPlanFloatExpanded') !== '1'; } catch {}
+let selected=null,lastPlacement='',viewMode='mini';
+try{const saved=localStorage.getItem('focusPlanFloatMode');if(['mini','full','edge'].includes(saved))viewMode=saved;}catch{}
+function setMode(mode){
+ viewMode=mode;try{localStorage.setItem('focusPlanFloatMode',mode);}catch{}
+ update(selected);place();
+}
+function manage(){
+ if(!selected||A.memoActions.busy())return;
+ const found=A.memoSchedule.resolve(selected.ref);if(!found)return A.ui.toast('任务已不存在，请查看历史计时');
+ const ref=found.ref,timing=A.memoSchedule.timing(ref),session=timing.session;
+ const attrs=' data-schedule-ref="'+A.store.esc(JSON.stringify(ref))+'"';
+ const end=session&&session.status!=='ended'?'<button type="button" class="btn" data-schedule-command="end"'+attrs+'>结束计时</button>':'';
+ const m=A.ui.openModal('计时管理 · '+found.task.text,'<p>'+A.store.esc(found.task.text)+'</p><p>'+(selected.status==='waiting'?'待开始':session?.status==='running'?'正在计时':'已暂停')+' · 累计 '+clock(timing.totalMs)+'</p><button type="button" class="btn btn-primary" data-schedule-command="'+(session?.status==='running'?'pause':'start')+'" data-queue-start="'+!!A.memoWorkspace?.currentQueueItem()+'"'+attrs+'>'+(session?.status==='running'?'暂停计时':session?.status==='paused'?'继续计时':'开始计时')+'</button>'+end+'<button class="btn" data-float-task>任务、备注与完成</button>','<button class="btn" data-act="close">关闭</button>');
+ m.classList.add('float-management-modal');
+ A.ui.bindActions({close:()=>A.ui.closeModal()});
+ m.querySelector('[data-float-task]').onclick=()=>{A.ui.closeModal();if(ref.kind==='checkin')A.memoActions.checkin(ref.id,ref.day);else A.memoWorkspace.complete(ref);};
+}
 const clock = ms => { const s = Math.floor(Math.max(0, ms) / 1000); return Math.floor(s / 3600) + ':' + String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
 // Anchor to the visible viewport, including when a mobile keyboard reduces it.
 function place() {
@@ -31,7 +46,7 @@ function ensure(root) {
  toggle.type = 'button'; toggle.className = 'btn float-toggle'; toggle.dataset.floatToggle = '';
  toggle.innerHTML = '<span class="float-name"></span><span class="float-arrow" aria-hidden="true"></span>';
  root.prepend(toggle);
- const summary = document.createElement('div'); summary.className = 'float-summary';
+ const summary = document.createElement('div'); summary.className = 'float-summary';summary.tabIndex=0;summary.setAttribute('role','button');summary.setAttribute('aria-label','打开计时管理');
  summary.innerHTML = '<span class="float-current"></span><span class="float-clock"></span><span class="float-total"></span>';
  root.append(summary);
  const hourNote=document.createElement('div');hourNote.className='float-hour-note';hourNote.hidden=true;root.append(hourNote);
@@ -40,29 +55,35 @@ function ensure(root) {
  root.append(meter);
  const view = document.createElement('button'); view.type = 'button'; view.className = 'btn float-complete'; view.dataset.floatOpen = '';
  root.append(view);
+ const modes=document.createElement('div');modes.className='float-modes';
+ modes.innerHTML='<button type="button" class="btn" data-float-mode="full" aria-label="全屏计时" title="全屏计时">⛶</button><button type="button" class="btn" data-float-mode="edge" aria-label="收起到侧边" title="收起到侧边">›</button>';
+ root.append(modes);
+ const edge=document.createElement('button');edge.type='button';edge.className='btn float-edge-toggle';edge.dataset.floatMode='mini';edge.setAttribute('aria-label','恢复迷你计时窗');edge.textContent='‹';root.append(edge);
+ const pending=document.createElement('span');pending.className='float-pending-note';pending.textContent='待开始 · 点击开始计时';root.append(pending);
 }
 function update(session, paused = []) {
  selected = session;
  const root = document.getElementById('mw-live'); if (!root) return;
  ensure(root);
  if (!lastPlacement) place();
- const memoFocused = document.activeElement?.id === 'memo-editor', folded = collapsed || memoFocused;
+ const memoFocused = document.activeElement?.id === 'memo-editor', folded = viewMode!=='full';
  root.classList.toggle('float-empty', !session);
+ root.classList.toggle('float-fullscreen',viewMode==='full');root.classList.toggle('float-edge',viewMode==='edge');root.classList.toggle('float-waiting',session?.status==='waiting');
  root.classList.toggle('float-collapsed', folded);
  root.classList.toggle('float-editor-focus', memoFocused);
  root.dataset.status = session?.status || '';
  const toggle = root.querySelector('[data-float-toggle]');
- toggle.setAttribute('aria-expanded', String(!folded));
- toggle.querySelector('.float-arrow').textContent = folded ? '⌄' : '⌃';
- toggle.title=folded?'展开计时详情':'收起计时详情';
+ toggle.removeAttribute('aria-expanded');
+ toggle.querySelector('.float-arrow').textContent='';toggle.title='打开计时与任务管理';
+ const full=root.querySelector('[data-float-mode="full"]');full.textContent=viewMode==='full'?'↙':'⛶';full.setAttribute('aria-label',viewMode==='full'?'返回迷你计时窗':'全屏计时');
  if (!session) return;
  const found = A.memoSchedule.resolve(session.ref), task = found?.task, ref = found?.ref || session.ref;
  const title = task?.text || session.title, totals = A.memoSchedule.timing(session.ref);
  const nowDay = A.memoCore.userDay(), daily = ['checkin', 'daily', 'project'].includes(ref.kind);
  const control = root.querySelector('#mw-live-controls [data-schedule-command]');
- if (control) control.setAttribute('aria-label', (session.status === 'running' ? '暂停：' : '继续：') + title);
- toggle.querySelector('.float-name').textContent = (session.status === 'running' ? '' : '已暂停 · ') + title;
- const projection = A.memoSchedule.meterTiming(ref, session);
+ if (control) control.setAttribute('aria-label', (session.status==='waiting'?'开始：':session.status==='running'?'暂停：':'继续：') + title);
+ toggle.querySelector('.float-name').textContent = (session.status==='waiting'?'待开始 · ':session.status==='running'?'':'已暂停 · ') + title;
+ const projection = A.memoSchedule.meterTiming(ref, session.status==='waiting'?null:session);
  root.querySelector('.float-current').textContent = (daily ? '今日累计 ' : '累计 ') + clock(projection.totalMs);
  root.querySelector('.float-clock').textContent = '本次 ' + clock(projection.currentMs);
  root.querySelector('.float-total').textContent = daily ? '历日累计 ' + clock(totals.allMs) : '今日 ' + clock(totals.todayMs);
@@ -94,7 +115,7 @@ function update(session, paused = []) {
  meter.querySelector('.float-meter-scale>span').textContent = planned?meterInfo.timeStart:'0';
  meter.querySelector('.float-range-end').textContent = planned?meterInfo.timeEnd:rangeMs/60000+'分钟';
  meter.querySelector('.float-meter-text').textContent = description + (paused.length > 1 ? ' · ' + paused.length + '项暂停' : '');
- toggle.setAttribute('aria-label', (session.status === 'running' ? '计时中，' : '已暂停，') + title + '；本次 ' + clock(currentMs) + '；今日 ' + clock(totals.todayMs) + '；' + detail + '；' + (folded ? '展开详情' : '收起详情'));
+ toggle.setAttribute('aria-label', (session.status==='waiting'?'待开始，':session.status==='running'?'计时中，':'已暂停，') + title + '；本次 ' + clock(currentMs) + '；今日 ' + clock(totals.todayMs) + '；' + detail + '；' + '打开计时与任务管理');
  const complete = root.querySelector('[data-float-open]');
  const targetDay = ref.day || task?.assignment?.day;
  complete.textContent = '任务与完成' + (targetDay && targetDay !== nowDay ? ' · ' + targetDay.slice(5) : '');
@@ -103,18 +124,11 @@ function update(session, paused = []) {
 document.addEventListener('focusin', e => { if (e.target?.id === 'memo-editor') update(selected); }, true);
 document.addEventListener('focusout', e => { if (e.target?.id === 'memo-editor') queueMicrotask(() => update(selected)); }, true);
 document.addEventListener('click', e => {
- const b = e.target.closest('[data-float-toggle],[data-float-open]'); if (!b) return;
- e.preventDefault(); e.stopImmediatePropagation();
- if (b.hasAttribute('data-float-toggle')) {
-   collapsed = !collapsed; try { localStorage.setItem('focusPlanFloatExpanded', collapsed ? '0' : '1'); } catch {}
-   update(selected); return;
- }
- if (!selected || A.memoActions.busy()) return;
- const found = A.memoSchedule.resolve(selected.ref);
- if (!found) { A.ui.toast('任务已不存在，可结束此计时记录'); return; }
- A.app.switchView('tasks');
- if (found.ref.kind === 'checkin') A.memoActions.checkin(found.ref.id, found.ref.day);
- else A.memoWorkspace.complete(found.ref);
-}, true);
-A.memoFloat = { update, place };
+ const mode=e.target.closest('[data-float-mode]');
+ if(mode){e.preventDefault();e.stopImmediatePropagation();setMode(mode.dataset.floatMode==='full'&&viewMode==='full'?'mini':mode.dataset.floatMode);return;}
+ const b=e.target.closest('[data-float-toggle],[data-float-open],#mw-live .float-summary');
+ if(!b)return;e.preventDefault();e.stopImmediatePropagation();manage();
+},true);
+document.addEventListener('keydown',e=>{if(e.target.matches?.('#mw-live .float-summary')&&['Enter',' '].includes(e.key)){e.preventDefault();manage();return;}if(e.key==='Escape'&&viewMode==='full'&&!document.querySelector('.modal'))setMode('mini');});
+A.memoFloat={update,place,setMode,manage};
 })();

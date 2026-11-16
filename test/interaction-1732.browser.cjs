@@ -64,10 +64,10 @@ async function run(){
    check(new Set(stamped.colors).size===3,'time rest and thought use distinct harmonious colors '+width);
    await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__toolbarCopy=text;}}}));
    await page.locator('#memo-copy-menu>summary').click();
-   check(await page.locator('#memo-copy-menu .memo-copy-options>button').first().getAttribute('id')==='memo-copy-full','full copy is first menu action '+width);
+   check(await page.locator('.memo-popup-layer .memo-copy-options>button').first().getAttribute('id')==='memo-copy-full','full copy is first menu action '+width);
    await page.locator('#memo-copy-full').click();await page.waitForFunction(()=>!!window.__toolbarCopy);
    check((await page.evaluate(()=>window.__toolbarCopy)).includes(beforeStamp),'full copy menu retains complete memo content '+width);
-   await page.locator('#memo-copy-menu>summary').click();
+   check(await page.locator('.memo-popup-layer').isHidden(),'copy closes popup '+width);
    await page.waitForFunction(()=>!App.memoActions.busy()&&App.store.status().phase==='saved');
    if(width===390){
     const oldDay=await page.evaluate(async day=>{await App.memo.flush();const old=App.memoCore.shiftDay(day,-1);App.memoCore.write(old,'历史正文');App.memo.show(old);App.memoEditor.select(0,4);return old;},day);
@@ -93,20 +93,20 @@ async function run(){
    await page.setViewportSize({width,height});
    await page.evaluate(()=>{document.querySelector('#memo-editor').blur();App.memoSchedule.startRef({kind:'queue',id:'visual-clock'},Date.now()-83*60000);App.memoSchedule.tick();});
    // The float becomes expanded explicitly, independent of previous test state.
-   await page.locator('[data-float-toggle]').click();
+   await page.locator('[data-float-mode="full"]').click();
    const meter=page.locator('#float-meter .float-meter-track');
    check(await meter.getAttribute('role')==='img','unestimated timer is a time scale '+width);
    check(await meter.getAttribute('aria-valuenow')===null,'time scale has no false completion percent '+width);
    check(/1小时＋23分/.test(await page.locator('.float-meter-text').innerText()),'hour count survives scale rollover '+width);
    const expanded=await page.locator('#mw-live').boundingBox();
-   check(expanded.height<245&&expanded.width<=width-20,'expanded float stays compact '+width);
+   check(Math.abs(expanded.height-height)<2&&expanded.width<=width,'full timer fits visible screen '+width);
    if(process.env.FOCUS_SCREENSHOT_DIR){fs.mkdirSync(process.env.FOCUS_SCREENSHOT_DIR,{recursive:true});await page.screenshot({animations:'disabled',path:path.join(process.env.FOCUS_SCREENSHOT_DIR,'memo-'+width+'.png')});}
-   await page.locator('[data-float-toggle]').click();
+   await page.locator('[data-float-mode="full"]').click();
    const compact=await page.locator('#mw-live').boundingBox();check(compact.height<110,'collapsed float remains compact and does not cover task controls '+width);check(await page.locator('#mw-live .float-complete').isHidden(),'collapsed float defers task shortcut until expansion '+width);await shot('compact');
    check(await page.locator('#mw-live-controls [data-schedule-command="pause"]').isVisible(),'pause accessible while collapsed '+width);
    await page.evaluate(()=>{App.store.data().queue[0].estimatedMinutes=60;App.memoSchedule.tick();});
    check(await page.locator('#mw-live').evaluate(e=>e.classList.contains('float-overtime')),'overtime remains visually distinct '+width);
-   await page.locator('[data-float-toggle]').click();check(/超时/.test(await page.locator('.float-meter-text').innerText()),'overtime label visible '+width);
+   await page.locator('[data-float-mode="full"]').click();check(/超时/.test(await page.locator('.float-meter-text').innerText()),'overtime label visible '+width);
    await page.evaluate(()=>{const P=App.memoSchedule;P.stopRef({kind:'queue',id:'visual-clock'});App.app.switchView('tasks');App.memoWorkspace.showPane('today');});
    await page.evaluate(()=>App.app.switchView('checkin'));const green=page.locator('.ck-row[data-id="green"]');
    const color=await green.evaluate(e=>getComputedStyle(e).backgroundColor);
