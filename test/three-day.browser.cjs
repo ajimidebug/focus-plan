@@ -52,8 +52,10 @@ const server=http.createServer((req,res)=>{
   assert.match(await page.locator('.three-day-column').innerText(),/延期/);
   assert.equal(await page.locator('.three-day-strip [aria-current=date]').innerText(),'第1天\n11/19');
   await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);assert.equal(await page.evaluate(()=>App.memoThree.state().tasks.length),1);
+  fs.mkdirSync('test-results',{recursive:true});await page.locator('.framework-overview').screenshot({path:'test-results/17512-three-day.png',animations:'disabled'});
   await page.getByRole('button',{name:'更多',exact:true}).click();await page.getByRole('button',{name:'长期拓展',exact:true}).click();
   assert(await page.locator('#mw-details:not([hidden]) #mw-column-extra').isVisible());
+  await page.locator('.more-sheet').waitFor({state:'hidden'});
   await page.evaluate(()=>App.app.switchView('timeline'));
   assert.equal(await page.locator('#schedule-range').inputValue(),'24');
   const controls=await page.evaluate(()=>({chart:document.querySelector('.schedule-chart').getBoundingClientRect().bottom,controls:document.querySelector('.schedule-display-controls').getBoundingClientRect().top}));
@@ -64,8 +66,10 @@ const server=http.createServer((req,res)=>{
    await page.setViewportSize({width,height:844});await page.evaluate(()=>App.memoSchedule.render());
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
    assert((await page.locator('.schedule-axis').boundingBox()).height<700);
+   assert(await page.evaluate(()=>document.querySelector('.schedule-chart').getBoundingClientRect().bottom<=document.querySelector('.app-bottom-nav').getBoundingClientRect().top+2),'full day fits above navigation at '+width);
+   await page.locator('.schedule-chart').screenshot({path:'test-results/17512-timeline-'+width+'.png',animations:'disabled'});
   }
-  fs.mkdirSync('test-results',{recursive:true});await page.screenshot({path:'test-results/17512-timeline.png',fullPage:true});
+  fs.mkdirSync('test-results',{recursive:true});await page.screenshot({path:'test-results/17512-timeline.png',fullPage:true,animations:'disabled'});
   assert.deepEqual(errors,[]);console.log('Three-day plan, queue move, floating completion, rollover and full-day timeline passed');
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);server.close();process.exitCode=1;});

@@ -4,6 +4,7 @@
   const App = window.App = window.App || {}, S = () => App.store, M = () => App.memoCore;
   const $ = id => document.getElementById(id), esc = value => S().esc(String(value ?? ''));
   let selectedDay, mode = false, interval, view = 'combined', rangeHours = 24, keyword = '', showLegacy = true, showHidden = false;
+  let fullDayHeight = null;
   const clone = x => JSON.parse(JSON.stringify(x));
   function state() {
     const d = S().data();
@@ -309,7 +310,7 @@
     const dayMs = dayStart(day), focus = focusMinute == null ? (day === (S().data().memoFlow ? M().userDay(now) : M().naturalDay(now)) ? (now - dayMs) / 60000 : 720) : focusMinute;
     const span = rangeHours * 60, from = Math.max(0, Math.min(1440 - span, Math.floor((focus - span / 3) / 30) * 30));
     const height = Math.max(240, Math.min(660, (window.visualViewport?.height || window.innerHeight || 844) - 330));
-    return { dayMs, from, to: from + span, scale: rangeHours === 24 ? height / 1440 : 1.2 };
+    return { dayMs, from, to: from + span, scale: rangeHours === 24 ? (fullDayHeight ?? height) / 1440 : 1.2 };
   }
   function legacyRecords(day) {
     const user = !!S().data().memoFlow, base = dayStart(day), end = base + 86400000;
@@ -558,12 +559,21 @@
         if (act === 'point-group') { const items = pointGroups[Number(b.dataset.group)] || []; App.ui.openModal('同刻任务', items.map(item => '<p>' + esc(item.title) + '</p>').join(''), '<button class="btn" data-act="close">关闭</button>'); App.ui.bindActions({ close: App.ui.closeModal }); return; }
         if (act === 'card') { const card = document.getElementById('schedule-card-' + b.dataset.card); for (let el = card?.parentElement; el && el !== root; el = el.parentElement) if (el.tagName === 'DETAILS') el.open = true; card?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
       };
+      if(rangeHours===24&&root.getBoundingClientRect().height>0){
+        const graph=root.querySelector('.schedule-chart'),axis=root.querySelector('.schedule-axis');
+        const graphBox=graph.getBoundingClientRect(),axisBox=axis.getBoundingClientRect();
+        const viewportHeight=window.visualViewport?.height||window.innerHeight;
+        const navHeight=document.querySelector('.app-bottom-nav')?.getBoundingClientRect().height||64;
+        const available=Math.max(180,Math.min(660,viewportHeight-navHeight-16-(graphBox.top+window.scrollY)-(graphBox.height-axisBox.height)));
+        if(fullDayHeight===null||Math.abs(fullDayHeight-available)>1){fullDayHeight=available;return render();}
+      }
       tick();
     } catch (e) { root.textContent = e.message; }
   }
   function setMode(value) { mode = value; $('memo-schedule-panel').hidden = !value; if (value) render(); }
   function open(options = {}) { if(options.workspace && !options.day && options.focusMinute==null){rangeHours=24;view='combined';}else if(options.focusMinute!=null)rangeHours=4; selectedDay = options.day || selectedDay || M().userDay(); focusMinute = options.focusMinute ?? null; if (options.legacy) { showLegacy = true; view = 'combined'; } if (!options.workspace) { App.app.switchView('timeline'); return open(Object.assign({}, options, { workspace: true })); } setMode(true); }
   function init() {
+    window.addEventListener('resize',()=>{if(mode&&rangeHours===24)render();});
     selectedDay = M().userDay(); rangeHours = 24; view = 'combined'; $('task-list-switch').onclick = () => setMode(false); $('task-schedule-switch').onclick = () => open(); $('memo-trash-open').onclick = () => App.memoActions.trash();
     $('schedule-active').onclick = () => { const d = state(), session = active() || d.sessions.find(s => s.status === 'paused'); if (session) { selectedDay = M().userDay(session.chunks[session.chunks.length - 1].start); focusMinute = (session.chunks[session.chunks.length - 1].start - dayStart(selectedDay)) / 60000; App.app?.switchView('tasks'); open({ day: selectedDay, focusMinute, focusCard: 's-' + session.id }); } };
     document.addEventListener('click', async e => {

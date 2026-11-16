@@ -180,7 +180,7 @@ const server=http.createServer((req,res)=>{
   await page.locator('.task-action-modal').waitFor({state:'hidden'});
   assert.equal(await page.evaluate(()=>Number(App.store.data().checkins.find(x=>x.id==='habit-1754').days['2026-11-06']||0)),0,'cancelling a habit confirmation leaves count unchanged');
   await page.locator('[data-mw="exec-pick"]').first().click();
-  assert.equal(await page.locator('.mw-exec-picker-column').count(),3,'picker contains compact three columns');
+  assert.equal(await page.locator('.mw-exec-picker-column').count(),4,'picker contains all four task types');
   assert.equal(await page.locator('.mw-exec-candidate').filter({hasText:'重置习惯'}).count(),1,'planned habits are selectable');
   await page.locator('.mw-exec-candidate').filter({hasText:'重置习惯'}).locator('input').check();
   assert.match(await page.locator('#mw-exec-selected').textContent(),/1 项/);
