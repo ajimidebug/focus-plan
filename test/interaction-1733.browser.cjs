@@ -35,7 +35,7 @@ async function run(){
    check((await page.locator('#stat-points-today').innerText())==='今日 +120 / −50','header signed flow '+width);
    await page.evaluate(()=>App.app.switchView('tasks'));
    check((await page.locator('#mw-today [data-overview-list="required"] .mw-column-count').innerText())==='2/4','assigned positive habit counts once; supervision excluded from completion denominator '+width);
-   check(await page.locator('#mw-today [data-overview-list] .mw-column-meter').count()===2,'daily meters belong to must and ideal '+width);check(await page.locator('.three-day-column').count()===1,'independent three-day column is visible '+width);
+   check(await page.locator('#mw-today [data-overview-list] .mw-column-meter').count()===3,'all three columns share their meter '+width);check(await page.locator('.three-day-column').count()===1,'independent three-day column is visible '+width);
    check((await page.locator('#mw-today [data-overview-list="required"]').innerText()).includes('坏习惯监督'),'assigned supervision habit remains visible '+width);
    await page.evaluate(()=>App.app.switchView('checkin'));await page.locator('#stat-points-today').click();
    check(/收入 \+120.*支出 −50/.test(await page.locator('.modal-body').innerText()),'daily breakdown '+width);

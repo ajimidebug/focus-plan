@@ -9,9 +9,10 @@ const labels=computed(()=>[A().tasks?.carryTagHTML?.(props.x.task),A().tasks?.le
 </script>
 <template>
   <HtmlIsland v-if="x.deferred" :html="A().memoWorkspace.deferredHTML(x,true)" />
-  <div v-else class="overview-task-frame"><q-btn flat no-caps class="cal-task overview-task" :class="{done}" :data-overview-ref="JSON.stringify(x.ref)" :data-carried="!!A().memoFlow.isCarried(x.task)" :data-category="category"  :data-bounty="!!A().memoOrganize?.bounty(score)" :data-bounty-tier="A().memoOrganize?.bountyTier(score)||'none'" :data-priority="category==='required'?weight:undefined" :data-score="A().memoWorkspace.scoreBand(score)" :aria-label="'打开任务：'+x.task.text+(A().memoFlow.isCarried(x.task)?'，逾期顺延':'')+(category==='required'?'，优先级'+weight:'')+(score!==null?'，'+score+'分':'')" @click.stop="A().memoWorkspace.complete(x.ref)">
+  <div v-else class="overview-task-frame"><q-btn flat no-caps class="cal-task overview-task" :class="{done}" :data-overview-ref="JSON.stringify(x.ref)" :data-carried="!!(x.delayed||A().memoFlow.isCarried(x.task))" :data-category="category"  :data-bounty="!!A().memoOrganize?.bounty(score)" :data-bounty-tier="A().memoOrganize?.bountyTier(score)||'none'" :data-priority="category==='required'?weight:undefined" :data-score="A().memoWorkspace.scoreBand(score)" :aria-label="'打开任务：'+x.task.text+(x.delayed||A().memoFlow.isCarried(x.task)?'，逾期顺延':'')+(category==='required'?'，优先级'+weight:'')+(score!==null?'，'+score+'分':'')" @click.stop="A().memoWorkspace.complete(x.ref)">
     <span class="ov-task-name">{{x.task.text}}{{done?' ✓':''}}</span>
     <small v-if="category==='required'&&weight!==3" class="mw-priority-note">优先 {{weight}}</small>
+    <small v-if="x.delayed" class="mw-delay-note">延期</small>
     <span v-if="score!==null" class="mw-score">+{{score}}分</span>
     <HtmlIsland v-if="labels" :html="labels" class="overview-labels" />
     <small v-if="x.task.standard" class="t-std">标准：{{x.task.standard}}</small>
