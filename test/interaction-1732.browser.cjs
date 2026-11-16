@@ -55,8 +55,27 @@ async function run(){
     });
     check(ime.preserved,'composition input retains the native DOM node');check(ime.text.endsWith('中文')&&!ime.busy,'composition commits text and leaves input ready');
    }
-   await page.evaluate(()=>App.memoEditor.select(6));await page.locator('#memo-time').click();
-   check(await page.evaluate(()=>/\d{4}/.test(App.memoEditor.text().slice(6,24))),'toolbar insertion retains caret '+width);
+   const beforeStamp=await page.evaluate(()=>{App.memoEditor.select(2,10);return App.memoEditor.text();});
+   await page.locator('#memo-time').click();
+   const stamped=await page.evaluate(()=>({text:App.memoEditor.text(),caret:App.memoEditor.selection(),colors:['memo-time','memo-rest','memo-think'].map(id=>getComputedStyle(document.getElementById(id)).backgroundColor),buttons:[...document.querySelector('.memo-toolbar').children].map(el=>el.id)}));
+   check(stamped.text.startsWith(beforeStamp)&&/^\n(?:次日)?\d{4} $/.test(stamped.text.slice(beforeStamp.length)),'time appends at document tail and preserves selected text '+width);
+   check(stamped.caret.start===stamped.text.length&&stamped.caret.end===stamped.text.length,'time leaves collapsed caret after appended space '+width);
+   check(stamped.buttons.join('|')==='memo-time|memo-rest|memo-think|memo-copy-menu','four toolbar actions with full copy under more '+width);
+   check(new Set(stamped.colors).size===3,'time rest and thought use distinct harmonious colors '+width);
+   await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__toolbarCopy=text;}}}));
+   await page.locator('#memo-copy-menu>summary').click();
+   check(await page.locator('#memo-copy-menu .memo-copy-options>button').first().getAttribute('id')==='memo-copy-full','full copy is first menu action '+width);
+   await page.locator('#memo-copy-full').click();await page.waitForFunction(()=>!!window.__toolbarCopy);
+   check((await page.evaluate(()=>window.__toolbarCopy)).includes(beforeStamp),'full copy menu retains complete memo content '+width);
+   await page.locator('#memo-copy-menu>summary').click();
+   await page.waitForFunction(()=>!App.memoActions.busy()&&App.store.status().phase==='saved');
+   if(width===390){
+    const oldDay=await page.evaluate(async day=>{await App.memo.flush();const old=App.memoCore.shiftDay(day,-1);App.memoCore.write(old,'历史正文');App.memo.show(old);App.memoEditor.select(0,4);return old;},day);
+    await page.locator('#memo-time').click();
+    check(await page.evaluate(old=>App.memoCore.read(old).text.startsWith('历史正文\n')&&App.memoEditor.selection().end===App.memoEditor.text().length,oldDay),'historical note gets dated stamp at its own tail '+width);
+    await page.evaluate(day=>App.memo.show(day),day);
+   }
+
    await page.evaluate(()=>{document.querySelector('#memo-editor').blur();document.querySelector('#memo-heading').focus?.();});
    await editor.dispatchEvent('pointerdown',{pointerId:4,clientX:30,clientY:150,pointerType:'touch'});
    await page.evaluate(()=>{document.querySelector('#memo-editor').focus();App.memoEditor.select(2,10);});

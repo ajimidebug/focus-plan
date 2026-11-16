@@ -117,12 +117,14 @@
     show(key); return true;
   }
   function insertTime() {
-    const el = $('memo-editor'); if (S().status().readOnly) return;
+    if (S().status().readOnly) return;
+    if (App.memoEditor.busy()) return App.ui.toast('请先完成正在输入的文字');
     const now = Date.now(), date = naturalDay(now);
     const stamp = date === selected ? clock(now) : (date === shiftDay(selected, 1) && userDay(now) === selected ? '次日' + clock(now) : date + ' ' + clock(now));
-    const pos = App.memoEditor.selection();
-    const a = pos ? pos.start : App.memoEditor.text().length;
+    const a = App.memoEditor.text().length;
+    App.memoEditor.select(a);
     App.memoEditor.insert((a > 0 && App.memoEditor.text()[a - 1] !== '\n' ? '\n' : '') + stamp.replace(':', '') + ' ');
+    App.memoEditor.revealEnd();
   }
   async function copyText(text, onCopied) {
     let copied = false;
