@@ -17,19 +17,32 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 const stable=x=>JSON.stringify(x);
 function column(day,list){
  if(A.memoFinance?.column)return A.memoFinance.column(day,list);
- const items=A.memoSchedule.columnItems(day,list).map(x=>({id:A.memoSchedule.key(x.ref),title:x.task.text,done:x.done,target:true,kind:x.ref.kind,backfillDay:x.task.backfillDay||'',originalDay:x.task.originalDay||''}));
+ const items=A.memoSchedule.columnItems(day,list).map(x=>({id:A.memoSchedule.key(x.ref),title:x.task.text,note:x.task.note||'',done:x.done,target:true,kind:x.ref.kind,backfillDay:x.task.backfillDay||'',originalDay:x.task.originalDay||''}));
  return {items,done:items.filter(x=>x.done).length,total:items.length,label:items.length?items.filter(x=>x.done).length+'/'+items.length:'暂无任务'};
 }
 function reviewFacts(day){return (S().data().memoReview?.rounds||[]).filter(r=>M().userDay(r.due)===day||r.at&&M().userDay(r.at)===day).map(r=>({id:r.id,n:r.n,title:r.title||A.memoReview?.series(r.seriesId)?.text||'',due:r.due,status:r.status,result:r.result,at:r.at||null,...(r.backfillDay?{reportedDay:r.backfillDay}:{})})).sort((a,b)=>a.id.localeCompare(b.id));}
-function facts(day){const fact={columns:['required','ideal','extra'].map(k=>({list:k,items:column(day,k).items.slice().sort((a,b)=>a.id.localeCompare(b.id))})),habits:(S().data().checkins||[]).filter(t=>t.days?.[day]).map(t=>({id:t.id,title:t.text,count:t.days[day]})).sort((a,b)=>a.id.localeCompare(b.id)),goals:(A.memoGoals?.at(day)||[]).map(g=>({id:g.id,name:g.name,due:g.due})).sort((a,b)=>String(a.id).localeCompare(String(b.id)))};const notes=(S().data().memoEvents||[]).filter(e=>e.active&&e.sourceDay===day&&e.remark?.trim()).map(e=>({id:e.id,remark:e.remark}));if(notes.length)fact.completionRemarks=notes;const periods=(S().data().memoRecurrence?.occurrences||[]).filter(o=>o.day===day).map(o=>({id:o.id,status:o.status,reason:o.reason||''}));if(periods.length)fact.periods=periods;const reviews=reviewFacts(day);if(reviews.length)fact.reviews=reviews;return fact;}
+function facts(day){const fact={three:A.memoThree?.projection(day).rows.map(x=>({id:x.id,title:x.text,done:x.done,delayed:x.delayed,note:x.task?.note||''}))||[],columns:['required','ideal','extra'].map(k=>({list:k,items:column(day,k).items.slice().sort((a,b)=>a.id.localeCompare(b.id))})),habits:(S().data().checkins||[]).filter(t=>t.days?.[day]).map(t=>({id:t.id,title:t.text,count:t.days[day]})).sort((a,b)=>a.id.localeCompare(b.id)),goals:(A.memoGoals?.at(day)||[]).map(g=>({id:g.id,name:g.name,due:g.due})).sort((a,b)=>String(a.id).localeCompare(String(b.id)))};const notes=(S().data().memoEvents||[]).filter(e=>e.active&&e.sourceDay===day&&e.remark?.trim()).map(e=>({id:e.id,remark:e.remark}));if(notes.length)fact.completionRemarks=notes;const periods=(S().data().memoRecurrence?.occurrences||[]).filter(o=>o.day===day).map(o=>({id:o.id,status:o.status,reason:o.reason||''}));if(periods.length)fact.periods=periods;const reviews=reviewFacts(day);if(reviews.length)fact.reviews=reviews;return fact;}
+function planFacts(day){
+ const rounds=[0,1,2].map(offset=>A.memoThree?.projection(M().shiftDay(day,offset*3))).filter(p=>p?.round).map(p=>({start:p.round.start,end:p.round.end,historical:p.historical,future:!!p.future,rows:p.rows.map(x=>({id:x.id,title:x.text,done:x.done,delayed:x.delayed,note:p.historical?'':x.task?.note||''}))}));
+ const gantt=(A.memoGantt?.model().rows||[]).filter(x=>x.valid).map(x=>({id:x.key,title:x.title,start:x.start===null?'':new Date(x.start*86400000).toISOString().slice(0,10),end:new Date(x.end*86400000).toISOString().slice(0,10),inferred:x.inferred,done:x.achieved,note:x.task.note||''}));
+ return {rounds,gantt,deadlines:A.memoGantt?.deadlines()||[]};
+}
+function planLines(day){
+ const p=planFacts(day),lines=[];
+ for(const r of p.rounds){lines.push('【三天计划 '+r.start+' — '+r.end+(r.future?' · 预排':r.historical?' · 已关闭结果':'')+'】');if(!r.rows.length)lines.push('暂无任务');for(const x of r.rows){lines.push((x.done?'✓ ':'○ ')+x.title+'〔'+(r.future?'预排':x.done?'已完成':'未完成')+(x.delayed?'；延期':'')+'〕');if(x.note?.trim())lines.push('  任务备注：'+x.note);}}
+ if(p.gantt.length){lines.push('【甘特计划 · 复制时状态】');for(const x of p.gantt){lines.push((x.done?'✓ ':'○ ')+x.title+'〔'+(x.done?'已完成':'未完成')+'；'+(x.start?x.start+' — ':'')+x.end+(x.inferred?' · 任务安排日':' · 截止')+'〕');if(x.note?.trim())lines.push('  任务备注：'+x.note);}}
+ if(p.deadlines.length)lines.push('【计划截止事项 · 复制时状态】',...p.deadlines.map(x=>x.due+' · '+x.title+(x.done?' · 已完成':'')));
+ return lines;
+}
 function report(day,legacyGoals=false,finance=true){
  if(legacyGoals)return legacyReport(day,true,finance);
  const lines=['===== 用户日 '+day+' · 任务汇总 =====','以下为当前保存记录；执行时段按片段编号及起止区间去重，复制不代表已发送或归档。'];let any=false;
  for(const [list,name] of [['required','必做'],['ideal','理想'],['extra','长期拓展']]){
   const c=column(day,list);lines.push('【'+name+'】'+(c.total?'完成 '+c.label:c.label));
   if(c.items.length)any=true;
-  c.items.forEach(x=>lines.push((x.done?'✓ ':'○ ')+x.title+'〔'+(x.deferredTo?(x.deferredClosed?'已补记至':'未完成；已延期至')+x.deferredTo:x.kind==='checkin'?(x.mode==='punch'?'监督记录 '+x.count+'次':x.count+'/'+x.goal+'次 · '+(x.target?(x.done?'打卡达标':'打卡未达标'):'选做，无完成目标')):x.done?'已完成':'未完成')+(x.backfillDay?'；补记实际完成日 '+x.backfillDay:'')+(x.originalDay?'；原安排 '+x.originalDay:'')+'〕'));
+  c.items.forEach(x=>{lines.push((x.done?'✓ ':'○ ')+x.title+'〔'+(x.deferredTo?(x.deferredClosed?'已补记至':'未完成；已延期至')+x.deferredTo:x.kind==='checkin'?(x.mode==='punch'?'监督记录 '+x.count+'次':x.count+'/'+x.goal+'次 · '+(x.target?(x.done?'打卡达标':'打卡未达标'):'选做，无完成目标')):x.done?'已完成':'未完成')+(x.backfillDay?'；补记实际完成日 '+x.backfillDay:'')+(x.originalDay?'；原安排 '+x.originalDay:'')+'〕');if(x.note?.trim())lines.push('  任务备注：'+x.note);});
  }
+ lines.push(...planLines(day));
  const review=reviewFacts(day);if(review.length){any=true;lines.push('【间隔复习 · 轮次说明，不另计时长】',...review.map(r=>r.title+' · 第'+r.n+'轮 · 原定 '+M().naturalDay(r.due)+' '+M().clock(r.due)+' · '+({pending:'待复习',done:'已完成',cancelled:'已取消'}[r.status])+(r.at?' · '+(r.reportedDay?'补记日 '+r.reportedDay+'，录入 ':'实际 ')+M().naturalDay(r.at)+' '+M().clock(r.at):'')+(r.result?' · '+({no:'未掌握',partial:'部分掌握',yes:'已掌握'}[r.result]):'')));}
  const periods=(S().data().memoRecurrence?.occurrences||[]).filter(o=>o.day===day);if(periods.length){any=true;lines.push('【固定周期 · 期次说明，不另计时长】',...periods.map(o=>o.id+' · '+({pending:'未完成',done:'已完成',skipped:'已跳过，未完成',retired:'安排已调整'}[o.status])+(o.reason?'；'+o.reason:'')));}
  if(finance&&A.memoFinance){const f=A.memoFinance.postingSummary(day);lines.push(f.text);if(f.any)any=true;}
@@ -115,3 +128,4 @@ function mark(q){
  if(q.factSnapshot){f.reportFacts=clone(q.factSnapshot);f.factCarry={day:M().userDay(),selected:q.day,base:clone(q.factBase)};}
 }
 A.memoReport={report,legacyReport,facts,executionText,attach,mark};})();
+

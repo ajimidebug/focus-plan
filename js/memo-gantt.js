@@ -412,5 +412,10 @@ document.addEventListener('toggle',e=>{const target=e.target;if(target.matches?.
 },true);
 let resizeQueued=false;
 window.addEventListener('resize',()=>{if(resizeQueued)return;resizeQueued=true;requestAnimationFrame(()=>{resizeQueued=false;if(pref('display-mode','detail')==='overview')refresh();else syncEdges();});});
-A.memoGantt={validate,model,html,editor,apply,quick,syncEdges,locate,nodes,normalizeKey};
+function deadlines(){
+ const items=(A.ms?.list?.()||[]).flatMap(x=>{const due=x.due||x.end||x.start;return dayNumber(due)===null?[]:[{key:'deadline:'+x.id,title:x.name,due}];});
+ for(const n of nodes())if(dayNumber(n.task.memoGanttEnd)!==null)items.push({key:n.key,title:n.title,due:n.task.memoGanttEnd,ref:n.ref,done:!!(n.task.done||n.task.doneAt||n.task.memoGanttCompletedAt)});
+ return items.sort((a,b)=>a.due.localeCompare(b.due)||a.title.localeCompare(b.title));
+}
+A.memoGantt={deadlines,validate,model,html,editor,apply,quick,syncEdges,locate,nodes,normalizeKey};
 })();

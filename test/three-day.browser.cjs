@@ -55,11 +55,21 @@ const server=http.createServer((req,res)=>{
   await page.getByRole('button',{name:'确认取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>App.memoThree.state().tasks[0].note),'保留自定义备注');
   assert.match(await page.evaluate(()=>App.memoCore.read(App.memoCore.userDay()).text),/本次完成备注/);
+  await page.locator('.three-round-nav').getByRole('button',{name:'下轮',exact:true}).click();
+  await page.getByRole('button',{name:'添加三天任务',exact:true}).click();
+  await page.locator('#mw-title').fill('下轮独立任务');await page.locator('#mw-note-edit').fill('未来任务备注');
+  await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
+  assert.equal(await page.evaluate(()=>App.memoThree.state().tasks.find(t=>t.text==='下轮独立任务').originRound),1);
+  assert.match(await page.locator('.three-day-column').innerText(),/下轮独立任务/);
+  assert.doesNotMatch(await page.locator('.three-day-column').innerText(),/三天内复盘数学错题/);
+  const copied=await page.evaluate(()=>App.memoFlow.copyQuote(App.memoCore.userDay()).text);
+  assert.match(copied,/保留自定义备注/);assert.match(copied,/未来任务备注/);assert.match(copied,/预排/);assert.match(copied,/未完成/);
+  await page.locator('.three-round-nav').getByRole('button',{name:'本轮',exact:true}).click();
   await page.clock.setFixedTime(new Date('2026-11-19T04:00:00+08:00'));
   await page.evaluate(async()=>{await App.memoActions.commit(()=>{});App.memoWorkspace.returnToday();});
   assert.match(await page.locator('.three-day-column').innerText(),/延期/);
   assert.equal(await page.locator('.three-day-strip [aria-current=date]').innerText(),'第1天\n19日');
-  await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);assert.equal(await page.evaluate(()=>App.memoThree.state().tasks.length),1);
+  await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);assert.equal(await page.evaluate(()=>App.memoThree.state().tasks.length),2);
   fs.mkdirSync('test-results',{recursive:true});
   for(const width of [320,390,430]){await page.setViewportSize({width,height:844});await page.locator('.framework-overview').screenshot({path:'test-results/175121-three-day-'+width+'.png',animations:'disabled'});}
   await page.setViewportSize({width:390,height:844});
@@ -83,3 +93,4 @@ const server=http.createServer((req,res)=>{
   assert.deepEqual(errors,[]);console.log('Three-day plan, queue move, floating completion, rollover and full-day timeline passed');
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);server.close();process.exitCode=1;});
+

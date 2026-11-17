@@ -14,7 +14,7 @@ function manage(){
  const ref=found.ref,timing=A.memoSchedule.timing(ref),session=timing.session;
  const attrs=' data-schedule-ref="'+A.store.esc(JSON.stringify(ref))+'"';
  const end=session&&session.status!=='ended'?'<button type="button" class="btn" data-schedule-command="end"'+attrs+'>结束计时</button>':'';
- const m=A.ui.openModal('计时管理 · '+found.task.text,'<p>'+A.store.esc(found.task.text)+'</p><p>'+(selected.status==='waiting'?'待开始':session?.status==='running'?'正在计时':'已暂停')+' · 累计 '+clock(timing.totalMs)+'</p><button type="button" class="btn btn-primary" data-schedule-command="'+(session?.status==='running'?'pause':'start')+'" data-queue-start="'+!!A.memoWorkspace?.currentQueueItem()+'"'+attrs+'>'+(session?.status==='running'?'暂停计时':session?.status==='paused'?'继续计时':'开始计时')+'</button>'+end+'<div class="float-task-actions"><button class="btn" data-float-task>任务与备注</button><button class="btn btn-primary" data-float-complete>完成任务</button></div>','<button class="btn" data-act="close">关闭</button>');
+ const m=A.ui.openModal('计时管理 · '+found.task.text,'<p>'+A.store.esc(found.task.text)+'</p><p>'+(selected.status==='waiting'?(session?.status==='ended'?'上次已结束 · 待开始':'待开始'):session?.status==='running'?'正在计时':'已暂停')+' · 累计 '+clock(timing.totalMs)+'</p><button type="button" class="btn btn-primary" data-schedule-command="'+(session?.status==='running'?'pause':'start')+'" data-queue-start="'+!!A.memoWorkspace?.currentQueueItem()+'"'+attrs+'>'+(session?.status==='running'?'暂停计时':session?.status==='paused'?'继续计时':'开始计时')+'</button>'+end+'<div class="float-task-actions"><button class="btn" data-float-task>任务与备注</button><button class="btn btn-primary" data-float-complete>完成任务</button></div>','<button class="btn" data-act="close">关闭</button>');
  m.classList.add('float-management-modal');
  A.ui.bindActions({close:()=>A.ui.closeModal()});
  m.querySelector('[data-float-task]').onclick=()=>{A.ui.closeModal();if(ref.kind==='checkin')A.memoActions.checkin(ref.id,ref.day);else A.memoWorkspace.editor(ref);};
@@ -133,3 +133,4 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown',e=>{if(e.target.matches?.('#mw-live .float-summary')&&['Enter',' '].includes(e.key)){e.preventDefault();manage();return;}if(e.key==='Escape'&&viewMode==='full'&&!document.querySelector('.modal'))setMode('mini');});
 A.memoFloat={update,place,setMode,manage};
 })();
+

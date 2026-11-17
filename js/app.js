@@ -383,7 +383,7 @@
     document.querySelectorAll('.view').forEach(function (sec) {
       sec.classList.toggle('active', sec.id === 'view-' + v);
     });
-    if (v === 'memo') requestAnimationFrame(function () { const editor = document.getElementById('memo-editor'); if (editor) App.memoEditor?.revealEnd(); });
+    if (v === 'memo') requestAnimationFrame(function () { const editor = document.getElementById('memo-editor'); if (editor) App.memoEditor?.enterAtEnd(); });
     if (v === 'timeline') App.timeline.render();
     if (v === 'memo-timeaxis') App.memoSchedule.open({ workspace: true });
     if (unifiedTimeline) document.querySelectorAll('[data-view="timeline"]').forEach(b => b.classList.add('active'));

@@ -39,16 +39,17 @@
     const closed = state().history.find(h => h.index === r.index);
     const current = round();
     const historical = !!closed || r.index < current.index;
+    const future = r.index > current.index;
     const snapshots = closed?.rows || (historical ? rowsAt(r.index, r.end) : null);
     const rows = snapshots ? snapshots.map(row => ({ ...row, task: find(row.id), ref: { kind: 'three', id: row.id, list: 'three' } })) :
-      state().tasks.filter(t => t.originRound <= r.index && (!t.done || round(M().userDay(t.doneAt))?.index === r.index)).map(task => ({
+      state().tasks.filter(t => (future ? t.originRound === r.index : t.originRound <= r.index) && (!t.done || round(M().userDay(t.doneAt))?.index === r.index)).map(task => ({
         id: task.id, text: task.text, task, ref: { kind: 'three', id: task.id, list: 'three' }, done: !!task.done, delayed: task.originRound < r.index
       }));
-    return { round: r, rows, done: rows.filter(t => t.done).length, total: rows.length, historical };
+    return { round: r, rows, done: rows.filter(t => t.done).length, total: rows.length, historical, future };
   }
   function items(day = M().userDay()) {
     const p = projection(day);
-    return p.historical ? [] : p.rows.filter(x => x.task).map(x => ({ task: x.task, ref: x.ref, done: x.done }));
+    return p.historical || p.future ? [] : p.rows.filter(x => x.task).map(x => ({ task: x.task, ref: x.ref, done: x.done }));
   }
   function setup() {
     if (A.memoActions.busy()) return A.ui.toast('请先重试保存');
@@ -65,6 +66,7 @@
       } catch (e) { modal.querySelector('#three-error').textContent = e.message; }
     } });
   }
-  function editor(ref) { return A.memoWorkspace.editor(ref, 'three'); }
+  function editor(ref, day) { return A.memoWorkspace.editor(ref, 'three', false, day); }
   A.memoThree = { state, find, round, projection, items, needsSettlement, settleCore, setup, editor };
 })();
+

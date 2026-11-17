@@ -209,6 +209,7 @@
   function active() { return state().sessions.find(s => s.status === 'running'); }
   function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
   function startRef(ref, now = Date.now(), itemId = null) {
+    if(ref.kind==='three' && App.memoThree.find(ref.id)?.originRound>App.memoThree.round().index)throw Error('请先把任务移到本轮再开始');
     summaryCache = null; const d = state(), found = resolve(ref); if (!found || found.task.archived) throw new Error('任务已删除或停用，请重新选择');
     App.memoReview?.assertExecutable(found.ref);
     if (isDone({ ref: found.ref })) throw new Error('任务已完成；取消完成后再计时');
@@ -395,6 +396,7 @@
       }});
   }
   function startUI(ref, itemId = null, fromQueue = false) {
+    if(ref.kind==='three' && App.memoThree.find(ref.id)?.originRound>App.memoThree.round().index)return App.ui.toast('请先把任务移到本轮再开始');
     const run = async () => {
       const saved=await perform(() => {startRef(ref, Date.now(), itemId);if(fromQueue)App.memoWorkspace?.selectQueueCore?.(ref);});
       if(saved)App.memoWorkspace?.timerStarted(ref,fromQueue);
@@ -603,3 +605,4 @@
   }
   App.memoSchedule = { invalidate:()=>{summaryCache=null;},meterTiming,meterState,planWindow,windowMeter,setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
 })();
+

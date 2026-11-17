@@ -449,3 +449,11 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 
 /* Prevent SVG intrinsic 300px width from expanding narrow overview tracks. */
 .memo-gantt .memo-gantt-edges{width:100%;max-width:100%;}
+
+
+.three-round-nav { display:flex; gap:4px; margin:6px 0; flex-wrap:wrap; }
+.three-round-nav .selected { background:var(--q-primary); color:white; }
+.three-future-row { display:flex; justify-content:space-between; gap:8px; width:100%; text-align:left; background:transparent; color:inherit; border:0; border-bottom:1px solid #8883; padding:12px 4px; font:inherit; overflow-wrap:anywhere; }
+.three-future-row small { flex-shrink:0; }
+.three-deadlines { display:flex; flex-direction:column; gap:4px; margin:8px 0; }
+.three-deadlines button { text-align:left; white-space:normal; overflow-wrap:anywhere; }

@@ -164,10 +164,10 @@
   }
   async function copyFull() {
     if(copying)return;
-    if(App.memoActions?.busy())return await copyText(currentText());
+    if(App.memoActions?.busy()){App.ui.toast('本次仅复制笔记正文，任务汇总尚未生成');return await copyText(currentText());}
     copying=true;
     try {
-      if (!await flush()) return await copyText(currentText());
+      if (!await flush()){App.ui.toast('本次仅复制笔记正文，任务汇总尚未生成');return await copyText(currentText());}
       if (!S().data().memoFlow) return await copyText(read(selected) ? exportText([selected]) : currentText());
       const quote=App.memoFlow.copyQuote(selected);
       return await copyText(quote.text,()=>markCopied(quote));
@@ -251,3 +251,4 @@
   App.memo = { init, show, history, flush, busy, copyCurrent, copyFull, selected: () => selected };
   App.memoCore = { naturalDay, userDay, clock, shiftDay, validDate, read, write, entries, exportText, segments, exportBlocks };
 })();
+

@@ -68,6 +68,18 @@
     cancelAnimationFrame(tailFrame);
     tailFrame = requestAnimationFrame(() => { root.scrollTop = root.scrollHeight; });
   }
+  function enterAtEnd() {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (document.body.dataset.view !== 'memo') return;
+      select(textOf(blocks).length);
+      root.scrollTop = root.scrollHeight;
+      const bottom = root.getBoundingClientRect().bottom;
+      const viewport = window.visualViewport;
+      const nav = document.querySelector('.app-bottom-nav');
+      const visible = Math.min(viewport ? viewport.offsetTop + viewport.height : window.innerHeight, nav?.getBoundingClientRect().top || window.innerHeight);
+      if (bottom > visible - 12) window.scrollBy(0, bottom - visible + 12);
+    }));
+  }
   function layoutChanged() {
     if (document.activeElement === root) followCaret();
     else if (stickBottom) revealEnd();
@@ -233,5 +245,6 @@
     });
   }
   function show(list, readOnly) { blocks = clone(list); undo = []; redo = []; root.contentEditable = readOnly ? 'false' : 'true'; paint(); root.scrollTop = root.scrollHeight; revealEnd(); }
-  App.memoEditor = { init, show, read: () => clone(blocks), text: () => textOf(blocks), selection, insert, busy: () => composing, select, revealEnd, textOf, splice, diff, normalize };
+  App.memoEditor = { init, show, read: () => clone(blocks), text: () => textOf(blocks), selection, insert, busy: () => composing, select, revealEnd, enterAtEnd, textOf, splice, diff, normalize };
 })();
+

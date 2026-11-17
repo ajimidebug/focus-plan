@@ -25,6 +25,16 @@ const server=http.createServer((req,res)=>{
   });
   await page.locator('.mw-exec-item').first().locator('[data-schedule-command=start]').click();
   await page.waitForFunction(()=>App.memoSchedule.state().sessions.some(s=>s.status==='running'));
+  await page.locator('#mw-live [data-float-toggle]').click();
+  await page.locator('.float-management-modal [data-schedule-command=end]').click();
+  await page.getByRole('button',{name:'确认结束',exact:true}).click();
+  await page.waitForFunction(()=>App.memoSchedule.state().sessions.every(s=>s.status==='ended'));
+  const endedTime=await page.evaluate(()=>App.memoSchedule.timing({kind:'task',id:'nav-a',day:'2026-11-13',list:'ideal'}).allMs);
+  await page.clock.runFor(10000);
+  assert.equal(await page.evaluate(()=>App.memoSchedule.timing({kind:'task',id:'nav-a',day:'2026-11-13',list:'ideal'}).allMs),endedTime);
+  assert.equal(await page.evaluate(()=>App.store.data().days['2026-11-13'].tasks.ideal[0].done||false),false);
+  await page.locator('#mw-live-controls [data-schedule-command=start]').click();
+  await page.waitForFunction(()=>App.memoSchedule.state().sessions.some(s=>s.status==='running'));
   const original=await page.evaluate(()=>App.memoSchedule.state().sessions.find(s=>s.status==='running').id);
   await page.clock.runFor(1000);
   await page.locator('#mw-live [data-float-toggle]').click();
@@ -72,3 +82,4 @@ const server=http.createServer((req,res)=>{
  }finally{await browser.close();await new Promise(r=>server.close(r));}
  console.log('Queue waiting, clear, mini/full/edge timer and clamped popup passed');
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
+

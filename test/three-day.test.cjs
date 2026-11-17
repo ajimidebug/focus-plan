@@ -39,3 +39,14 @@ test('three-day full backup rejects unknown and damaged module data without chan
  }
  assert.equal(b.S.validate(valid),true);assert.equal(await b.S.save(),true);
 });
+
+test('future rounds stay separate and retained task notes survive complete, undo and reload',async()=>{
+ const b=await harness(),ref=b.add('now'),future=b.add('future');
+ b.T.find(future.id).originRound=1;
+ assert.equal(b.T.projection().rows.length,1);
+ const next=b.T.projection('2026-11-19');assert.equal(next.future,true);assert.deepEqual(Array.from(next.rows,x=>x.id),['future']);assert.equal(b.T.items('2026-11-19').length,0);
+ assert.throws(()=>b.P.startRef(future),/本轮/);
+ const event=b.A.completeCore({...ref,title:'now'},'完成说明',b.at());b.A.undoCore(event.id,'',b.at());assert.equal(b.T.find(ref.id).note,'原始备注');
+ await b.S.save();const c=browser({shared:b});await c.S.load();assert.equal(c.S.data().memoThree.tasks[0].note,'原始备注');
+ b.setTime('2026-11-19T04:00:00+08:00');b.T.settleCore();assert.equal(b.T.projection().rows.length,2);assert.equal(b.T.projection().rows.filter(x=>x.delayed).length,1);
+});
