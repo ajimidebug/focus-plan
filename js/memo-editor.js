@@ -62,7 +62,7 @@
     const r = s.getRangeAt(0), pre = document.createRange(); pre.selectNodeContents(root); pre.setEnd(r.startContainer, r.startOffset);
     return { start: pre.toString().length, end: pre.toString().length + r.toString().length };
   }
-  let stickBottom = true, tailFrame = 0, pointer = null;
+  let stickBottom = true, tailFrame = 0, pointer = null, tailOnFocus = false;
   function revealEnd() {
     stickBottom = true;
     cancelAnimationFrame(tailFrame);
@@ -71,7 +71,7 @@
   function enterAtEnd() {
     requestAnimationFrame(() => requestAnimationFrame(() => {
       if (document.body.dataset.view !== 'memo') return;
-      select(textOf(blocks).length);
+      tailOnFocus = true;
       root.scrollTop = root.scrollHeight;
       const bottom = root.getBoundingClientRect().bottom;
       const viewport = window.visualViewport;
@@ -196,7 +196,9 @@
     root = element; changed = onChange;
     ['input', 'keyup', 'click', 'focus', 'compositionupdate', 'compositionend'].forEach(type => root.addEventListener(type, followCaret));
     document.addEventListener('selectionchange', followCaret);
+    root.addEventListener('focus', () => { if (tailOnFocus) { tailOnFocus = false; select(textOf(blocks).length); } });
     root.addEventListener('pointerdown', e => {
+      tailOnFocus = false;
       pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, at: Date.now(), first: document.activeElement !== root, moved: false };
     });
     root.addEventListener('pointermove', e => { if (pointer?.id === e.pointerId && Math.hypot(e.clientX-pointer.x, e.clientY-pointer.y)>8) pointer.moved = true; });
