@@ -57,3 +57,10 @@ test('round view is safe before setup and survives remount within the same round
  b.S.data().memoThree=state;b.T.viewOffset('2026-11-16',1);
  assert.equal(b.T.viewOffset('2026-11-17'),1);assert.equal(b.T.viewOffset('2026-11-19'),0);
 });
+
+test('full report includes unfinished unscheduled Gantt tasks and their notes',async()=>{
+ const b=browser();await b.S.load();const {R}=require('./helpers/harness.cjs').executionReportHarness(b);
+ b.ctx.App.memoGantt={model:()=>({rows:[{key:'project:pending',title:'未排期项目',valid:false,start:null,end:null,achieved:false,task:{note:'项目备注'}}]}),deadlines:()=>[]};
+ const text=R.report('2026-10-28').text;
+ assert.match(text,/未排期项目〔未完成；未排期〕/);assert.match(text,/项目备注/);
+});
