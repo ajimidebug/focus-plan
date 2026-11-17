@@ -50,3 +50,10 @@ test('future rounds stay separate and retained task notes survive complete, undo
  await b.S.save();const c=browser({shared:b});await c.S.load();assert.equal(c.S.data().memoThree.tasks[0].note,'原始备注');
  b.setTime('2026-11-19T04:00:00+08:00');b.T.settleCore();assert.equal(b.T.projection().rows.length,2);assert.equal(b.T.projection().rows.filter(x=>x.delayed).length,1);
 });
+
+test('round view is safe before setup and survives remount within the same round',async()=>{
+ const b=await harness(),state=b.S.data().memoThree;delete b.S.data().memoThree;
+ assert.equal(b.T.viewOffset('2026-11-16'),0);
+ b.S.data().memoThree=state;b.T.viewOffset('2026-11-16',1);
+ assert.equal(b.T.viewOffset('2026-11-17'),1);assert.equal(b.T.viewOffset('2026-11-19'),0);
+});
