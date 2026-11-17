@@ -66,7 +66,13 @@
       } catch (e) { modal.querySelector('#three-error').textContent = e.message; }
     } });
   }
+  let viewedRound = null;
+  function viewOffset(day, value) {
+    const base = round(day)?.start;
+    if (value !== undefined) viewedRound = { base, offset: value };
+    return viewedRound?.base === base ? viewedRound.offset : 0;
+  }
   function editor(ref, day) { return A.memoWorkspace.editor(ref, 'three', false, day); }
-  A.memoThree = { state, find, round, projection, items, needsSettlement, settleCore, setup, editor };
+  A.memoThree = { state, find, round, projection, items, needsSettlement, settleCore, setup, editor, viewOffset };
 })();
 

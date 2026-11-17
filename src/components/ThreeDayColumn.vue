@@ -3,8 +3,9 @@ import { computed, ref, watch } from 'vue'
 import OverviewTask from './OverviewTask.vue'
 const props=defineProps<{day:string;revision:number}>()
 const A=()=>window.App
-const offset=ref(0)
-watch(()=>props.day,()=>{offset.value=0})
+const offset=ref(A().memoThree.viewOffset(props.day))
+function selectRound(index:number){offset.value=index;A().memoThree.viewOffset(props.day,index)}
+watch(()=>props.day,()=>{offset.value=A().memoThree.viewOffset(props.day)})
 const viewDay=computed(()=>A().memoCore.shiftDay(props.day,offset.value*3))
 const deadlines=computed(()=>{void props.revision;const r=A().memoThree.round(viewDay.value);return r?(A().memoGantt?.deadlines()||[]).filter((x:any)=>x.due>=r.start&&x.due<=r.end):[]})
 const plan=computed(()=>{void props.revision;return A().memoThree.projection(viewDay.value)})
@@ -19,7 +20,7 @@ function remember(event:Event){try{localStorage.setItem(doneKey.value,(event.tar
     <div class="cal-col-head"><span>三天计划</span><span class="mw-column-count">{{plan.round?plan.done+'/'+plan.total:'尚未开始'}}</span></div>
     <div class="mw-column-meter" role="img" :aria-label="'本轮完成'+plan.done+'/'+plan.total"><span class="mw-column-done" :style="{width:(plan.total?plan.done/plan.total*100:0)+'%'}" /></div>
     <template v-if="plan.round">
-      <div class="three-round-nav" role="group" aria-label="选择三天轮次"><q-btn v-for="(label,index) in ['本轮','下轮','下下轮']" :key="index" flat dense no-caps :aria-pressed="offset===index" :class="{selected:offset===index}" @click="offset=index">{{label}}</q-btn></div>
+      <div class="three-round-nav" role="group" aria-label="选择三天轮次"><q-btn v-for="(label,index) in ['本轮','下轮','下下轮']" :key="index" flat dense no-caps :aria-pressed="offset===index" :class="{selected:offset===index}" @click="selectRound(index)">{{label}}</q-btn></div>
       <div v-if="deadlines.length" class="three-deadlines"><small>本轮截止</small><button v-for="item in deadlines" :key="item.key" type="button" class="btn btn-small" @click="item.ref?A().memoWorkspace.editor(item.ref):A().ms.openList(item.due)">{{item.due.slice(5)}} · {{item.title}}{{item.done?' · 已完成':''}}</button></div>
       <div class="three-day-strip" role="img" :aria-label="'本轮'+plan.round.start+'至'+plan.round.end+(currentDay?'，当前第'+currentDay+'天':'')">
         <div v-for="(date,index) in dates" :key="date" :class="{current:date===A().memoCore.userDay(),past:date<A().memoCore.userDay()}" :aria-current="date===A().memoCore.userDay()?'date':undefined"><span>第{{index+1}}天</span><small>{{date.slice(8)}}日</small></div>
