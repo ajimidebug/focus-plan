@@ -6,7 +6,7 @@ permissions:
   contents: write
   actions: read
 concurrency:
-  group: focus-plan-production
+  group: focus-plan-production-175151
   cancel-in-progress: false
 jobs:
   stage:
