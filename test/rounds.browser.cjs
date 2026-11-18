@@ -37,7 +37,7 @@ const server=http.createServer((req,res)=>{
   assert.match(await row.innerText(),/手动安排/);assert.match(await row.innerText(),/截止日位于轮次外/);
   await row.getByRole('button',{name:'安排轮次',exact:true}).click();await page.locator('#round-assignment').selectOption('auto');await save();await select.selectOption('0');assert(await row.isVisible());
   await page.evaluate(async()=>{await App.memoActions.commit(()=>App.memoSchedule.startRef({kind:'three',id:App.memoThree.state().tasks[0].id,list:'three'}));});
-  await page.getByRole('button',{name:'提前结束本轮',exact:true}).click();await page.getByRole('button',{name:'确认提前结束',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
+  await page.getByRole('button',{name:'提前结束本轮',exact:true}).click();await page.locator('#round-next-start').fill('2026-11-17');await page.getByRole('button',{name:'确认提前结束',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>App.memoThree.byIndex(0).end),'2026-11-16');assert.equal(await page.evaluate(()=>App.memoThree.byIndex(0).originalEnd),'2026-11-20');assert.equal(await page.evaluate(()=>App.memoSchedule.state().sessions[0].status),'paused');
   await select.selectOption('1');await page.getByRole('button',{name:'调整日期',exact:true}).click();await range(17,23);await save();
   await page.getByRole('button',{name:'新建轮次',exact:true}).click();await range(17,18);await page.locator('.modal [data-act=save]').click();assert.match(await page.locator('#round-error').innerText(),/重叠/);await page.locator('.modal [data-act=cancel]').click();

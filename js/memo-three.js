@@ -138,7 +138,10 @@
   }
   function rangePreview(start, end, index) {
     validateRange(start, end, index);
-    return linkedNodes().filter(n => n.task.memoRoundAssignment?.mode !== 'manual' && M().validDate(n.task.memoGanttEnd) && ((start <= n.task.memoGanttEnd && n.task.memoGanttEnd <= end) || targetOf(n) === index)).map(n => n.title + ' · 截止 ' + n.task.memoGanttEnd);
+    const linked=linkedNodes().filter(n => n.task.memoRoundAssignment?.mode !== 'manual' && M().validDate(n.task.memoGanttEnd) && ((start <= n.task.memoGanttEnd && n.task.memoGanttEnd <= end) || targetOf(n) === index)).map(n => n.title + ' · 截止 ' + n.task.memoGanttEnd);
+    const native=index===null?[]:(state()?.tasks||[]).filter(t=>nativeTarget(t)===index).map(t=>t.text);
+    const deadlines=(A.ms?.list?.()||[]).filter(d=>{const due=d.due||d.end||d.start;return due>=start&&due<=end;}).map(d=>d.name+' · 截止 '+(d.due||d.end||d.start));
+    return native.concat(linked,deadlines);
   }
   function saveRoundCore(start, end, index = null, includePending = true) {
     migrateCore(); validateRange(start, end, index);
@@ -183,7 +186,7 @@
     const modal = A.ui.openModal(r ? '调整轮次日期' : '新建轮次', A.memoGantt.dateFields('round', start, end) + '<label><input type="checkbox" id="round-pending" checked>接入尚未安排的轮次任务</label><p id="round-preview" role="status"></p><p id="round-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">确认保存</button>', { lock: true });
     A.memoGantt.bindDates(modal, 'round');
     modal.querySelector('[data-range-deadline]').hidden = true;
-    const preview = () => { try { const rows = rangePreview(modal.querySelector('#round-start').value, modal.querySelector('#round-end').value, index); modal.querySelector('#round-preview').textContent = rows.length ? '关联甘特任务：' + rows.join('、') : '此范围暂无自动关联的甘特任务'; modal.querySelector('#round-error').textContent = ''; } catch (e) { modal.querySelector('#round-error').textContent = e.message; } };
+    const preview = () => { try { const rows = rangePreview(modal.querySelector('#round-start').value, modal.querySelector('#round-end').value, index); modal.querySelector('#round-preview').textContent = rows.length ? '关联任务及截止事项：' + rows.join('、') : '此范围暂无关联任务或截止事项'; modal.querySelector('#round-error').textContent = ''; } catch (e) { modal.querySelector('#round-error').textContent = e.message; } };
     modal.addEventListener('change', preview); modal.addEventListener('click', () => requestAnimationFrame(preview)); preview();
     A.ui.bindActions({ cancel: A.ui.closeModal, save: () => run(() => {
       const saved = saveRoundCore(modal.querySelector('#round-start').value, modal.querySelector('#round-end').value, index, modal.querySelector('#round-pending').checked);
@@ -194,8 +197,9 @@
     const r = byIndex(index); if (!r || r.closedAt) return;
     const p = projection(r.start), rows = p.rows.filter(x => !x.done);
     const next = rounds().find(n => !n.closedAt && n.start > M().userDay());
-    const modal = A.ui.openModal('提前结束本轮', '<p>' + E(r.start + ' — ' + r.end) + '</p><p>本轮结束于 ' + E(M().userDay()) + '，下一轮最早从 ' + E(M().shiftDay(M().userDay(), 1)) + ' 开始。</p><p>已完成 ' + p.done + ' 项，未完成 ' + rows.length + ' 项。未完成项将进入' + E(next ? next.start + ' — ' + next.end : '待安排') + '。</p><ul>' + rows.map(x => '<li>' + E(x.text) + (A.memoSchedule.timing(x.ref).session?.status === 'running' ? ' · 正在计时，确认后暂停并保留已有片段' : '') + '</li>').join('') + '</ul><p>原截止日期保留，剩余日期释放；后续轮次可另行调整日期。</p><p id="round-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="close-round">确认提前结束</button>', { lock: true });
-    A.ui.bindActions({ cancel: A.ui.closeModal, 'close-round': () => run(() => closeCore(index, true)) });
+    const nextField=next?'<label>下一轮开始日期<input type="date" id="round-next-start" value="'+E(next.start)+'" min="'+E(M().shiftDay(M().userDay(),1))+'" max="'+E(next.end)+'"></label>':'';
+    const modal = A.ui.openModal('提前结束本轮', '<p>' + E(r.start + ' — ' + r.end) + '</p><p>本轮结束于 ' + E(M().userDay()) + '，下一轮最早从 ' + E(M().shiftDay(M().userDay(), 1)) + ' 开始。</p><p>已完成 ' + p.done + ' 项，未完成 ' + rows.length + ' 项。未完成项将进入' + E(next ? next.start + ' — ' + next.end : '待安排') + '。</p><ul>' + rows.map(x => '<li>' + E(x.text) + (A.memoSchedule.timing(x.ref).session?.status === 'running' ? ' · 正在计时，确认后暂停并保留已有片段' : '') + '</li>').join('') + '</ul>'+nextField+'<p>原截止日期保留，剩余日期释放。</p><p id="round-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="close-round">确认提前结束</button>', { lock: true });
+    A.ui.bindActions({ cancel: A.ui.closeModal, 'close-round': () => {const nextStart=modal.querySelector('#round-next-start')?.value;run(() => {closeCore(index, true);if(next&&nextStart!==next.start)saveRoundCore(nextStart,next.end,next.index,false);});} });
   }
   function assignmentEditor(ref) {
     if (A.memoActions.busy()) return A.ui.toast('请先重试保存');
