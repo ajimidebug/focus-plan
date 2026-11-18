@@ -5,8 +5,9 @@
   const S = () => App.store;
   const $ = id => document.getElementById(id);
   let selected = null, saving = false, pending = Promise.resolve(true), inputVersion = 0;
+  const dateFormat = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   const parts = value => {
-    const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(value));
+    const p = dateFormat.formatToParts(new Date(value));
     const d = {}; p.forEach(x => { d[x.type] = x.value; }); return d;
   };
   function naturalDay(value = Date.now()) { const p = parts(value); return p.year + '-' + p.month + '-' + p.day; }
@@ -125,17 +126,55 @@
     App.memoEditor.insert((a > 0 && App.memoEditor.text()[a - 1] !== '\n' ? '\n' : '') + stamp.replace(':', '') + ' ');
     App.memoEditor.revealEnd();
   }
-  async function copyText(text, onCopied) {
-    let copied = false;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      try { await navigator.clipboard.writeText(text); copied = true; } catch (e) { /* 使用可见文本回退 */ }
+  function writeClipboard(text) {
+    const clipboard = navigator.clipboard;
+    if (typeof text !== 'string' && clipboard?.write && typeof ClipboardItem === 'function') {
+      // Start the clipboard request inside the click, before save and report generation.
+      const payload = text.then(value => new Blob([value], { type: 'text/plain' }));
+      payload.catch(() => {});
+      try { return clipboard.write([new ClipboardItem({ 'text/plain': payload })]); }
+      catch { /* Some browsers only support writeText. */ }
     }
-    if (!copied) {
-      App.ui.openModal('复制文字', '<p class="hint">自动复制未完成，请长按下方文字全选复制。</p><textarea id="memo-copy-fallback" readonly></textarea>', (onCopied ? '<button class="btn btn-primary" data-act="copied">我已手动复制</button>' : '') + '<button class="btn" data-act="close">关闭</button>');
-      $('memo-copy-fallback').value = text; $('memo-copy-fallback').select();
-      App.ui.bindActions({ close: App.ui.closeModal, copied: async b => { b.disabled = true; if (onCopied) await onCopied(); App.ui.closeModal(); } });
-    } else { App.ui.toast('已复制；请自行粘贴发送'); if (onCopied) await onCopied(); }
-    return copied;
+    if (!clipboard?.writeText) return Promise.reject(new Error('剪贴板不可用'));
+    return typeof text === 'string' ? clipboard.writeText(text) : text.then(value => clipboard.writeText(value));
+  }
+  async function copyText(text, onCopied) {
+    let request;
+    try { request = Promise.resolve(writeClipboard(text)).then(() => true, () => false); }
+    catch { request = Promise.resolve(false); }
+    const value = await text;
+    let timer;
+    const copied = await Promise.race([request, new Promise(resolve => { timer = setTimeout(() => resolve(false), 2500); })]);
+    clearTimeout(timer);
+    let confirmed = false;
+    const confirmCopy = async () => {
+      if (confirmed) return;
+      confirmed = true;
+      App.ui.toast('已复制，可直接粘贴');
+      if (onCopied) await onCopied();
+    };
+    if (copied) { await confirmCopy(); return true; }
+
+    const modal = App.ui.openModal('复制文字', '<p class="hint">自动复制未完成。可以重新复制、长按文字手动复制，或下载全文。</p><textarea id="memo-copy-fallback" aria-label="待复制全文" readonly></textarea>', '<button class="btn btn-primary" data-act="retry">重新复制</button><button class="btn" data-act="download">下载全文</button>' + (onCopied ? '<button class="btn" data-act="copied">我已手动复制</button>' : '') + '<button class="btn" data-act="close">关闭</button>');
+    const field = modal.querySelector('#memo-copy-fallback');
+    field.value = value;
+    App.ui.bindActions({
+      close: App.ui.closeModal,
+      download: () => download('备忘录.txt', value),
+      copied: async b => { b.disabled = true; App.ui.closeModal(); await confirmCopy(); },
+      retry: async b => {
+        b.disabled = true;
+        let timer;
+        try {
+          await Promise.race([writeClipboard(value), new Promise((_, reject) => { timer = setTimeout(reject, 2500); })]);
+          if (modal.isConnected) App.ui.closeModal();
+          await confirmCopy();
+        } catch {
+          if (modal.isConnected) { field.focus(); field.select(); App.ui.toast('复制未成功，请手动复制或下载'); }
+        } finally { clearTimeout(timer); b.disabled = false; }
+      }
+    });
+    return false;
   }
   function download(name, text) {
     const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
@@ -163,14 +202,30 @@
   }
   async function copyFull() {
     if(copying)return;
-    if(App.memoActions?.busy()){App.ui.toast('本次仅复制笔记正文，任务汇总尚未生成');return await copyText(currentText());}
     copying=true;
     try {
-      if (!await flush()){App.ui.toast('本次仅复制笔记正文，任务汇总尚未生成');return await copyText(currentText());}
-      if (!S().data().memoFlow) return await copyText(read(selected) ? exportText([selected]) : currentText());
-      const quote=App.memoFlow.copyQuote(selected);
-      return await copyText(quote.text,()=>markCopied(quote));
-    } catch(e){App.ui.toast(e.message);} finally{copying=false;}
+      const day=selected, fallback=currentText();
+      let quote, notice;
+      state('正在准备复制…');
+      const text = (async () => {
+        if (App.memoActions?.busy() || !await flush()) {
+          notice='已提供笔记正文，任务汇总因保存未完成暂未生成';
+          return fallback;
+        }
+        try {
+          if (!S().data().memoFlow) return read(day) ? exportText([day]) : fallback;
+          quote=App.memoFlow.copyQuote(day);
+          return quote.text;
+        } catch (e) {
+          console.warn('完整复制汇总生成失败', e);
+          notice='任务汇总生成失败，已提供笔记正文';
+          return fallback;
+        }
+      })();
+      const copied=await copyText(text,()=>quote&&markCopied(quote));
+      if(notice)App.ui.toast(notice);
+      return copied;
+    } catch(e){App.ui.toast(e.message);} finally{copying=false;statusText();}
   }
   function history() {
     const root = $('memo-history-results'); if (!root) return;

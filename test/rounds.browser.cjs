@@ -83,6 +83,48 @@ const server=http.createServer((req,res)=>{
   await page.getByRole('button',{name:'新建轮次',exact:true}).click();await range(17,18);await page.locator('.modal [data-act=save]').click();assert.match(await page.locator('#round-error').innerText(),/重叠/);await page.locator('.modal [data-act=cancel]').click();
   await page.clock.setFixedTime(new Date('2026-11-17T12:00:00+08:00'));await page.evaluate(()=>App.memoWorkspace.returnToday());
   const text=await page.evaluate(()=>App.memoFlow.copyQuote(App.memoCore.userDay()).text);assert.match(text,/轮次计划/);assert.match(text,/甘特原备注/);assert.match(text,/未完成/);
+  // Exercise the actual copy control, including an asynchronous save and a denied clipboard.
+  await page.context().grantPermissions(['clipboard-read','clipboard-write']);
+  await page.evaluate(async()=>{
+   const day=App.memoCore.userDay();
+   await App.memoActions.commit(()=>{
+    for(let i=1;i<=30;i++)App.store.getDay(App.memoCore.shiftDay(day,-i)).tasks.ideal.push({id:'copy-history-'+i,text:'历史安排 '+i});
+    App.memoCore.write(day,'轮次复制原文');
+   });
+   App.app.switchView('memo');App.memo.show(day);
+   const model=App.memoGantt.model;
+   window.copyPlanBuilds=0;
+   App.memoGantt.model=(...args)=>{window.copyPlanBuilds++;return model(...args);};
+  });
+  async function clickCopy(){
+   await page.locator('#memo-copy-menu summary').click();
+   await page.getByRole('button',{name:'复制全文',exact:true}).click();
+  }
+  await clickCopy();
+  await page.waitForFunction(()=>App.memoFlow.state().lastCopy?.text.includes('轮次复制原文'));
+  const pasted=await page.evaluate(()=>navigator.clipboard.readText());
+  assert.match(pasted,/轮次复制原文/);
+  assert.match(pasted,/甘特原备注/);
+  assert.equal(await page.evaluate(()=>window.copyPlanBuilds),1);
+  await page.waitForFunction(()=>!App.memoActions.busy());
+  const before=await page.evaluate(()=>App.memoFlow.state().lastCopy.at);
+  await page.evaluate(()=>{
+   const real=navigator.clipboard;
+   Object.defineProperty(navigator,'clipboard',{configurable:true,value:{
+    write:()=>Promise.reject(new Error('blocked')),
+    writeText:text=>real.writeText(text),
+    readText:()=>real.readText()
+   }});
+  });
+  await page.clock.setFixedTime(new Date('2026-11-17T12:01:00+08:00'));
+  await clickCopy();
+  const fallback=page.locator('#memo-copy-fallback');
+  await fallback.waitFor();
+  assert.match(await fallback.inputValue(),/甘特原备注/);
+  assert.equal(await page.evaluate(()=>App.memoFlow.state().lastCopy.at),before);
+  await page.getByRole('button',{name:'重新复制',exact:true}).click();
+  await page.waitForFunction(id=>App.memoFlow.state().lastCopy.at!==id,before);
+  assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/轮次复制原文/);
   await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);assert.equal(await page.evaluate(()=>App.memoThree.byIndex(1).start),'2026-11-17');
   fs.mkdirSync('test-results',{recursive:true});
   for(const [width,height] of [[320,640],[390,844],[550,350]]){
