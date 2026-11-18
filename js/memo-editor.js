@@ -68,19 +68,33 @@
     cancelAnimationFrame(tailFrame);
     tailFrame = requestAnimationFrame(() => { root.scrollTop = root.scrollHeight; });
   }
+  let tailEntry = 0, tailDeadline = 0, entryFrame = 0;
+  function cancelEntryTail() { tailDeadline = 0; cancelAnimationFrame(entryFrame); }
+  function alignEntryTail() {
+    if (!root || document.body.dataset.view !== 'memo' || Date.now() > tailDeadline) return;
+    stickBottom = true; root.scrollTop = root.scrollHeight;
+    const viewport = window.visualViewport;
+    const nav = document.querySelector('.app-bottom-nav');
+    const header = document.querySelector('.app-topbar');
+    const visibleTop = Math.max(viewport?.offsetTop || 0, header?.getBoundingClientRect().bottom || 0) + 8;
+    const visibleBottom = Math.min(viewport ? viewport.offsetTop + viewport.height : window.innerHeight, nav?.getBoundingClientRect().top || window.innerHeight) - 12;
+    const range = document.createRange(); range.selectNodeContents(root); range.collapse(false);
+    const caret = range.getClientRects()[0], box = caret?.height ? caret : root.getBoundingClientRect();
+    if (box.bottom > visibleBottom || box.top < visibleTop) window.scrollBy({ top: box.bottom - visibleBottom, behavior: 'instant' });
+  }
   function enterAtEnd() {
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (document.body.dataset.view !== 'memo') return;
-      tailOnFocus = true;
-      root.scrollTop = root.scrollHeight;
-      const bottom = root.getBoundingClientRect().bottom;
-      const viewport = window.visualViewport;
-      const nav = document.querySelector('.app-bottom-nav');
-      const visible = Math.min(viewport ? viewport.offsetTop + viewport.height : window.innerHeight, nav?.getBoundingClientRect().top || window.innerHeight);
-      if (bottom > visible - 12) window.scrollBy(0, bottom - visible + 12);
-    }));
+    const entry = ++tailEntry; tailOnFocus = true; tailDeadline = Date.now() + 1000;
+    let frames = 0;
+    const settle = () => {
+      if (entry !== tailEntry || !tailDeadline || document.body.dataset.view !== 'memo') return;
+      alignEntryTail();
+      if (++frames < 12) entryFrame = requestAnimationFrame(settle);
+    };
+    cancelAnimationFrame(entryFrame); entryFrame = requestAnimationFrame(settle);
+    document.fonts?.ready.then(() => { if (entry === tailEntry && tailDeadline && document.body.dataset.view === 'memo') { tailDeadline = Date.now() + 100; alignEntryTail(); } });
   }
   function layoutChanged() {
+    alignEntryTail();
     if (document.activeElement === root) followCaret();
     else if (stickBottom) revealEnd();
   }
@@ -196,6 +210,10 @@
     root = element; changed = onChange;
     ['input', 'keyup', 'click', 'focus', 'compositionupdate', 'compositionend'].forEach(type => root.addEventListener(type, followCaret));
     document.addEventListener('selectionchange', followCaret);
+    document.addEventListener('pointerdown', cancelEntryTail, {passive:true});
+    document.addEventListener('wheel', cancelEntryTail, {passive:true});
+    document.addEventListener('touchmove', cancelEntryTail, {passive:true});
+    new MutationObserver(alignEntryTail).observe(root,{childList:true,subtree:true,characterData:true});
     root.addEventListener('focus', () => { if (tailOnFocus) { tailOnFocus = false; select(textOf(blocks).length); } });
     root.addEventListener('pointerdown', e => {
       tailOnFocus = false;

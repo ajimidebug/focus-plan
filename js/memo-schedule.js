@@ -44,7 +44,7 @@
   function sources(forDay) {
     const d = S().data(), out = [], dayKey = forDay || selectedDay || M().userDay();
     (d.queue || []).filter(t=>!t.memoDismissed&&!t.archived&&!App.memoReview?.hidden(t,t.assignment?.list)&&(!t.assignment||t.assignment.day===dayKey)).forEach(t => out.push({ ref: { kind: 'queue', id: t.id }, title: t.text, label: '队列 · ' + t.text }));
-    (App.memoThree?.items(dayKey)||[]).filter(x=>!x.task.done).forEach(x=>out.push({ref:x.ref,title:x.task.text,label:'三天计划 · '+x.task.text}));
+    (App.memoThree?.items(dayKey)||[]).filter(x=>!x.task.done).forEach(x=>out.push({ref:x.ref,title:x.task.text,label:'轮次计划 · '+x.task.text}));
     const day = S().getDay(dayKey);
     ['required', 'ideal', 'extra'].forEach(list => (day.tasks[list] || []).filter(t => !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed && !App.memoReview?.hidden(t,list)).forEach(t => { const found = resolve({ kind: 'task', id: t.id, day: dayKey, list }); if (found) out.push({ ref: found.ref, title: found.task.text, label: '当天 · ' + found.task.text }); }));
     (d.daily || []).filter(t=>!t.archived).forEach(t => out.push({ ref: { kind: 'daily', id: t.id, day: dayKey }, title: t.text, label: '基础 · ' + t.text }));
@@ -209,7 +209,7 @@
   function active() { return state().sessions.find(s => s.status === 'running'); }
   function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
   function startRef(ref, now = Date.now(), itemId = null) {
-    if(ref.kind==='three' && App.memoThree.find(ref.id)?.originRound>App.memoThree.round().index)throw Error('请先把任务移到本轮再开始');
+    if(ref.kind==='three' && !App.memoThree.executable(ref))throw Error('请先把任务移到本轮再开始');
     summaryCache = null; const d = state(), found = resolve(ref); if (!found || found.task.archived) throw new Error('任务已删除或停用，请重新选择');
     App.memoReview?.assertExecutable(found.ref);
     if (isDone({ ref: found.ref })) throw new Error('任务已完成；取消完成后再计时');
@@ -396,7 +396,7 @@
       }});
   }
   function startUI(ref, itemId = null, fromQueue = false) {
-    if(ref.kind==='three' && App.memoThree.find(ref.id)?.originRound>App.memoThree.round().index)return App.ui.toast('请先把任务移到本轮再开始');
+    if(ref.kind==='three' && !App.memoThree.executable(ref))return App.ui.toast('请先把任务移到本轮再开始');
     const run = async () => {
       const saved=await perform(() => {startRef(ref, Date.now(), itemId);if(fromQueue)App.memoWorkspace?.selectQueueCore?.(ref);});
       if(saved)App.memoWorkspace?.timerStarted(ref,fromQueue);

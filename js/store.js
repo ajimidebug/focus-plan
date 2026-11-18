@@ -287,17 +287,28 @@
         !/^\d{4}-\d{2}-\d{2}$/.test(f.factCarry.selected)||!checkpoint(f.factCarry.base)))throw new Error('复制补记基线结构异常');
     }
     if (clean.memoThree !== undefined) {
-      const x=clean.memoThree, validDay=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&!Number.isNaN(Date.parse(d));
-      if(!x||x.version!==1||!validDay(x.anchor)||!Number.isSafeInteger(x.settledRound)||x.settledRound<0||
-        !Array.isArray(x.tasks)||!Array.isArray(x.history)||x.history.length!==x.settledRound||
-        x.history.some((h,i)=>h?.index!==i)||
+      const x=clean.memoThree;
+      const validDay=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d))&&new Date(d+'T00:00:00Z').toISOString().slice(0,10)===d;
+      const validIndex=n=>Number.isSafeInteger(n)&&n>=0;
+      const validRows=rows=>Array.isArray(rows)&&rows.every(r=>r&&typeof r.id==='string'&&typeof r.text==='string'&&typeof r.done==='boolean'&&typeof r.delayed==='boolean'&&(r.note===undefined||typeof r.note==='string'));
+      if(!x||![1,2].includes(x.version)||!validDay(x.anchor)||!validIndex(x.settledRound)||!Array.isArray(x.tasks)||!Array.isArray(x.history)||x.history.length!==x.settledRound||
         new Set(x.tasks.map(t=>t?.id)).size!==x.tasks.length||
-        x.tasks.some(t=>!t||typeof t.id!=='string'||typeof t.text!=='string'||!validDay(t.createdDay)||
-          !Number.isSafeInteger(t.originRound)||t.originRound<0||typeof t.done!=='boolean'||
-          !Number.isFinite(t.points)||t.points<0||!Number.isFinite(t.estimatedMinutes)||t.estimatedMinutes<0||t.estimatedMinutes>1440||
-          (t.done&&!Number.isFinite(Date.parse(t.doneAt))))||
-        x.history.some(h=>!h||!Number.isSafeInteger(h.index)||h.index<0||!Array.isArray(h.rows)||h.rows.some(r=>!r||typeof r.id!=='string'||typeof r.text!=='string'||typeof r.done!=='boolean'||typeof r.delayed!=='boolean')))
-        throw new Error('三天计划记录结构异常或版本不支持');
+        x.tasks.some(t=>!t||typeof t.id!=='string'||typeof t.text!=='string'||!validDay(t.createdDay)||!validIndex(t.originRound)||typeof t.done!=='boolean'||!Number.isFinite(t.points)||t.points<0||!Number.isFinite(t.estimatedMinutes)||t.estimatedMinutes<0||t.estimatedMinutes>1440||(t.done&&!Number.isFinite(Date.parse(t.doneAt))))||
+        x.history.some(h=>!h||!validIndex(h.index)||!validRows(h.rows)))throw new Error('轮次记录结构异常或版本不支持');
+      if(x.version===1&&x.history.some((h,i)=>h.index!==i))throw new Error('旧三天轮次历史异常');
+      if(x.version===2){
+        if(!Array.isArray(x.rounds)||new Set(x.rounds.map(r=>r?.index)).size!==x.rounds.length||
+          x.rounds.some(r=>!r||!validIndex(r.index)||!validDay(r.start)||!validDay(r.end)||r.end<r.start||(r.closedAt!==undefined&&!Number.isFinite(Date.parse(r.closedAt)))||(r.originalEnd!==undefined&&(!validDay(r.originalEnd)||r.originalEnd<r.end))))throw new Error('轮次日期结构异常');
+        const sorted=x.rounds.slice().sort((a,b)=>a.start.localeCompare(b.start));
+        if(sorted.some((r,i)=>i>0&&r.start<=sorted[i-1].end))throw new Error('轮次日期重叠');
+        const ids=new Set(x.rounds.map(r=>r.index)),closed=new Set(x.rounds.filter(r=>r.closedAt).map(r=>r.index));
+        if(new Set(x.history.map(h=>h.index)).size!==x.history.length||x.history.length!==closed.size||x.history.some(h=>!closed.has(h.index))||x.tasks.some(t=>t.roundIndex!==null&&!ids.has(t.roundIndex)))throw new Error('轮次任务或历史关联异常');
+      }
+    }
+    const roundTasks=[...Object.values(clean.days||{}).flatMap(d=>Object.values(d.tasks||{}).flat()),...(clean.queue||[]),...(clean.queueDone||[]),...(clean.memoProjects||[])];
+    for(const task of roundTasks){
+      const a=task.memoRoundAssignment;if(a===undefined)continue;
+      if(!a||!['auto','manual','carry'].includes(a.mode)||(a.roundIndex!==null&&(!Number.isSafeInteger(a.roundIndex)||a.roundIndex<0||!clean.memoThree?.rounds?.some(r=>r.index===a.roundIndex)))||(a.due!==undefined&&typeof a.due!=='string'))throw new Error('甘特任务轮次关联异常');
     }
     if (clean.memoSchedule !== undefined) {
       const x = clean.memoSchedule;
@@ -639,3 +650,4 @@
     ledger: function () { return data.ledger; }
   };
 })();
+

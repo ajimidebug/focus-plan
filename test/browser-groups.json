@@ -26,6 +26,7 @@
     "safety.browser.cjs",
     "retention.browser.cjs",
     "timer-navigation.browser.cjs",
-    "three-day.browser.cjs"
+    "three-day.browser.cjs",
+    "rounds.browser.cjs"
   ]
 }

@@ -173,9 +173,10 @@
       ledger(event, 'earn-queue', assignment?.list === 'required' ? 0 : it.points == null ? (S().settings().queuePoints ?? 5) : it.points, '队列完成：' + it.text);
     } else if (spec.kind === 'three') {
       const task=App.memoThree.find(spec.id);if(!task||task.done)throw Error('任务状态已改变，请重新打开');
-      event.sourceDay=M().userDay(at);event.sourceList='three';event.threeRound=App.memoThree.round(event.sourceDay).index;
+      if(!App.memoThree.executable({kind:'three',id:spec.id}))throw Error('请先把任务安排到当前轮次再完成');
+      event.sourceDay=M().userDay(at);event.sourceList='three';event.threeRound=App.memoThree.current()?.index ?? null;
       task.done=true;task.memoCompletionId=event.id;task.doneAt=at;task.summary={done:true,text,at};
-      ledger(event,'earn-three',Number(task.points)||0,'三天计划完成：'+task.text);
+      ledger(event,'earn-three',Number(task.points)||0,'轮次计划完成：'+task.text);
     } else if (spec.kind === 'task') {
       const task = S().getDay(event.sourceDay).tasks[spec.list].find(t => t.id === spec.id);
       if (!task || task.done) throw new Error('任务状态已改变，请重新打开');
@@ -751,3 +752,4 @@
 
   App.memoActions = { three, tick:()=>App.ui.query?.('.task-action-modal')?._timerTick?.(), deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, availableRewards, claimRewardsCore, reconcileRewards, completeCore, timingSnapshot, undoCore, latest, passage, commit: transaction };
 })();
+

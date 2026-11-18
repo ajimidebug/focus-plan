@@ -15,9 +15,9 @@ const server=http.createServer((req,res)=>{
   await page.goto('http://127.0.0.1:'+server.address().port+'/#/tasks');await page.waitForFunction(()=>window.App?.app?.ready);
   assert.equal(await page.locator('.framework-overview .cal-col').count(),3);
   assert.equal(await page.locator('.framework-overview [data-overview-list=extra]').count(),0);
-  await page.getByRole('button',{name:'开始三天计划',exact:true}).click();
-  await page.locator('#three-anchor').fill('2026-11-16');await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
-  await page.getByRole('button',{name:'添加三天任务',exact:true}).click();
+  await page.getByRole('button',{name:'新建轮次',exact:true}).click();
+  await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
+  await page.getByRole('button',{name:'添加轮次任务',exact:true}).click();
   assert(await page.locator('.mw-task-editor #mw-title').isVisible(),'three-day creation uses the shared editor');
   await page.locator('#mw-title').fill('三天内复盘数学错题');await page.locator('#mw-note-edit').fill('保留自定义备注');await page.locator('#mw-points').fill('7');
   await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
@@ -55,8 +55,9 @@ const server=http.createServer((req,res)=>{
   await page.getByRole('button',{name:'确认取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>App.memoThree.state().tasks[0].note),'保留自定义备注');
   assert.match(await page.evaluate(()=>App.memoCore.read(App.memoCore.userDay()).text),/本次完成备注/);
-  await page.locator('.three-round-nav').getByRole('button',{name:'下轮',exact:true}).click();
-  await page.getByRole('button',{name:'添加三天任务',exact:true}).click();
+  await page.getByRole('button',{name:'新建轮次',exact:true}).click();
+  await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
+  await page.getByRole('button',{name:'添加轮次任务',exact:true}).click();
   await page.locator('#mw-title').fill('下轮独立任务');await page.locator('#mw-note-edit').fill('未来任务备注');
   await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>App.memoThree.state().tasks.find(t=>t.text==='下轮独立任务').originRound),1);
@@ -64,11 +65,11 @@ const server=http.createServer((req,res)=>{
   assert.doesNotMatch(await page.locator('.three-day-column').innerText(),/三天内复盘数学错题/);
   const copied=await page.evaluate(()=>App.memoFlow.copyQuote(App.memoCore.userDay()).text);
   assert.match(copied,/保留自定义备注/);assert.match(copied,/未来任务备注/);assert.match(copied,/预排/);assert.match(copied,/未完成/);
-  await page.locator('.three-round-nav').getByRole('button',{name:'本轮',exact:true}).click();
+  await page.getByRole('combobox',{name:'选择轮次',exact:true}).selectOption('0');
   await page.clock.setFixedTime(new Date('2026-11-19T04:00:00+08:00'));
   await page.evaluate(async()=>{await App.memoActions.commit(()=>{});App.memoWorkspace.returnToday();});
   assert.match(await page.locator('.three-day-column').innerText(),/延期/);
-  assert.equal(await page.locator('.three-day-strip [aria-current=date]').innerText(),'第1天\n19日');
+  assert.equal(await page.locator('.three-day-strip [aria-current=date]').innerText(),'第1天\n11-19');
   await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);assert.equal(await page.evaluate(()=>App.memoThree.state().tasks.length),2);
   fs.mkdirSync('test-results',{recursive:true});
   for(const width of [320,390,430]){await page.setViewportSize({width,height:844});await page.locator('.framework-overview').screenshot({path:'test-results/175121-three-day-'+width+'.png',animations:'disabled'});}

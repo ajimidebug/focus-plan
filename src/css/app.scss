@@ -457,3 +457,14 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .three-future-row small { flex-shrink:0; }
 .three-deadlines { display:flex; flex-direction:column; gap:4px; margin:8px 0; }
 .three-deadlines button { text-align:left; white-space:normal; overflow-wrap:anywhere; }
+.three-round-nav select { min-width:0; flex:1; max-width:100%; border:1px solid #8885; border-radius:6px; background:var(--bg,#fff); color:inherit; padding:8px 4px; font:inherit; font-size:12px; }
+.round-entry { padding:6px 0; border-bottom:1px solid #8883; overflow-wrap:anywhere; }
+.round-entry>small { display:block; padding:0 4px; opacity:.8; }
+.round-actions { display:flex; flex-wrap:wrap; gap:2px; }
+.round-pending { margin-top:8px; }
+.three-day-strip { grid-template-columns:repeat(auto-fit,minmax(28px,1fr)); }
+.three-round-nav .q-btn,.round-actions .q-btn { font-size:11px; padding:4px; min-height:32px; max-width:100%; }
+.round-actions .q-btn__content { white-space:normal; }
+.three-future-row>span { min-width:0; }
+
+.round-snapshot-note { white-space:pre-wrap; overflow-wrap:anywhere; }
