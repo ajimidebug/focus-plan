@@ -142,17 +142,22 @@ function calendar(node:HTMLElement,month:string,selected:string,onSelect:(day:st
 function overview(node:HTMLElement,day:string) { mount(node,TaskOverview,{day,revision:screen.revision}) }
 
 function ganttRange(node:HTMLElement,initialStart:string,initialEnd:string,onChange:(start:string,end:string)=>void){
-  const value=ref<any>(initialStart&&initialEnd?{from:initialStart,to:initialEnd}:initialEnd||initialStart||null)
-  const component={setup(){return ()=>h(QDate,{modelValue:value.value,range:true,minimal:true,flat:true,mask:'YYYY-MM-DD',
+  // Keep single dates as ranges so an existing endpoint starts a fresh selection.
+  const rangeValue=(start:string,end:string)=>start||end?{from:start||end,to:end||start}:null
+  const value=ref<any>(rangeValue(initialStart,initialEnd)),calendar=ref<any>(null)
+  const component={setup(){return ()=>h(QDate,{ref:calendar,modelValue:value.value,range:true,noUnset:true,minimal:true,flat:true,mask:'YYYY-MM-DD',
     firstDayOfWeek:1,landscape:false,
     'onUpdate:modelValue':(next:any)=>{
-      value.value=next
+      value.value=typeof next==='string'?rangeValue(next,next):next
       if(next&&typeof next==='object')onChange(next.from||'',next.to||'')
-      else if(typeof next==='string')onChange(next,'')
+      else if(typeof next==='string')onChange(next,next)
       else onChange('','')
     },
-    onRangeStart:(date:any)=>{const d=typeof date==='string'?date:date?.date;if(d)onChange(d,'')}
+    onRangeStart:(date:any)=>{
+      const day=typeof date==='string'?date:date?.year?String(date.year)+'-'+String(date.month).padStart(2,'0')+'-'+String(date.day).padStart(2,'0'):date?.date
+      if(day)onChange(day,'')
+    }
   })}}
   mount(node,component)
-  ;(node as any)._ganttSet=(start:string,end:string)=>{value.value=start&&end?{from:start,to:end}:end||start||null}
+  ;(node as any)._ganttSet=(start:string,end:string)=>{calendar.value?.setEditingRange(null);value.value=rangeValue(start,end)}
 }
