@@ -18,7 +18,7 @@
     const x = state();
     if (!x) return [];
     if (x.version === 2) return x.rounds.slice().sort((a, b) => a.start.localeCompare(b.start));
-    const last = Math.max((legacyRound(M().userDay())?.index || 0) + 2, ...x.tasks.map(t => t.originRound), x.settledRound - 1);
+    const last = Math.max((legacyRound(M().userDay())?.index || 0) + 2, ...x.tasks.map(t => t.originRound), x.settledRound);
     return Array.from({ length: last + 1 }, (_, index) => legacyRound(M().shiftDay(x.anchor, index * 3)));
   }
   function round(day = M().userDay()) {

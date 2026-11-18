@@ -480,7 +480,7 @@
       '<button class="btn" data-act="cancel">取消</button>' + (existing&&!isThree?'<button class="btn" data-act="round-assign">安排到轮次</button>':'') + (existing ? '<button class="btn btn-danger" data-act="delete">' + (kind === 'project' || kind === 'daily' ? '停用' : '删除') + '</button>' + (kind === 'task' && ref.list === 'extra' && !reviewLink ? '<button class="btn" data-act="convert">转为每日推进</button>' : '') : '') + '<button class="btn mw-save-start" data-act="save-start">保存并立即开始</button><button class="btn btn-primary" data-act="save">保存</button>', { lock: true, cancelOnBackdrop: true });
 
     m.classList.add('mw-task-editor');
-    if(isThree){const field=document.createElement('label');field.textContent='所属轮次';const select=document.createElement('select');select.id='mw-three-round';const chosen=A.memoThree.round(day);for(const r of A.memoThree.rounds().filter(r=>!r.closedAt&&r.end>=M().userDay())){const option=document.createElement('option');option.value=r.start;option.textContent=r.start+' — '+r.end;option.selected=r.index===chosen?.index;select.append(option);}select.disabled=!!existing?.done;field.append(select);m.querySelector('#mw-title').parentElement.after(field);}
+    if(isThree){const field=document.createElement('label');field.textContent='所属轮次';const select=document.createElement('select');select.id='mw-three-round';const pendingOption=document.createElement('option');pendingOption.value='';pendingOption.textContent='待安排';select.append(pendingOption);const chosen=existing?A.memoThree.byIndex(A.memoThree.nativeTarget(existing)):A.memoThree.round(day);for(const r of A.memoThree.rounds().filter(r=>!r.closedAt&&r.end>=M().userDay())){const option=document.createElement('option');option.value=r.start;option.textContent=r.start+' — '+r.end;option.selected=r.index===chosen?.index;select.append(option);}if(existing?.done&&chosen?.closedAt){const option=document.createElement('option');option.value=chosen.start;option.textContent=chosen.start+' — '+chosen.end+'（已结束）';option.selected=true;select.append(option);}select.disabled=!!existing?.done;field.append(select);m.querySelector('#mw-title').parentElement.after(field);}
 
     const q = s => m.querySelector(s); q('#mw-title').value = existing?.text || ''; q('#mw-note-edit').value = existing?.note || ''; if (q('#mw-points')) q('#mw-points').value = existing?.points ?? (kind === 'queue' ? S().settings().queuePoints ?? 5 : list === 'ideal' || ref?.list === 'ideal' ? S().settings().idealPoints ?? 1 : S().settings().extPoints ?? 5);
     q('#mw-estimate').value = existing?.estimatedMinutes || ''; if(q('#mw-priority')) q('#mw-priority').value=String(priorityWeight(existing));
@@ -527,9 +527,9 @@
           else { S().getDay(day).tasks[selectedList].push(t); targetRef = { kind: 'task', id: t.id, list: selectedList, day }; }
         }
         if(kind==='three' && !t.done){
-          const target=A.memoThree.round(q('#mw-three-round').value);
-          if(!target || target.closedAt || target.end<M().userDay())throw Error('请选择开放的轮次');
-          if(!existing || target.index!==A.memoThree.nativeTarget(t))A.memoThree.assignCore(targetRef,target.index);
+          const value=q('#mw-three-round').value,target=value?A.memoThree.round(value):null;
+          if(value&&(!target||target.closedAt||target.end<M().userDay()))throw Error('请选择开放的轮次');
+          if(!existing || (target?.index??null)!==A.memoThree.nativeTarget(t))A.memoThree.assignCore(targetRef,target?.index??null);
         }
         t.estimatedMinutes = Math.min(1440, Math.max(0, Number(q('#mw-estimate').value) || 0)); t.dateBasis = 'user';
         if(kind==='three'){const points=Number(q('#mw-points').value);if(!Number.isFinite(points)||points<0||points>1000000||Math.abs(Math.round(points*100)-points*100)>1e-7)throw Error('积分须为0—1000000之间的两位小数');}
