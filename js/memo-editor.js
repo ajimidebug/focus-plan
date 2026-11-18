@@ -62,14 +62,18 @@
     const r = s.getRangeAt(0), pre = document.createRange(); pre.selectNodeContents(root); pre.setEnd(r.startContainer, r.startOffset);
     return { start: pre.toString().length, end: pre.toString().length + r.toString().length };
   }
-  let stickBottom = true, tailFrame = 0, pointer = null, tailOnFocus = false;
+  let stickBottom = true, tailFrame = 0, pointer = null, tailOnFocus = false, manualScroll = false;
   function revealEnd() {
-    stickBottom = true;
+    manualScroll = false; stickBottom = true;
     cancelAnimationFrame(tailFrame);
     tailFrame = requestAnimationFrame(() => { root.scrollTop = root.scrollHeight; });
   }
   let tailEntry = 0, tailDeadline = 0, entryFrame = 0;
-  function cancelEntryTail() { tailDeadline = 0; cancelAnimationFrame(entryFrame); }
+  function cancelEntryTail(event) {
+    tailDeadline = 0; stickBottom = false;
+    manualScroll = event?.type === 'wheel' || event?.type === 'touchmove';
+    cancelAnimationFrame(entryFrame); cancelAnimationFrame(tailFrame);
+  }
   function alignEntryTail() {
     if (!root || document.body.dataset.view !== 'memo' || Date.now() > tailDeadline) return;
     stickBottom = true; root.scrollTop = root.scrollHeight;
@@ -83,7 +87,7 @@
     if (box.bottom > visibleBottom || box.top < visibleTop) window.scrollBy({ top: box.bottom - visibleBottom, behavior: 'instant' });
   }
   function enterAtEnd() {
-    const entry = ++tailEntry; tailOnFocus = true; tailDeadline = Date.now() + 1000;
+    const entry = ++tailEntry; manualScroll = false; tailOnFocus = true; tailDeadline = Date.now() + 1000;
     let frames = 0;
     const settle = () => {
       if (entry !== tailEntry || !tailDeadline || document.body.dataset.view !== 'memo') return;
@@ -94,13 +98,14 @@
     document.fonts?.ready.then(() => { if (entry === tailEntry && tailDeadline && document.body.dataset.view === 'memo') { tailDeadline = Date.now() + 100; alignEntryTail(); } });
   }
   function layoutChanged() {
+    if (manualScroll) return;
     alignEntryTail();
     if (document.activeElement === root) followCaret();
     else if (stickBottom) revealEnd();
   }
   let followFrame = false;
   function followCaret() {
-    if (followFrame || !root || document.activeElement !== root) return;
+    if (manualScroll || followFrame || !root || document.activeElement !== root) return;
     followFrame = true;
     requestAnimationFrame(() => {
       followFrame = false;
@@ -208,10 +213,11 @@
   }
   function init(element, onChange) {
     root = element; changed = onChange;
-    ['input', 'keyup', 'click', 'focus', 'compositionupdate', 'compositionend'].forEach(type => root.addEventListener(type, followCaret));
+    ['input', 'keyup', 'click', 'focus', 'compositionupdate', 'compositionend'].forEach(type => root.addEventListener(type, () => { if(type==='input'||type==='compositionupdate')cancelEntryTail();manualScroll = false;followCaret(); }));
     document.addEventListener('selectionchange', followCaret);
     document.addEventListener('pointerdown', cancelEntryTail, {passive:true});
     document.addEventListener('wheel', cancelEntryTail, {passive:true});
+    document.addEventListener('keydown', cancelEntryTail);
     document.addEventListener('touchmove', cancelEntryTail, {passive:true});
     new MutationObserver(alignEntryTail).observe(root,{childList:true,subtree:true,characterData:true});
     root.addEventListener('focus', () => { if (tailOnFocus) { tailOnFocus = false; select(textOf(blocks).length); } });
