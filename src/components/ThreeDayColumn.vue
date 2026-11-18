@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import OverviewTask from './OverviewTask.vue'
 const props=defineProps<{day:string;revision:number}>()
 const A=()=>window.App
-const selectedIndex=ref<number|null>(null)
-watch(()=>props.day,()=>{selectedIndex.value=null})
 const rounds=computed(()=>{void props.revision;return A().memoThree.rounds()})
-const selected=computed(()=>{void props.revision;return (selectedIndex.value===null?null:A().memoThree.byIndex(selectedIndex.value))||A().memoThree.selected(props.day)})
+const selectionRevision=ref(0)
+const selected=computed(()=>{void props.revision;void selectionRevision.value;return A().memoThree.selected(props.day)})
 const plan=computed(()=>{void props.revision;return A().memoThree.projection(selected.value?.start||props.day)})
 const dates=computed(()=>{
  const r=selected.value;if(!r)return []
@@ -17,14 +16,28 @@ const position=computed(()=>rounds.value.findIndex((r:any)=>r.index===selected.v
 const globals=computed(()=>{void props.revision;const r=selected.value;return r?(A().memoGantt.deadlines()||[]).filter((x:any)=>x.key.startsWith('deadline:')&&x.due>=r.start&&x.due<=r.end):[]})
 const pending=computed(()=>{void props.revision;return A().memoThree.pending()})
 const active=computed(()=>selected.value&&!plan.value.historical&&!plan.value.future&&A().memoThree.current()?.index===selected.value.index)
-function choose(index:number){selectedIndex.value=index;A().memoThree.selectRound(index,props.day)}
+function choose(index:number){A().memoThree.selectRound(index,props.day);selectionRevision.value++}
 function change(event:Event){choose(Number((event.target as HTMLSelectElement).value))}
 function move(step:number){const r=rounds.value[position.value+step];if(r)choose(r.index)}
-function edit(row:any){A().memoWorkspace.editor(row.ref,row.ref.list, false,selected.value?.start)}
-function complete(row:any){const ref={...row.ref};if(ref.kind==='project')ref.day=A().memoCore.userDay();A().memoWorkspace.complete(ref)}
+const delayed=computed(()=>plan.value.rows.filter((row:any)=>!row.done&&row.delayed))
+const unfinished=computed(()=>plan.value.rows.filter((row:any)=>!row.done&&!row.delayed))
+const finished=computed(()=>plan.value.rows.filter((row:any)=>row.done))
+const sections=computed(()=>[
+ { key:'delayed', label:'延期待办', rows:delayed.value },
+ { key:'unfinished', label:'', rows:unfinished.value },
+ { key:'finished', label:'已完成', rows:finished.value },
+])
+function edit(row:any){
+ A().memoWorkspace.editor(row.ref,row.ref.list,false,null,!active.value)
+}
+function open(row:any){
+ if(!active.value)return edit(row)
+ const taskRef=row.kind==='project'?{...row.ref,day:A().memoCore.userDay()}:row.ref
+ A().memoWorkspace.complete(taskRef, row.kind==='project' ? '今日推进' : undefined)
+}
 </script>
 <template>
-  <q-card flat bordered class="cal-col three-day-column" data-category="three" data-overview-list="three">
+  <q-card flat bordered class="cal-col three-day-column" data-category="three" data-overview-list="three" @click.stop>
     <div class="cal-col-head"><span>轮次计划</span><span class="mw-column-count">{{plan.round?plan.done+'/'+plan.total:'尚未安排'}}</span></div>
     <div class="mw-column-meter" role="img" :aria-label="'本轮完成'+plan.done+'/'+plan.total"><span class="mw-column-done" :style="{width:(plan.total?plan.done/plan.total*100:0)+'%'}" /></div>
     <div class="three-round-nav">
@@ -40,20 +53,31 @@ function complete(row:any){const ref={...row.ref};if(ref.kind==='project')ref.da
       </div>
       <div v-if="!plan.historical" class="round-actions"><q-btn flat dense no-caps @click="A().memoThree.rangeEditor(selected.index)">调整日期</q-btn><q-btn v-if="active" flat dense no-caps @click="A().memoThree.earlyEnd(selected.index)">提前结束本轮</q-btn></div>
       <div v-if="globals.length" class="three-deadlines"><small>本轮截止事项</small><button v-for="item in globals" :key="item.key" type="button" class="btn btn-small" @click="A().ms.openList(item.due)">{{item.due.slice(5)}} · {{item.title}}</button></div>
-      <div v-for="row in plan.rows" :key="row.key" class="round-entry" :data-round-key="row.key">
-        <template v-if="row.kind==='three'&&active"><OverviewTask :x="row" category="three" :done="row.done" /></template>
-        <button v-else type="button" class="three-future-row" :disabled="plan.historical" @click="row.kind==='three'?edit(row):A().memoGantt.quick(row.key)"><span>{{row.text}}</span><small>{{row.kind==='project'?(row.overallDone?'项目已达成':row.done?'本轮已推进':'尚未推进'):row.done?'已完成':plan.future?'预排':'未完成'}}</small></button>
-        <details v-if="plan.historical&&row.note"><summary>备注</summary><p class="round-snapshot-note">{{row.note}}</p></details>
-        <small v-if="row.due">截止 {{row.due}}{{row.manual?' · 手动安排':''}}{{row.conflict?' · 截止日位于轮次外':''}}</small>
-        <small v-if="row.delayed">延期</small>
-        <div v-if="!plan.historical" class="round-actions">
-          <q-btn v-if="row.kind!=='three'&&active" flat dense no-caps @click="complete(row)">{{row.kind==='project'?'今日推进':row.done?'撤销完成':'完成任务'}}</q-btn>
-          <q-btn v-if="row.kind!=='three'" flat dense no-caps @click="edit(row)">任务与备注</q-btn>
-          <q-btn v-if="!row.done" flat dense no-caps @click="A().memoThree.assignmentEditor(row.ref)">安排轮次</q-btn>
-        </div>
-      </div>
+      <template v-for="section in sections" :key="section.key">
+        <component v-if="section.rows.length" :is="section.label?'details':'div'"
+          :key="selected.index+':'+section.key"
+          :class="section.key==='finished'?'mw-completed':section.key==='delayed'?'mw-late-section':undefined"
+          :open="section.key==='delayed'?true:undefined">
+          <summary v-if="section.label">{{section.label}}（{{section.rows.length}}）</summary>
+          <div v-for="row in section.rows" :key="row.key" :class="{'round-entry':plan.historical}" :data-round-key="row.key">
+            <template v-if="plan.historical">
+              <div class="three-future-row"><span>{{row.text}}</span><small>{{row.kind==='project'?(row.overallDone?'项目已达成':row.done?'本轮已推进':'尚未推进'):row.done?'已完成':'未完成'}}</small></div>
+              <small v-if="row.due">截止 {{row.due}}</small>
+              <details v-if="row.note"><summary>备注</summary><p class="round-snapshot-note">{{row.note}}</p></details>
+            </template>
+            <OverviewTask v-else :x="row" category="three" :done="row.done" :open="()=>open(row)">
+              <small v-if="row.due">截止 {{row.due}}{{row.manual?' · 手动安排':''}}{{row.conflict?' · 截止日位于轮次外':''}}</small>
+              <small v-if="row.kind==='project'">{{row.overallDone?'项目已达成':row.done?'本轮已推进':'尚未推进'}}</small>
+              <small v-if="row.note">有备注</small>
+            </OverviewTask>
+          </div>
+        </component>
+      </template>
       <q-btn v-if="!plan.historical" flat dense no-caps class="overview-add" aria-label="添加轮次任务" @click.stop="A().memoThree.editor(undefined,selected.start)">＋ 添加</q-btn>
     </template>
-    <details v-if="pending.length" class="round-pending"><summary>待安排（{{pending.length}}）</summary><div v-for="row in pending" :key="row.key" class="round-entry"><span>{{row.text}}</span><q-btn flat dense no-caps @click="A().memoThree.assignmentEditor(row.ref)">安排轮次</q-btn></div></details>
+    <details v-if="pending.length" class="round-pending">
+      <summary>待安排（{{pending.length}}）</summary>
+      <OverviewTask v-for="row in pending" :key="row.key" :x="row" category="three" :open="()=>edit(row)" />
+    </details>
   </q-card>
 </template>

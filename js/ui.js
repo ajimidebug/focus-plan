@@ -166,7 +166,7 @@
         save.textContent = options.shortSaveLabel || (valid ? (options.saveLabel || '保存到') + day : '保存');
         if(options.shortSaveLabel)save.setAttribute('aria-label',options.shortSaveLabel+(valid?' · '+day:''));
       }
-      modal.querySelector('[data-act="save-start"]')?.toggleAttribute('hidden', valid && day !== today || !!options.noStart);
+      modal.querySelector('[data-act="save-start"]')?.toggleAttribute('hidden', options.canStart ? !options.canStart() : valid && day !== today || !!options.noStart);
     };
     modal.addEventListener('input', update); modal.addEventListener('change', update);
     const timer = win.setInterval(update, 1000), layer = modal.closest('#modal-root'), dispose = layer?._disposeModal;

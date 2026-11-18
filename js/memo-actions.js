@@ -364,7 +364,7 @@
       options.map(kind => '<div class="field"><label><input type="checkbox" data-reward="' + kind + '" checked> 同时领取' + (kind === 'base' ? '保底' : '前两栏全部完成（必做与理想）') + '奖励</label><input type="number" min="0" data-reward-points="' + kind + '" value="' + Number(kind === 'base' ? settings.baseRewardPoints : settings.perfectRewardPoints) + '"></div>').join('') +
       '</details><p class="hint" id="memo-action-info"></p><p id="memo-action-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="commit">确认完成</button>', { lock: true, cancelOnBackdrop: true });
-    App.ui.dateContext(m,{day:spec.day||sourceTask?.assignment?.day||day,label:'完成归属',saveSelector:'[data-act=commit]',saveLabel:'确认完成 · ',shortSaveLabel:spec.kind==='checkin'?'确认打卡':'确认完成'});
+    App.ui.dateContext(m,{day:spec.day||sourceTask?.assignment?.day||day,label:'完成归属',saveSelector:'[data-act=commit]',saveLabel:'确认完成 · ',shortSaveLabel:spec.actionLabel || (spec.kind==='checkin'?'确认打卡':'确认完成')});
     const textarea = m.querySelector('#memo-action-text');
     textarea.value = stamp(at, day) + '【' + label + '】' + spec.title + suffix + (timingSnapshot(spec, Date.parse(at)).text ? '\n' + timingSnapshot(spec, Date.parse(at)).text.replace(/\n$/, '') : '');
     const reviewChoice=App.memoReview?.completionFields(spec,m);
@@ -523,10 +523,10 @@
     if(task.done){const event=latest('three',id);if(event)cancelEvent(event);}
     else complete({kind:'three',id,list:'three',day:M().userDay(),title:task.text});
   }
-  function project(id, day = M().userDay()) {
+  function project(id, day = M().userDay(), actionLabel) {
     const it = (S().data().memoProjects || []).find(x => x.id === id); if (!it) return;
     const event = latest('project', id, day);
-    if (it.days?.[day] && event) cancelEvent(event); else complete({ kind: 'project', id, day, title: it.text });
+    if (it.days?.[day] && event) cancelEvent(event); else complete({ kind: 'project', id, day, title: it.text, actionLabel });
   }
   function queue(id) {
     const it = S().data().queue.find(x => x.id === id);

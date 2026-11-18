@@ -201,19 +201,6 @@
     const modal = A.ui.openModal('提前结束本轮', '<p>' + E(r.start + ' — ' + r.end) + '</p><p>本轮结束于 ' + E(M().userDay()) + '，下一轮最早从 ' + E(M().shiftDay(M().userDay(), 1)) + ' 开始。</p><p>已完成 ' + p.done + ' 项，未完成 ' + rows.length + ' 项。未完成项将进入' + E(next ? next.start + ' — ' + next.end : '待安排') + '。</p><ul>' + rows.map(x => '<li>' + E(x.text) + (A.memoSchedule.timing(x.ref).session?.status === 'running' ? ' · 正在计时，确认后暂停并保留已有片段' : '') + '</li>').join('') + '</ul>'+nextField+'<p>原截止日期保留，剩余日期释放。</p><p id="round-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="close-round">确认提前结束</button>', { lock: true });
     A.ui.bindActions({ cancel: A.ui.closeModal, 'close-round': () => {const nextStart=modal.querySelector('#round-next-start')?.value;run(() => {closeCore(index, true);if(next&&nextStart!==next.start)saveRoundCore(nextStart,next.end,next.index,false);});} });
   }
-  function assignmentEditor(ref) {
-    if (A.memoActions.busy()) return A.ui.toast('请先重试保存');
-    const task = A.memoSchedule.find(ref); if (!task) return;
-    const native = ref.kind === 'three', node = linkedNodes().find(n => n.ref.kind === ref.kind && n.ref.id === ref.id);
-    const assigned = native ? nativeTarget(task) : node ? targetOf(node) : null;
-    const options = rounds().filter(r => !r.closedAt && r.end >= M().userDay());
-    const modal = A.ui.openModal('安排到轮次', '<p>' + E(task.text) + '</p><label>所属轮次<select id="round-assignment"><option value="pending">待安排</option>' + (!native ? '<option value="auto">按截止日自动安排</option>' : '') + options.map(r => '<option value="' + r.index + '">' + E(r.start + ' — ' + r.end) + '</option>').join('') + '</select></label><p id="round-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">保存安排</button>', { lock: true });
-    modal.querySelector('#round-assignment').value = !native && !task.memoRoundAssignment ? 'auto' : assigned === null ? 'pending' : String(assigned);
-    A.ui.bindActions({ cancel: A.ui.closeModal, save: () => run(() => {
-      const value = modal.querySelector('#round-assignment').value;
-      assignCore(ref, value === 'auto' ? 'auto' : value === 'pending' ? null : Number(value));
-    }) });
-  }
   let viewed = null;
   function selected(day = M().userDay()) {
     const list = rounds();
@@ -227,5 +214,5 @@
     return viewed?.day === day ? Math.max(0, list.findIndex(r => r.index === selected(day)?.index) - Math.max(0, base)) : 0;
   }
   function editor(ref, day) { return A.memoWorkspace.editor(ref, 'three', false, day || selected()?.start); }
-  A.memoThree = { state, find, rounds, round, byIndex, current, nativeTarget, executable, targetOf, linkedNodes, pending, projection, items, needsSettlement, settleCore, migrateCore, closeCore, saveRoundCore, assignCore, rangeEditor, earlyEnd, assignmentEditor, selected, selectRound, viewOffset, setup: rangeEditor, editor };
+  A.memoThree = { state, find, rounds, round, byIndex, current, nativeTarget, executable, targetOf, linkedNodes, pending, projection, items, needsSettlement, settleCore, migrateCore, closeCore, saveRoundCore, assignCore, rangeEditor, earlyEnd, selected, selectRound, viewOffset, setup: rangeEditor, editor };
 })();

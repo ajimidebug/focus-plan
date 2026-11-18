@@ -301,13 +301,11 @@ function quick(key){
   '<details class="gantt-dependency-picker"><summary>前置任务 <span data-gantt-dep-count>无</span></summary><label class="gantt-cross-label"><input type="checkbox" data-gantt-cross> 显示其他分组项目</label><div id="gq-dependency-list" class="gantt-dependency-list"></div></details>'+
   (n.kind==='project'?'<label><input type="checkbox" id="gq-achieved"'+(task.memoGanttCompletedAt?' checked':'')+'> 长期项目已达成（独立于每日打卡）</label>':'<p class="hint">一次性任务的完成状态仍由三栏打卡控制。</p>')+
   '<p class="hint">计划日期不自动更改三栏安排和历史计时。</p><p id="gq-error" role="alert"></p>',
-  '<button class="btn" data-act="cancel">取消</button><button class="btn" data-act="edit-full">编辑任务</button><button class="btn" data-act="round-assign">安排到轮次</button><button class="btn btn-primary" data-act="save">保存计划</button>',{lock:true,wide:true});
+  '<button class="btn" data-act="cancel">取消</button><button class="btn" data-act="edit-full">编辑任务</button><button class="btn btn-primary" data-act="save">保存计划</button>',{lock:true,wide:true});
  const q=x=>modal.querySelector('#gq-'+x);
  bindDeps(modal,task,q('group'),q('dependency-list'));bindDates(modal,'gq');
- const fields=()=>JSON.stringify([...modal.querySelectorAll('input,select')].map(e=>[e.id,e.value,e.checked]));
- const initialFields=fields();
  let saving=false;
- A.ui.bindActions({cancel:()=>{if(!saving&&!A.memoActions.busy())A.ui.closeModal();},'round-assign':()=>{if(fields()!==initialFields)return A.ui.toast('请先保存排期修改');if(!saving&&!A.memoActions.busy())A.memoThree.assignmentEditor(n.ref);},'edit-full':()=>{if(!saving&&!A.memoActions.busy())A.memoWorkspace.editor(n.ref,n.ref.list||'extra');},save:async()=>{
+ A.ui.bindActions({cancel:()=>{if(!saving&&!A.memoActions.busy())A.ui.closeModal();},'edit-full':()=>{if(!saving&&!A.memoActions.busy())A.memoWorkspace.editor(n.ref,n.ref.list||'extra');},save:async()=>{
   if(saving)return;saving=true;
   try{
    const ok=await A.memoActions.commit(()=>{
