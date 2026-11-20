@@ -25,7 +25,7 @@ const server=http.createServer((req,res)=>{
   await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>App.memoThree.state().tasks.length),1,'shared editing preserves task identity');
   assert(await page.evaluate(()=>{const ideal=document.querySelector('[data-overview-list=ideal] .cal-col-head'),three=document.querySelector('[data-overview-list=three] .cal-col-head');return getComputedStyle(ideal).padding===getComputedStyle(three).padding&&getComputedStyle(three).backgroundColor!=='rgba(0, 0, 0, 0)';}),'shared header styling');
-  await page.locator('.three-day-strip>div').nth(1).click();assert.equal(await page.locator('.modal').count(),0,'day indicator remains noninteractive');
+  await page.locator('.three-round-position').click();assert.equal(await page.locator('.modal').count(),0,'day indicator remains noninteractive');
   await page.getByRole('button',{name:'打开任务：三天内复盘数学错题，7分',exact:true}).click();
   await page.locator('.task-action-modal .ma-enqueue').click();await page.locator('.modal [data-act=cancel]').click();await page.locator('.modal').waitFor({state:'detached'});
   await page.evaluate(async()=>{
@@ -53,7 +53,8 @@ const server=http.createServer((req,res)=>{
   await page.getByRole('button',{name:'确认取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>App.memoThree.state().tasks[0].note),'保留自定义备注');
   assert.match(await page.evaluate(()=>App.memoCore.read(App.memoCore.userDay()).text),/本次完成备注/);
-  await page.locator('#mw-day').fill('2026-11-19');
+  await page.getByRole('button',{name:'日历',exact:true}).click();
+  await page.getByRole('button',{name:'查看2026-11-19任务',exact:true}).press('Enter');
   await page.getByRole('button',{name:'添加轮次任务',exact:true}).click();
   await page.locator('#mw-title').fill('下轮独立任务');await page.locator('#mw-note-edit').fill('未来任务备注');
   await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
@@ -62,11 +63,11 @@ const server=http.createServer((req,res)=>{
   assert.doesNotMatch(await page.locator('.three-day-column').innerText(),/三天内复盘数学错题/);
   const copied=await page.evaluate(()=>App.memoFlow.copyQuote(App.memoCore.userDay()).text);
   assert.match(copied,/保留自定义备注/);assert.match(copied,/未来任务备注/);assert.match(copied,/预排/);assert.match(copied,/未完成/);
-  await page.locator('#mw-day').fill('2026-11-16');
+  await page.getByRole('button',{name:'今天',exact:true}).click();
   await page.clock.setFixedTime(new Date('2026-11-19T04:00:00+08:00'));
   await page.evaluate(async()=>{await App.memoActions.commit(()=>{});App.memoWorkspace.returnToday();});
   assert.match(await page.locator('.three-day-column').innerText(),/延期/);
-  assert.equal(await page.locator('.three-day-strip [aria-current=date]').innerText(),'第1天\n11-19');
+  assert.equal(await page.locator('.three-round-position').innerText(),'第1/3天');
   await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);assert.equal(await page.evaluate(()=>App.memoThree.state().tasks.length),2);
   fs.mkdirSync('test-results',{recursive:true});
   for(const width of [320,390,430]){await page.setViewportSize({width,height:844});await page.locator('.framework-overview').screenshot({path:'test-results/175121-three-day-'+width+'.png',animations:'disabled'});}

@@ -16,7 +16,6 @@ function showAllGroup(id:string){return Object.hasOwn(groupExpansion.value,id)?g
 function visibleGroupRows(g:any){return g.rows.length>8&&!showAllGroup(g.id)?g.rows.slice(0,5):g.rows}
 function toggleGroup(id:string){const next=!showAllGroup(id);groupExpansion.value={...groupExpansion.value,[id]:next};try{localStorage.setItem('task-group:limit:'+id,next?'open':'closed')}catch{}}
 function choose(offset:number){const m=A().memoCore;A().memoWorkspace.setDay(m.shiftDay(m.userDay(),offset))}
-function dateChanged(e:Event){A().memoWorkspace.setDay((e.target as HTMLInputElement).value)}
 const monthCalendar=ref<HTMLElement>()
 const month=ref(props.day.slice(0,7)+'-01')
 const calendarOpen=ref(false)
@@ -59,14 +58,12 @@ const columns=computed(()=>{void props.revision;return lists.filter(col=>col.key
 </script>
 <template>
   <section class="mw-overview framework-overview" aria-label="三栏任务概览">
-    <div class="overview-heading"><h2>{{Number(day.slice(5,7))}}月{{Number(day.slice(8))}}日 周{{weekday}}</h2>
-      <div class="mw-toolbar mw-date-header">
-        <input id="mw-day" type="date" aria-label="任务日期" :value="day" @change="dateChanged" />
-        <div class="mw-day-shortcuts" role="group" aria-label="快捷日期">
-          <button class="btn" data-mw="yesterday" :aria-pressed="pressed(-1)" @click.stop="choose(-1)">昨天</button>
-          <button class="btn" data-mw="today" :aria-pressed="pressed(0)" @click.stop="choose(0)">今天</button>
-          <button class="btn" data-mw="tomorrow" :aria-pressed="pressed(1)" @click.stop="choose(1)">明天</button>
-        </div>
+    <div class="overview-heading">
+      <h2><time :datetime="day">{{day.slice(0,4)}}年{{Number(day.slice(5,7))}}月{{Number(day.slice(8))}}日 周{{weekday}}</time></h2>
+      <div class="mw-toolbar mw-day-shortcuts mw-date-header" role="group" aria-label="任务日期">
+        <button class="btn" data-mw="yesterday" :aria-pressed="pressed(-1)" @click.stop="choose(-1)">昨天</button>
+        <button class="btn" data-mw="today" :aria-pressed="pressed(0)" @click.stop="choose(0)">今天</button>
+        <button class="btn" data-mw="tomorrow" :aria-pressed="pressed(1)" @click.stop="choose(1)">明天</button>
         <button class="btn" type="button" :aria-expanded="calendarOpen" @click="calendarOpen=!calendarOpen">日历</button>
       </div>
       <section v-if="calendarOpen" class="task-date-calendar" aria-label="选择任务日期">

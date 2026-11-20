@@ -39,7 +39,7 @@ async function run(){
    const saved=await page.evaluate(old=>App.memoFlow.deferred(old,'ideal')[0],days.old);
    check(saved&&!saved.automatic&&saved.task.text==='原日期任务名称'&&saved.toDay===days.day,'source title and destination kept in history '+width);
    check(await page.evaluate(old=>App.memoFinance.column(old,'ideal').total,days.old)===0,'original daily denominator reduced '+width);
-   await page.evaluate(day=>App.memoWorkspace.setDay(day),days.day);check(await page.locator('#mw-day').inputValue()===days.day,'navigate to active continuation '+width);
+   await page.evaluate(day=>App.memoWorkspace.setDay(day),days.day);check(await page.locator('.overview-heading time').getAttribute('datetime')===days.day,'navigate to active continuation '+width);
    check((await page.locator('#mw-today .mw-overview').innerText()).includes('目标日期修改后的名称'),'current copy has edited title '+width);
    await page.evaluate(()=>App.memoWorkspace.showPane('details'));await page.locator('#mw-column-ideal [data-mw="add-ideal"]').click();check(await page.locator('#mw-points').inputValue()==='1','new ideal form uses one '+width);
    await page.locator('#mw-title').fill('新建一分任务');await page.locator('.modal [data-act="save"]').click();await page.waitForFunction(()=>!document.querySelector('.modal'));

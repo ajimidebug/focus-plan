@@ -210,7 +210,7 @@
   function card(t, ref, options = {}) {
     const done = doneFor(t, ref), attrs = refAttrs(ref);
     const points = score(t,ref), category = ref.list || t.assignment?.list || (ref.kind === 'project' ? t.memoCategoryDays?.[ref.day]||'extra' : 'queue');
-    return '<article class="mw-task' + (done ? ' mw-done' : '') + '" data-mw-card data-carried="'+!!A.memoFlow.isCarried(t)+'" data-category="'+category+'" data-bounty="'+!!A.memoOrganize?.bounty(points)+'" data-score="'+scoreBand(points)+'" data-priority="'+(category==='required'?priorityWeight(t):'')+'" data-bounty-tier="'+(A.memoOrganize?.bountyTier(points)||'none')+'" ' + attrs + '><div class="mw-task-heading">' + button('complete', done ? '✓' : '○', attrs + ' aria-label="' + (done ? '取消完成：' : '完成：') + esc(t.text) + '" aria-pressed="' + done + '"') + '<div class="mw-task-title"><strong>' + esc(t.text) + '</strong>' + scoreHTML(points) + '<div class="mw-task-meta">' + (category==='required'&&priorityWeight(t)!==3?'<small class="mw-priority-note">优先 '+priorityWeight(t)+' · '+priorityLabel(t)+'</small>':'') + (ref.kind === 'queue' ? '<span>' + (t.pinned ? '置顶 · ' : '') + (options.number ? '第' + options.number + '项' : '已安排') + '</span>' : ref.kind === 'project' ? '<span>每日推进 · ' + esc(ref.day) + '</span>' : '') + (A.memoReview?.label(t)||'')+(A.memoRecurrence?.label(t)||'')+'</div></div>' + button('edit', '编辑', attrs + ' aria-label="编辑：' + esc(t.text) + '"') + '</div><div class="mw-task-timing">' + A.memoSchedule.rowControls(ref) + '</div>' +
+    return '<article class="mw-task' + (done ? ' mw-done' : '') + '" data-mw-card data-carried="'+!!A.memoFlow.isCarried(t)+'" data-category="'+category+'" data-bounty="'+!!A.memoOrganize?.bounty(points)+'" data-score="'+scoreBand(points)+'" data-priority="'+(category==='required'?priorityWeight(t):'')+'" data-bounty-tier="'+(A.memoOrganize?.bountyTier(points)||'none')+'" ' + attrs + '><div class="mw-task-heading">' + button('complete', done ? '✓' : '○', attrs + ' aria-label="' + (done ? '取消完成：' : '完成：') + esc(t.text) + '" aria-pressed="' + done + '"') + '<div class="mw-task-title"><strong>' + esc(t.text) + '</strong>' + scoreHTML(points) + '<div class="mw-task-meta">' + (category==='required'?'<small class="mw-priority-note">优先 '+priorityWeight(t)+' · '+priorityLabel(t)+'</small>':'') + (ref.kind === 'queue' ? '<span>' + (t.pinned ? '置顶 · ' : '') + (options.number ? '第' + options.number + '项' : '已安排') + '</span>' : ref.kind === 'project' ? '<span>每日推进 · ' + esc(ref.day) + '</span>' : '') + (A.memoReview?.label(t)||'')+(A.memoRecurrence?.label(t)||'')+'</div></div>' + button('edit', '编辑', attrs + ' aria-label="编辑：' + esc(t.text) + '"') + '</div><div class="mw-task-timing">' + A.memoSchedule.rowControls(ref) + '</div>' +
       (true ? '<details class="mw-task-extras"><summary>更多操作</summary><div class="mw-task-secondary">' + (['task','queue'].includes(ref.kind) && (!done || t.overdueEventId) ? button('assign', done ? '安排与扣分记录' : ref.kind === 'queue' ? (t.assignment ? '调整今日安排' : '安排到今天') : '调整安排', attrs) : '') + (!done && ['task','queue'].includes(ref.kind) && (t.originalDay || (t.assignment?.day || ref.day) < M().userDay()) ? button('backfill', '补记完成', attrs) : '') + (A.memoFlow.isCarried(t) ? '<details class="mw-late-detail"><summary>顺延记录</summary><small>' + esc(A.memoFlow.lateLabel(t)) + '</small></details>' : '') + (t.assignment ? '<small>' + esc(t.assignment.day + ' · ' + names[t.assignment.list]) + '</small>' : '') + (done?A.memoSchedule.executionHTML((S().data().memoEvents||[]).find(e=>e.active&&e.kind===ref.kind&&e.sourceId===ref.id&&(['queue','three','project'].includes(ref.kind)||e.sourceDay===ref.day))?.timing):'') + (t.note ? '<details class="mw-note"><summary>备注</summary><p>' + esc(t.note) + '</p></details>' : '') + (options.reorder ? '<details class="mw-manage"><summary>更多操作</summary><div>' + button('pin', t.pinned ? '取消置顶' : '置顶', attrs) + button('up', '上移', attrs) + button('down', '下移', attrs) + '</div></details>' : '') + '</div></details>' : '') + '</article>';
   }
   function taskSection(items) {
@@ -249,7 +249,7 @@
   }
   function overviewClick(e,day){
     const goal=e.target.closest('[data-goal]');if(goal){e.preventDefault();e.stopImmediatePropagation();return A.memoGoals.editor(goal.dataset.goal);}
-    if(e.target.closest('[data-goal-group],.three-day-strip,.three-round-dates'))return;
+    if(e.target.closest('[data-goal-group]'))return;
     if(e.target.closest('[data-deferred-source]'))return;
     const quick=e.target.closest('[data-mw="exec-add"]');if(quick){e.preventDefault();e.stopImmediatePropagation();return execAdd(JSON.parse(quick.dataset.ref));}
     if(e.target.closest('summary,button,input,select,a'))return;if(window.getSelection()?.toString())return;
@@ -400,6 +400,19 @@
   function setDay(day) {
     if(!M().validDate(day))return;
     taskDay=day;positions.today=0;pane='today';render();
+  }
+  function celebrateRequired(day) {
+    const column = taskDay === day ? $('mw-today')?.querySelector('[data-overview-list="required"]') : null;
+    const bounds = column?.getBoundingClientRect();
+    const anchored = bounds && bounds.width > 0 && bounds.top >= 42 && bounds.top < window.innerHeight - 44;
+    document.querySelector('.required-completion')?.remove();
+    const status = document.createElement('div');
+    status.className = 'required-completion' + (anchored ? ' required-completion-anchored' : '');
+    status.setAttribute('role', 'status');
+    status.textContent = '✓ 今日必做已完成';
+    (anchored ? column : document.body).append(status);
+    setTimeout(() => status.remove(), 2100);
+    return true;
   }
   function renderDetails() {
     const root=$('mw-details');if(!root)return;
@@ -736,6 +749,6 @@
     A.memoReview?.init();A.memoRecurrence?.init();
     render();
   }
-  A.memoWorkspace = { clearPinsCore, currentQueueItem, selectQueueCore, advanceQueueCore, waitingQueue, clearExecCore, captureQueueAdvance, queueSettled, timerStarted, timerEnded, pruneExec, execAdd, execHas, execHTML, setDay, assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
+  A.memoWorkspace = { clearPinsCore, currentQueueItem, selectQueueCore, advanceQueueCore, waitingQueue, clearExecCore, captureQueueAdvance, queueSettled, timerStarted, timerEnded, pruneExec, execAdd, execHas, execHTML, setDay, celebrateRequired, assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
 })();
 

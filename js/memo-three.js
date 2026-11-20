@@ -234,12 +234,16 @@
     const proposed = r || plannedRound(day);
     if (!proposed || proposed.closedAt) return A.ui.toast('请选择今天或未来日期');
     const { start, end } = proposed;
-    const modal = A.ui.openModal(r ? '调整轮次日期' : '新建轮次', A.memoGantt.dateFields('round', start, end) + '<label><input type="checkbox" id="round-pending" checked>接入尚未安排的轮次任务</label><p id="round-preview" role="status"></p><p id="round-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">确认保存</button>', { lock: true });
+    const canEndEarly = r && current()?.index === r.index;
+    const modal = A.ui.openModal(r ? '调整轮次日期' : '新建轮次', A.memoGantt.dateFields('round', start, end) + '<label><input type="checkbox" id="round-pending" checked>接入尚未安排的轮次任务</label><p id="round-preview" role="status"></p><p id="round-error" role="alert"></p>' + (canEndEarly ? '<button type="button" class="btn" data-act="early-end">提前结束本轮</button>' : ''), '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">确认保存</button>', { lock: true });
     A.memoGantt.bindDates(modal, 'round');
     modal.querySelector('[data-range-deadline]').hidden = true;
     const preview = () => { try { const rows = rangePreview(modal.querySelector('#round-start').value, modal.querySelector('#round-end').value, index); modal.querySelector('#round-preview').textContent = rows.length ? '关联任务及截止事项：' + rows.join('、') : '此范围暂无关联任务或截止事项'; modal.querySelector('#round-error').textContent = ''; } catch (e) { modal.querySelector('#round-error').textContent = e.message; } };
     modal.addEventListener('change', preview); modal.addEventListener('click', () => requestAnimationFrame(preview)); preview();
-    A.ui.bindActions({ cancel: A.ui.closeModal, save: () => run(() => {
+    A.ui.bindActions({ cancel: A.ui.closeModal, 'early-end': () => {
+      if (A.memoActions.busy() || current()?.index !== r?.index) return;
+      A.ui.closeModal(); earlyEnd(r.index);
+    }, save: () => run(() => {
       saveRoundCore(modal.querySelector('#round-start').value, modal.querySelector('#round-end').value, index, modal.querySelector('#round-pending').checked);
     }) });
   }
