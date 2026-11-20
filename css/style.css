@@ -2637,20 +2637,29 @@ body.memo-layout{width:100%;max-width:100%;min-width:0;overflow-x:clip;overscrol
 
 
 /* 174.3: required priorities only affect order and category rails, not points. */
-[data-category="required"][data-priority="1"]{--priority-rail:#475569;}
+[data-category="required"][data-priority="1"]{--priority-rail:#94a3b8;--priority-ink:#526177;}
 [data-category="required"][data-priority="2"]{--priority-rail:#0f766e;}
 [data-category="required"][data-priority="3"]{--priority-rail:#3274b5;}
-[data-category="required"][data-priority="4"]{--priority-rail:#c2410c;}
+[data-category="required"][data-priority="4"]{--priority-rail:#ca8a04;--priority-ink:#875800;}
 [data-category="required"][data-priority="5"]{--priority-rail:#be123c;}
-body[data-theme="dark"] [data-category="required"][data-priority="1"],body[data-theme="purple"] [data-category="required"][data-priority="1"]{--priority-rail:#94a3b8;}
+body[data-theme="dark"] [data-category="required"][data-priority="1"],body[data-theme="purple"] [data-category="required"][data-priority="1"]{--priority-rail:#cbd5e1;--priority-ink:var(--priority-rail);}
 body[data-theme="dark"] [data-category="required"][data-priority="2"],body[data-theme="purple"] [data-category="required"][data-priority="2"]{--priority-rail:#5eead4;}
 body[data-theme="dark"] [data-category="required"][data-priority="3"],body[data-theme="purple"] [data-category="required"][data-priority="3"]{--priority-rail:#93c5fd;}
-body[data-theme="dark"] [data-category="required"][data-priority="4"],body[data-theme="purple"] [data-category="required"][data-priority="4"]{--priority-rail:#fdba74;}
+body[data-theme="dark"] [data-category="required"][data-priority="4"],body[data-theme="purple"] [data-category="required"][data-priority="4"]{--priority-rail:#facc15;--priority-ink:var(--priority-rail);}
 body[data-theme="dark"] [data-category="required"][data-priority="5"],body[data-theme="purple"] [data-category="required"][data-priority="5"]{--priority-rail:#fda4af;}
 [data-category="required"][data-priority]:is(.cal-task,.overview-task,.mw-task){border-left:3px solid var(--priority-rail,var(--task-rail,var(--primary)))!important;}
-:is(.mw-task,.overview-task) .mw-priority-note{display:inline-block;max-width:100%;margin-top:2px;color:var(--priority-rail,var(--muted));font-weight:650;font-size:11px;overflow-wrap:anywhere;}
+:is(.mw-task,.overview-task) .mw-priority-note{display:inline-block;max-width:100%;margin-top:2px;color:var(--priority-ink,var(--priority-rail,var(--muted)));font-weight:650;font-size:11px;overflow-wrap:anywhere;}
 #mw-priority-field[hidden]{display:none!important;}
-#mw-priority{width:100%;min-height:40px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;}
+#mw-priority-field{min-inline-size:0;border:0;padding:0;margin:0 0 8px;}
+#mw-priority-field legend{padding:0;margin-bottom:4px;font-size:12.5px;color:var(--muted);}
+.mw-priority-options{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;}
+.modal .mw-priority-option{position:relative;margin:0;}
+.mw-priority-option>input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;}
+.mw-priority-option>span{display:grid;place-items:center;min-height:44px;border:1px solid var(--priority-rail);border-radius:8px;color:var(--priority-ink,var(--priority-rail));font-size:15px;font-weight:650;}
+.mw-priority-option>input:checked+span{background:color-mix(in srgb,var(--priority-rail) 18%,var(--card));box-shadow:inset 0 0 0 2px currentColor;font-weight:800;}
+.mw-priority-option>input:focus-visible+span{outline:2px solid currentColor;outline-offset:2px;}
+.mw-priority-option>input:disabled{cursor:default;}
+.mw-priority-option>input:disabled+span{opacity:.65;}
 /* Reward textures communicate levels only; no additional badge or reward entry. */
 body:is(:not([data-theme]),[data-theme=""],[data-theme="default"]) [data-bounty-tier="high"]:is(.mw-task,.cal-task,.overview-task,.habit-plan-row,.mw-history-row){
   background-color:#fff5d9!important;

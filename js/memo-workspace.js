@@ -3,6 +3,7 @@
   'use strict';
   const A = window.App, S = () => A.store, M = () => A.memoCore, $ = id => document.getElementById(id), esc = x => S().esc(String(x ?? ''));
   const names = { required: '必做任务', ideal: '理想任务', extra: '长期拓展', three: '轮次计划' };
+  const priorities = ['较低', '次要', '正常', '重要', '最重要'];
   let pane = 'today', taskDay, positions = {}, ready = false, lastDay, lastCivilDay, completionFocus;
   const projects = () => S().data().memoProjects || [];
   const button = (act, text, attrs = '', primary = false) => '<button type="button" class="btn btn-small' + (primary ? ' btn-primary' : '') + '" data-mw="' + act + '" ' + attrs + '>' + text + '</button>';
@@ -206,7 +207,7 @@
     const n=Number(task?.priorityWeight);
     return Number.isInteger(n)&&n>=1&&n<=5?n:3;
   }
-  function priorityLabel(task) { return ['','较低','次要','正常','重要','最重要'][priorityWeight(task)]; }
+  function priorityLabel(task) { return priorities[priorityWeight(task) - 1]; }
   function card(t, ref, options = {}) {
     const done = doneFor(t, ref), attrs = refAttrs(ref);
     const points = score(t,ref), category = ref.list || t.assignment?.list || (ref.kind === 'project' ? t.memoCategoryDays?.[ref.day]||'extra' : 'queue');
@@ -490,8 +491,17 @@
       return A.ui.toast('请选择今天或未来的开放轮次');
     }
     if(ref?.kind==='three'&&!existing)return A.ui.toast('任务已移动或删除');
+    const showPriority = list === 'required' || ref?.list === 'required' || existing?.assignment?.list === 'required';
+    const initialPriority = existing ? priorityWeight(existing) : 2;
+    const priorityOptions = priorities.map((label, index) => {
+      const level = index + 1;
+      return '<label class="mw-priority-option" data-category="required" data-priority="'+level+'">'+
+        '<input type="radio" name="mw-priority" value="'+level+'" aria-label="'+level+'级 · '+label+'"'+(level===initialPriority?' checked':'')+'><span>'+level+'</span></label>';
+    }).join('');
     const m = A.ui.openModal(existing ? '编辑任务' : newRound ? '添加轮次任务 · '+newRound.start+' — '+newRound.end : '添加' + (names[list] || '队列任务'), (!existing && kind === 'task' ? '<label>任务栏目<select id="mw-list">' + Object.keys(names).map(k => '<option value="' + k + '"' + (k === list ? ' selected' : '') + '>' + names[k] + '</option>').join('') + '</select></label>' : '') + '<div class="mw-title-field"><label for="mw-title">任务名称</label><textarea id="mw-title" rows="2"></textarea></div>' +
-      (existing && kind === 'task' && ref?.list === 'required' ? '' : '<div id="mw-points-field"><label for="mw-points">完成积分</label><input type="number" id="mw-points" min="0" inputmode="decimal"></div>') + '<label id="mw-priority-field"'+((list==='required'||ref?.list==='required'||existing?.assignment?.list==='required')?'':' hidden')+'>必做优先级<select id="mw-priority" aria-label="必做优先级">'+[1,2,3,4,5].map(n=>'<option value="'+n+'">'+n+' · '+['','较低','次要','正常','重要','最重要'][n]+'</option>').join('')+'</select></label><label for="mw-note-edit">备注（选填）</label><textarea id="mw-note-edit" rows="2"></textarea>' + (!existing && kind === 'task' ? '<fieldset id="mw-repeat-wrap"><legend>重复方式</legend><label><input type="radio" name="mw-repeat" value="once" checked>一次性完成</label><label><input type="radio" name="mw-repeat" value="daily">每日推进</label><label><input type="radio" name="mw-repeat" value="review">间隔复习</label><label><input type="radio" name="mw-repeat" value="cycle">固定周期</label></fieldset>' : '') +
+      (existing && kind === 'task' && ref?.list === 'required' ? '' : '<div id="mw-points-field"><label for="mw-points">完成积分</label><input type="number" id="mw-points" min="0" inputmode="decimal"></div>') +
+      '<fieldset id="mw-priority-field"'+(showPriority?'':' hidden')+'><legend>必做优先级</legend><div class="mw-priority-options">'+priorityOptions+'</div></fieldset>'+
+      '<label for="mw-note-edit">备注（选填）</label><textarea id="mw-note-edit" rows="2"></textarea>' + (!existing && kind === 'task' ? '<fieldset id="mw-repeat-wrap"><legend>重复方式</legend><label><input type="radio" name="mw-repeat" value="once" checked>一次性完成</label><label><input type="radio" name="mw-repeat" value="daily">每日推进</label><label><input type="radio" name="mw-repeat" value="review">间隔复习</label><label><input type="radio" name="mw-repeat" value="cycle">固定周期</label></fieldset>' : '') +
       '<label>预计用时（分钟，选填）<input id="mw-estimate" type="number" min="0" max="1440"></label>' + timingFields() + (existing ? '<p class="hint">这里可追加一段安排；修改已有时间请点卡片上的“修改／追加时间”。</p>' : '') + '<p id="mw-form-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">取消</button>' + (existing ? '<button class="btn btn-danger" data-act="delete">' + (kind === 'project' || kind === 'daily' ? '停用' : '删除') + '</button>' + (kind === 'task' && ref.list === 'extra' && !reviewLink ? '<button class="btn" data-act="convert">转为每日推进</button>' : '') : '') + '<button class="btn mw-save-start" data-act="save-start">保存并立即开始</button><button class="btn btn-primary" data-act="save">保存</button>', { lock: true, cancelOnBackdrop: true });
 
@@ -540,7 +550,7 @@
       action.onclick = () => complete(ref);
       q('#mw-title').parentElement.before(action);
     }
-    q('#mw-estimate').value = existing?.estimatedMinutes || ''; if(q('#mw-priority')) q('#mw-priority').value=String(existing?priorityWeight(existing):2);
+    q('#mw-estimate').value = existing?.estimatedMinutes || '';
     A.memoOrganize?.editor(m,existing,list||ref?.list,ref); A.memoGantt?.editor(m,existing,kind,list||ref?.list);const selectList = q('#mw-list');
     if (selectList) { let pointsEdited = false; q('#mw-points').addEventListener('input', () => { pointsEdited = true; }); const update = () => { if (!pointsEdited) q('#mw-points').value = selectList.value === 'ideal' ? S().settings().idealPoints ?? 1 : S().settings().extPoints ?? 5; q('#mw-repeat-wrap').hidden = false;q('[name="mw-repeat"][value="daily"]').closest('label').hidden=selectList.value!=='extra'; q('#mw-points-field').hidden = selectList.value === 'required';q('#mw-priority-field').hidden=selectList.value!=='required'; }; selectList.onchange = ()=>{if(selectList.value==='three'){A.ui.closeModal();A.memoThree.editor();}else update();}; update(); }
     m.querySelectorAll('[name="mw-repeat"]').forEach(r=>r.addEventListener('change',()=>{if(r.checked&&['review','cycle'].includes(r.value)&&!A.memoActions.busy()){const draft={text:q('#mw-title').value,note:q('#mw-note-edit').value};A.ui.closeModal();if(r.value==='review')A.memoReview.newEditor(null,draft);else A.memoRecurrence.newEditor({...draft,list:q('#mw-list')?.value||list,points:Number(q('#mw-points')?.value)||0,estimatedMinutes:Number(q('#mw-estimate').value)||0});}}));
@@ -603,9 +613,9 @@
         t.estimatedMinutes = Math.min(1440, Math.max(0, Number(q('#mw-estimate').value) || 0)); t.dateBasis = 'user';
         if(kind==='three'){const points=Number(q('#mw-points').value);if(!Number.isFinite(points)||points<0||points>1000000||Math.abs(Math.round(points*100)-points*100)>1e-7)throw Error('积分须为0—1000000之间的两位小数');}
         t.text = text; t.note = q('#mw-note-edit').value; if (q('#mw-points')) t.points = Math.max(0, Number(q('#mw-points').value) || 0);
-        if(q('#mw-priority')&&(selectedList==='required'||(!q('#mw-list')&&ref?.list==='required')||(kind==='queue'&&t.assignment?.list==='required'))){
-          const weight=Number(q('#mw-priority').value);
-          if(!Number.isInteger(weight)||weight<1||weight>5)throw Error('必做优先级必须为1—5');
+        if(selectedList==='required'||(!q('#mw-list')&&ref?.list==='required')||(kind==='queue'&&t.assignment?.list==='required')){
+          const weight=Number(q('[name="mw-priority"]:checked')?.value);
+          if(!Number.isInteger(weight)||weight<1||weight>priorities.length)throw Error('必做优先级必须为1—5');
           t.priorityWeight=weight;
         }
         if(q('#task-group'))t.memoGroup=q('#task-group').value;A.memoGantt?.apply(t,m);saveTiming(m, targetRef, text, targetRef.kind === 'project' ? targetRef.day : isThree ? (canStart() ? M().userDay() : chosenRound()?.start || newRound?.start || day) : day); savedRef=targetRef;

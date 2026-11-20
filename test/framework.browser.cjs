@@ -52,8 +52,25 @@ for(const width of [320,390,1280]){
  assert.deepEqual(initial.segments,['late-done','deferred','done','pending'],'four progress segments retain their ordering');
  const tierEls=await page.locator('.framework-overview .overview-task[data-bounty-tier]').evaluateAll(nodes=>Object.fromEntries(nodes.filter(n=>n.getAttribute('data-overview-ref')?.includes('bounty-')).map(n=>[JSON.parse(n.dataset.overviewRef).id,n.dataset.bountyTier])));
  assert.equal(tierEls['bounty-10'],'none');assert.equal(tierEls['bounty-11'],'none');assert.equal(tierEls['bounty-25'],'basic');assert.equal(tierEls['bounty-31'],'high');
+ const priorityControls=page.getByRole('group',{name:'必做优先级'});
+ const priority=level=>priorityControls.getByRole('radio',{name:new RegExp('^'+level+'级')});
+ await page.getByRole('region',{name:'三栏任务概览'}).getByRole('button',{name:'概览：添加必须任务',exact:true}).click();
+ assert(await priority(2).isChecked(),'a new required task starts at level 2');
+ const options=await priorityControls.locator('.mw-priority-option').evaluateAll(nodes=>nodes.map(node=>{
+   const {left,top,width,height}=node.getBoundingClientRect();
+   return {level:node.querySelector('input').value,left,top,width,height};
+ }));
+ assert.deepEqual(options.map(e=>e.level),['1','2','3','4','5']);
+ assert(options.every((e,i)=>e.top===options[0].top&&Math.abs(e.width-options[0].width)<1&&e.height>=44&&(i===0||e.left>options[i-1].left)),'priority options stay in one row at '+width+'px');
+ await page.locator('#mw-list').selectOption('ideal');
+ assert.equal(await priorityControls.isVisible(),false);
+ await page.locator('#mw-list').selectOption('required');
+ await page.getByRole('textbox',{name:'任务名称',exact:true}).fill('必做等级创建测试');
+ await priority(5).check();await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
+ assert.equal(await page.evaluate(()=>App.store.getDay('2026-11-04').tasks.required.find(t=>t.text==='必做等级创建测试').priorityWeight),5);
  await page.evaluate(()=>App.memoWorkspace.editor({kind:'task',id:'priority-low',day:'2026-11-04',list:'required'}));
- await page.locator('#mw-priority').selectOption('4');await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
+ assert(await priority(1).isChecked(),'editing shows the saved level');
+ await priority(4).check();await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
  assert.equal(await page.evaluate(()=>App.store.getDay('2026-11-04').tasks.required.find(t=>t.id==='priority-low').priorityWeight),4,'UI persists priority');
  const resort=await page.evaluate(()=>App.memoWorkspace.taskItems('2026-11-04','required').filter(x=>['priority-low','priority-high','priority-default'].includes(x.task.id)).map(x=>x.task.id));
  assert.deepEqual(resort,['priority-high','priority-low','priority-default'],'required order refreshes after editing');

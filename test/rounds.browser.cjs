@@ -180,18 +180,20 @@ const server=http.createServer((req,res)=>{
    });
    App.app.switchView('tasks');App.memoWorkspace.setDay(day);
   });
-  async function checkColors(cards){
-   const styles=await cards.evaluateAll(elements=>elements.map(el=>({
+  async function checkColors(cards,dark=false){
+   const styles=await cards.evaluateAll(elements=>Object.fromEntries(elements.map(el=>[el.dataset.priority,{
     rail:getComputedStyle(el).borderLeftColor,
     label:getComputedStyle(el.querySelector('.mw-priority-note')).color
-   })));
-   assert.equal(new Set(styles.map(x=>x.rail)).size,5);
-   assert(styles.every(x=>x.label===x.rail),'priority text and rail use the same color: '+JSON.stringify(styles));
+   }])));
+   assert.equal(new Set(Object.values(styles).map(x=>x.rail)).size,5);
+   assert.equal(new Set(Object.values(styles).map(x=>x.label)).size,5);
+   assert.deepEqual(styles[1],dark?{rail:'rgb(203, 213, 225)',label:'rgb(203, 213, 225)'}:{rail:'rgb(148, 163, 184)',label:'rgb(82, 97, 119)'});
+   assert.deepEqual(styles[4],dark?{rail:'rgb(250, 204, 21)',label:'rgb(250, 204, 21)'}:{rail:'rgb(202, 138, 4)',label:'rgb(135, 88, 0)'});
   }
   const cards=page.locator('.framework-overview .overview-task[data-category="required"]');
   await checkColors(cards);
   await page.evaluate(()=>document.body.dataset.theme='dark');
-  await checkColors(cards);
+  await checkColors(cards,true);
   await page.evaluate(()=>{delete document.body.dataset.theme;App.memoWorkspace.showPane('details');});
   await checkColors(page.locator('#mw-details .mw-task[data-category="required"]'));
   await page.evaluate(()=>App.memoWorkspace.returnToday());
