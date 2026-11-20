@@ -62,7 +62,7 @@ const server=http.createServer((req,res)=>{
   assert.match(await row.innerText(),/截止日位于轮次外/);
   assert.equal(await page.getByRole('button',{name:'安排轮次',exact:true}).count(),0);
   await row.getByRole('button',{name:/打开任务/}).click();
-  await page.getByRole('button',{name:'编辑任务',exact:true}).click();
+  await page.getByRole('button',{name:'完成任务',exact:true}).waitFor();
   await page.getByLabel('恢复按截止日关联轮次').check();await save();
   await pickDay(16);assert(await row.isVisible());
   const native=page.getByRole('button',{name:/打开任务：弹性轮次任务/});

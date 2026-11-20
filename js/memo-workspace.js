@@ -467,7 +467,7 @@
     if (!start) throw new Error('请补充开始时间');
     A.memoSchedule.savePlan({ ref, title, day, type: end ? 'span' : 'point', start: Date.parse((start < '04:00' ? M().shiftDay(day,1) : day) + 'T' + start + ':00+08:00'), end: end ? Date.parse(((modal.querySelector('#mw-next').checked || end < '04:00') ? M().shiftDay(day, 1) : day) + 'T' + end + ':00+08:00') : null });
   }
-  function editor(ref, list, reviewExecution = false, threeDay = null, planningOnly = false, projectActions = false) {
+  function editor(ref, list, reviewExecution = false, threeDay = null, planningOnly = false, roundActions = false) {
     if (A.memoActions.busy()) return A.ui.toast('请先重试保存当前操作');
     const isThree=ref?.kind==='three'||(!ref&&list==='three');
     const reviewLink=ref&&A.memoReview?.locate(ref);if(reviewLink&&!reviewExecution)return A.memoReview.manage(reviewLink.series.id);
@@ -501,7 +501,7 @@
       const details=note.closest('details');if(details)details.open=true;
       note.focus();
     });
-    if (projectActions && kind === 'project') {
+    if (roundActions && kind === 'project') {
       const today = M().userDay();
       const actions = document.createElement('div');
       actions.className = 'round-project-actions';
@@ -518,6 +518,14 @@
           }))A.ui.closeModal();
         } finally {control.disabled=false;}
       };
+    }
+    if (roundActions && ['task','queue'].includes(kind)) {
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'btn btn-primary';
+      action.textContent = doneFor(existing,ref) ? '撤销完成' : '完成任务';
+      action.onclick = () => complete(ref);
+      q('#mw-title').parentElement.before(action);
     }
     q('#mw-estimate').value = existing?.estimatedMinutes || ''; if(q('#mw-priority')) q('#mw-priority').value=String(existing?priorityWeight(existing):2);
     A.memoOrganize?.editor(m,existing,list||ref?.list,ref); A.memoGantt?.editor(m,existing,kind,list||ref?.list);const selectList = q('#mw-list');
@@ -545,7 +553,7 @@
       return existing ? !!current && chosenRound()?.index === current.index : !!newRound && newRound.start <= M().userDay() && newRound.end >= M().userDay();
     };
     immediate.textContent=running?.status==='running'?'保存并返回':running?'保存并继续计时':'保存并立即开始';
-    A.ui.dateContext(m, { day: kind==='queue'?(existing?.assignment?.day||null):(projectActions?threeDay:day), label:isThree||projectActions?'查看日期':undefined, shortSaveLabel:isThree?'保存':undefined, saveSelector:'[data-act=save]', canStart });
+    A.ui.dateContext(m, { day: kind==='queue'?(existing?.assignment?.day||null):(roundActions?threeDay:day), label:isThree||roundActions?'查看日期':undefined, shortSaveLabel:isThree?'保存':undefined, saveSelector:'[data-act=save]', canStart });
     if (existing?.memoRoundAssignment?.mode === 'manual') {
       q('#mw-form-error').insertAdjacentHTML('beforebegin',
         '<label><input type="checkbox" id="mw-round-auto"> 恢复按截止日关联轮次</label>');

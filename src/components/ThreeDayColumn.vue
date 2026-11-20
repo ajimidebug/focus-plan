@@ -30,7 +30,10 @@ function open(row:any){
  if(row.kind==='project'){
    return A().memoWorkspace.editor({...row.ref,day:A().memoCore.userDay()},'extra',false,props.day,true,true)
  }
- if(!active.value&&row.kind==='three')return edit(row)
+ if(!active.value){
+   if(row.kind==='three')return edit(row)
+   return A().memoWorkspace.editor(row.ref,row.ref.list,false,props.day,true,true)
+ }
  A().memoWorkspace.complete(row.ref)
 }
 </script>
