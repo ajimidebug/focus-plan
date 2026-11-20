@@ -138,6 +138,15 @@
     return modal;
   }
   // A fixed target day is never silently changed when the user-day boundary passes.
+  function taskNotePreview(anchor, note, edit) {
+    if (!anchor || !note?.trim()) return;
+    const button = anchor.ownerDocument.createElement('button');
+    button.type = 'button';
+    button.className = 'task-note-preview';
+    button.textContent = '任务备注 · ' + note.trim();
+    button.onclick = edit;
+    anchor.after(button);
+  }
   function dateContext(modal, options = {}) {
     const M = App.memoCore, doc = modal.ownerDocument, win = doc.defaultView;
     const banner = doc.createElement('div'); banner.className = 'modal-date-context';
@@ -362,7 +371,7 @@
   }
 
   App.ui = {
-    openModal: openModal, closeModal: closeModal, bindActions: bindActions, confirm: confirm, dateContext: dateContext,
+    openModal: openModal, closeModal: closeModal, bindActions: bindActions, confirm: confirm, dateContext: dateContext, taskNotePreview: taskNotePreview,
     toast: toast, floatText: floatText, floatAt: floatAt,
     // 弹窗"开在哪个文档"这套：给 tasks.js 用（拆解界面等要按弹窗所在文档查元素）
     query: query, markFloatAction: markFloatAction, willUsePip: willUsePip, uiDoc: uiDoc,

@@ -468,3 +468,18 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .three-future-row>span { min-width:0; }
 
 .round-snapshot-note { white-space:pre-wrap; overflow-wrap:anywhere; }
+
+.overview-add-area { display:block; width:100%; flex:1; min-height:20px; border:0; background:transparent; cursor:pointer; }
+.overview-add + .overview-add-area { min-height:8px; }
+.overview-add-area:focus-visible { outline:2px solid var(--primary); outline-offset:-2px; }
+.task-date-calendar { width:min(100%, 400px); margin:8px auto; }
+.task-calendar-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+.fc .calendar-round-day .fc-daygrid-day-frame { background:color-mix(in srgb, var(--primary) 9%, transparent); }
+.fc .calendar-round-start .fc-daygrid-day-frame { border-inline-start:2px solid color-mix(in srgb, var(--primary) 36%, transparent); }
+.fc .calendar-round-end .fc-daygrid-day-frame { border-inline-end:2px solid color-mix(in srgb, var(--primary) 36%, transparent); }
+
+.task-note-preview { display:block; max-width:100%; border:0; background:transparent; color:var(--task-note-color,#235fa7); font-size:.85rem; text-align:start; padding:6px 0; overflow-wrap:anywhere; cursor:pointer; }
+body:is([data-theme="dark"],[data-theme="purple"]) .task-note-preview { --task-note-color:#a9ccff; }
+.round-project-actions { display:flex; flex-wrap:wrap; gap:8px; margin-block-end:8px; }
+.modal[data-date-context="past"] .modal-heading { background:color-mix(in srgb, #c59038 16%, var(--card)); }
+.modal[data-date-context="future"] .modal-heading { background:color-mix(in srgb, #5c8ed0 17%, var(--card)); }

@@ -33,7 +33,9 @@ const server=http.createServer((req,res)=>{
   await page.clock.runFor(10000);
   assert.equal(await page.evaluate(()=>App.memoSchedule.timing({kind:'task',id:'nav-a',day:'2026-11-13',list:'ideal'}).allMs),endedTime);
   assert.equal(await page.evaluate(()=>App.store.data().days['2026-11-13'].tasks.ideal[0].done||false),false);
-  await page.locator('#mw-live-controls [data-schedule-command=start]').click();
+  await page.locator('#mw-live.float-empty').waitFor({state:'attached'});
+  await page.reload();await page.waitForFunction(()=>App?.app?.ready&&document.querySelector('#mw-live')?.classList.contains('float-empty'));
+  await page.locator('.mw-exec-item').first().locator('[data-schedule-command=start]').click();
   await page.waitForFunction(()=>App.memoSchedule.state().sessions.some(s=>s.status==='running'));
   const original=await page.evaluate(()=>App.memoSchedule.state().sessions.find(s=>s.status==='running').id);
   await page.clock.runFor(1000);
@@ -65,7 +67,7 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>{App.app.switchView('tasks');App.memoWorkspace.setDay('2026-11-13');});
   await page.locator('[data-mw=exec-clear]').click();await page.locator('.modal [data-act=ok]').click();
   await page.waitForFunction(()=>!App.memoActions.busy()&&App.store.data().memoExecutionQueue.length===0);
-  assert.equal(await page.evaluate(()=>App.memoSchedule.state().sessions.find(s=>s.ref.id==='nav-b').status),'paused');
+  assert.equal(await page.evaluate(()=>App.memoSchedule.state().sessions.find(s=>s.ref.id==='nav-b').status),'ended');
   assert.equal(await page.evaluate(()=>App.store.data().days['2026-11-13'].tasks.ideal.find(t=>t.id==='nav-b').done||false),false);
   await page.reload();await page.waitForFunction(()=>App?.app?.ready);assert.equal(await page.evaluate(()=>App.store.data().memoExecutionQueue.length),0);
   await page.evaluate(()=>App.app.switchView('memo'));

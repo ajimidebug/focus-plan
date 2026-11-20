@@ -21,7 +21,38 @@
     list.push(block);
     M().write(event.noteDay, list.map(x => x.text).join(''), event.at, list);
   }
-  function passage(event) { return noteBlocks(event.noteDay).filter(x => x.eventId === event.id).map(x => x.text).join(''); }
+  function passage(event) { return event.undonePassage || noteBlocks(event.noteDay).filter(x => x.eventId === event.id).map(x => x.text).join(''); }
+  function retainedNote(block, event) {
+    const started = stamp(event.at,event.noteDay);
+    const label = event.kind==='checkin'?'积分打卡':event.backfillDay?'补记完成':'任务勾选';
+    const suffix = event.sourceDay===event.noteDay?'':(event.sourceDay>event.noteDay?'（任务日期 ':'（补记 ')+event.sourceDay+'）';
+    const generated = new Set([started+'【'+label+'】'+event.title+suffix,started+'【'+label+'】'+event.title,
+      started+'【重新完成】'+event.title,'原文见本日先前记录。']);
+    if(event.noteInput?.mode!=='custom') {
+      for(const line of (event.timing?.text||'').split('\n'))if(line)generated.add(line);
+    }
+    const lines = block.text.split('\n');
+    const kept = lines.filter((line,index)=>!generated.has(line)&&
+      !(index>=lines.length-2&&/^本次实际获得积分：-?\d+(?:\.\d+)?分$/.test(line)));
+    if(!kept.some(line=>line.trim()))return null;
+    return { id:block.id, text:kept.join('\n') };
+  }
+  function visibleBlocks(blocks) {
+    if(!blocks.some(block=>block.eventId))return blocks;
+    const revoked=new Map((S().data().memoEvents||[]).filter(e=>e?.active===false&&e.undoneAt).map(e=>[e.id,e]));
+    if(!revoked.size)return blocks;
+    return blocks.flatMap(block=>{
+      const event=revoked.get(block.eventId);
+      return event?retainedNote(block,event)||[]:block;
+    });
+  }
+  function archiveLegacyBlocks(blocks) {
+    const archived=new Map();
+    for(const block of blocks)if(block.eventId)archived.set(block.eventId,(archived.get(block.eventId)||'')+block.text);
+    for(const event of S().data().memoEvents||[])if(event?.active===false&&event.undoneAt&&!event.undonePassage&&archived.has(event.id)){
+      event.undonePassage=archived.get(event.id);
+    }
+  }
   function ledger(event, type, points, note, day = event.sourceDay) {
     if (!Number.isFinite(points) || points === 0) return;
     const entry = { id: S().uid(), date: day, type, points, leisure: 0, taskId: event.sourceId, memoEventId: event.id, note, at: event.at };
@@ -274,8 +305,13 @@
       });
     } else d.ledger = d.ledger.filter(l => !event.ledgerIds.includes(l.id));
     const kept = []; let removedLine = false;
+    if(notePolicy==='retain')event.undonePassage=blocks.filter(b=>b.eventId===id).map(b=>b.text).join('');
     blocks.forEach(block => {
-      if (notePolicy === 'remove' && block.eventId === id) { removedLine = removedLine || block.text.includes('\n'); return; }
+      if (block.eventId === id) {
+        const retained = notePolicy==='retain' ? retainedNote(block,event) : null;
+        if(!retained){removedLine=removedLine||block.text.includes('\n');return;}
+        block=retained;
+      }
       const previous = kept[kept.length - 1];
       if (removedLine && previous?.text && block.text && !previous.text.endsWith('\n') && !block.text.startsWith('\n')) kept.push({ id: S().uid(), text: '\n' });
       kept.push(block); if (block.text) removedLine = false;
@@ -386,6 +422,12 @@
     if(['task','queue'].includes(spec.kind)){const assign=document.createElement('button');assign.type='button';assign.className='btn';assign.textContent='调整安排';assign.onclick=()=>{if(!App.memoActions.busy()){remember();App.memoWorkspace.assignmentEditor(ref,()=>{const next=Object.assign({},spec,App.memoSchedule.canonical(ref));completionDrafts.set(draftKey(next),completionDrafts.get(draftId));complete(next);});}};m.querySelector('.modal-actions').prepend(assign);}
     const detail=document.createElement('details');detail.className='execution-detail';const title=document.createElement('summary');title.textContent='查看执行时段（确认时更新）';const pre=document.createElement('pre');pre.textContent=timingSnapshot(spec,Date.parse(at)).executionText;detail.append(title,pre);m.querySelector('.action-passage').after(detail);
     const editButton=document.createElement('button');editButton.type='button';editButton.className='btn';editButton.textContent='编辑任务';editButton.onclick=()=>{if(textarea.value!==initialText||remark.value.trim())return App.ui.toast('请先完成本次记录，再编辑任务');App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list});};if(spec.kind!=='checkin')m.querySelector('.modal-actions').prepend(editButton);
+    if(spec.kind!=='checkin')App.ui.taskNotePreview?.(m.querySelector('.action-task-title'),sourceTask?.note,()=>{
+      remember();
+      App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list},spec.list,true);
+      const note=document.querySelector('#mw-note-edit');
+      if(note){const details=note.closest('details');if(details)details.open=true;note.focus();}
+    });
     const ref={kind:spec.kind,id:spec.id,day:spec.day,list:spec.list};
     const habitPlan=spec.kind==='checkin'&&App.memoFinance?.plans(spec.day).find(x=>x.it.id===spec.id);
     if(spec.kind!=='checkin'||(spec.day===M().userDay()&&habitPlan)){
@@ -472,7 +514,7 @@
     if (committing || unsettled) return;
     const text = passage(event), points = S().data().ledger.filter(l => event.ledgerIds.includes(l.id)).reduce((n, l) => n + l.points, 0);
     const m = App.ui.openModal('取消' + (event.kind === 'checkin' ? '这次打卡' : '完成'),
-      '<p>' + (event.award?.bonus ? '本日连续奖励机会不重新发放。' : '') + '将撤回本次积分 ' + points + '，保留以下笔记和段内补充，并标记本次完成已撤销。</p>' +
+      '<p>' + (event.award?.bonus ? '本日连续奖励机会不重新发放。' : '') + '将撤回本次积分 ' + points + '，随手记保留手写备注和补充。完整文段可在任务的已撤销记录中查看。</p>' +
       '<pre class="memo-delete-preview">' + E(text || '没有关联文段，或文段已被你删除。') + '</pre>' +
       '<label for="memo-action-text">取消原因（选填）</label><textarea id="memo-action-text" class="memo-action-text" placeholder="留空确认，不新增取消文字"></textarea><p id="memo-action-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">保留完成</button><button class="btn btn-danger" data-act="commit">确认取消</button>', { lock: true });
@@ -750,6 +792,6 @@
     });
   }
 
-  App.memoActions = { three, tick:()=>App.ui.query?.('.task-action-modal')?._timerTick?.(), deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, availableRewards, claimRewardsCore, reconcileRewards, completeCore, timingSnapshot, undoCore, latest, passage, commit: transaction };
+  App.memoActions = { three, tick:()=>App.ui.query?.('.task-action-modal')?._timerTick?.(), deleteTask, deleteCore, restoreCore, trash, archiveHabit, restoreHabit, project, task, queue, checkin, daily, checkinHistory, renderQueue, queueClick, busy: () => committing || unsettled, availableRewards, claimRewardsCore, reconcileRewards, completeCore, timingSnapshot, undoCore, latest, passage, visibleBlocks, archiveLegacyBlocks, commit: transaction };
 })();
 

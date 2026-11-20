@@ -291,6 +291,10 @@ function createProject(){
  if(radio){radio.checked=true;radio.dispatchEvent(new Event('change',{bubbles:true}));}
 }
 
+function setAchieved(task, achieved){
+ if(achieved)task.memoGanttCompletedAt=task.memoGanttCompletedAt||new Date().toISOString();
+ else delete task.memoGanttCompletedAt;
+}
 function quick(key){
  const n=locate(key);if(!n)return A.ui.toast('任务已移动或删除，请刷新');
  if(A.memoActions.busy())return A.ui.toast('请先完成当前保存操作');
@@ -315,8 +319,7 @@ function quick(key){
     if(checked.end)current.task.memoGanttEnd=checked.end;else delete current.task.memoGanttEnd;
     current.task.memoGanttDependencies=checked.dependencies;current.task.memoGroup=q('group').value;
     if(n.kind==='project'){
-      if(q('achieved').checked)current.task.memoGanttCompletedAt=current.task.memoGanttCompletedAt||new Date().toISOString();
-      else delete current.task.memoGanttCompletedAt;
+      setAchieved(current.task,q('achieved').checked);
     }
    });
    if(ok){A.ui.closeModal();A.memoWorkspace.render();}
@@ -417,5 +420,5 @@ function deadlines(){
  for(const n of nodes())if(dayNumber(n.task.memoGanttEnd)!==null)items.push({key:n.key,title:n.title,due:n.task.memoGanttEnd,ref:n.ref,done:!!(n.task.done||n.task.doneAt||n.task.memoGanttCompletedAt)});
  return items.sort((a,b)=>a.due.localeCompare(b.due)||a.title.localeCompare(b.title));
 }
-A.memoGantt={dateFields,bindDates,deadlines,validate,model,html,editor,apply,quick,syncEdges,locate,nodes,normalizeKey};
+A.memoGantt={dateFields,bindDates,deadlines,validate,model,html,editor,apply,quick,syncEdges,locate,nodes,normalizeKey,setAchieved};
 })();

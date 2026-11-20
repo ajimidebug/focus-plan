@@ -16,7 +16,8 @@ test('cancel preserves latest handwritten edits, input snapshots and exported ca
  const b=H.browser();await b.S.load();const {A,M,E}=H.actionHarness(b);b.S.data().queue=[{id:'q',text:'数学',points:5}];M.write('2026-10-19','前文');
  const e=A.completeCore({kind:'queue',id:'q',title:'数学',remark:'备注A',noteInput:{version:1,mode:'custom',body:'说明B'}},'说明B',H.actionAt);
  let blocks=M.segments(M.read(e.noteDay)),pos=E.textOf(blocks).indexOf('说明B')+3;blocks=E.splice(blocks,pos,pos,'段内C');blocks.push({id:'tail',text:'后文'});M.write(e.noteDay,E.textOf(blocks),H.actionAt,blocks);const before=M.read(e.noteDay).text;
- A.undoCore(e.id,'',H.actionAt);assert.equal(M.read(e.noteDay).text,before);assert(M.exportBlocks(M.segments(M.read(e.noteDay))).includes('数学 · 已撤销完成'));assert(before.includes('备注A'));assert(before.includes('段内C'));assert.equal(b.S.pointsTotal(),0);await b.S.save();const c=H.browser({shared:b});await c.S.load();assert.equal(H.memoHarness(c).read(e.noteDay).text,before);
+ const kept=before.replace(/本次实际获得积分：5分\n?/,'');
+ A.undoCore(e.id,'',H.actionAt);assert.equal(M.read(e.noteDay).text,kept);assert(!M.exportBlocks(M.segments(M.read(e.noteDay))).includes('数学 · 已撤销完成'));assert.match(A.passage(e),/说明B段内C/);assert(before.includes('备注A'));assert(before.includes('段内C'));assert.equal(b.S.pointsTotal(),0);await b.S.save();const c=H.browser({shared:b});await c.S.load();assert.equal(H.memoHarness(c).read(e.noteDay).text,kept);
 });
 for(const [end,expected] of [['02:00','2026-11-13'],['04:00','2026-11-14'],['08:00','2026-11-14']])test('04:00 day boundary '+end,async()=>{
  const b=H.browser();await b.S.load();const {F,P}=H.flowHarness(b,'2026-11-13');const ref={kind:'task',id:'t',day:'2026-11-13',list:'required'};b.S.getDay(ref.day).tasks.required.push({id:'t',text:'边界'});

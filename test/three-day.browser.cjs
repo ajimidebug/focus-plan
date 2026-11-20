@@ -15,8 +15,6 @@ const server=http.createServer((req,res)=>{
   await page.goto('http://127.0.0.1:'+server.address().port+'/#/tasks');await page.waitForFunction(()=>window.App?.app?.ready);
   assert.equal(await page.locator('.framework-overview .cal-col').count(),3);
   assert.equal(await page.locator('.framework-overview [data-overview-list=extra]').count(),0);
-  await page.getByRole('button',{name:'新建轮次',exact:true}).click();
-  await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
   await page.getByRole('button',{name:'添加轮次任务',exact:true}).click();
   assert(await page.locator('.mw-task-editor #mw-title').isVisible(),'three-day creation uses the shared editor');
   await page.locator('#mw-title').fill('三天内复盘数学错题');await page.locator('#mw-note-edit').fill('保留自定义备注');await page.locator('#mw-points').fill('7');
@@ -55,8 +53,7 @@ const server=http.createServer((req,res)=>{
   await page.getByRole('button',{name:'确认取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>App.memoThree.state().tasks[0].note),'保留自定义备注');
   assert.match(await page.evaluate(()=>App.memoCore.read(App.memoCore.userDay()).text),/本次完成备注/);
-  await page.getByRole('button',{name:'新建轮次',exact:true}).click();
-  await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
+  await page.locator('#mw-day').fill('2026-11-19');
   await page.getByRole('button',{name:'添加轮次任务',exact:true}).click();
   await page.locator('#mw-title').fill('下轮独立任务');await page.locator('#mw-note-edit').fill('未来任务备注');
   await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});
@@ -65,7 +62,7 @@ const server=http.createServer((req,res)=>{
   assert.doesNotMatch(await page.locator('.three-day-column').innerText(),/三天内复盘数学错题/);
   const copied=await page.evaluate(()=>App.memoFlow.copyQuote(App.memoCore.userDay()).text);
   assert.match(copied,/保留自定义备注/);assert.match(copied,/未来任务备注/);assert.match(copied,/预排/);assert.match(copied,/未完成/);
-  await page.getByRole('combobox',{name:'选择轮次',exact:true}).selectOption('0');
+  await page.locator('#mw-day').fill('2026-11-16');
   await page.clock.setFixedTime(new Date('2026-11-19T04:00:00+08:00'));
   await page.evaluate(async()=>{await App.memoActions.commit(()=>{});App.memoWorkspace.returnToday();});
   assert.match(await page.locator('.three-day-column').innerText(),/延期/);

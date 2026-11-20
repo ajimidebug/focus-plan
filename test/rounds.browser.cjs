@@ -19,10 +19,13 @@ const server=http.createServer((req,res)=>{
    await days.filter({hasText:new RegExp('^'+start+'$')}).click();await days.filter({hasText:new RegExp('^'+end+'$')}).click();
   }
   async function save(){await page.locator('.modal [data-act=save]').click();await page.locator('.modal').waitFor({state:'detached'});}
-  await page.getByRole('button',{name:'新建轮次',exact:true}).click();await range(16,20);assert.equal(await page.locator('#round-end').inputValue(),'2026-11-20');await save();
+  const pickDay=(day)=>page.locator('#mw-day').fill('2026-11-'+day);
+  await page.getByRole('button',{name:'调整日期',exact:true}).click();await range(16,20);assert.equal(await page.locator('#round-end').inputValue(),'2026-11-20');await save();
   await page.getByRole('button',{name:'添加轮次任务',exact:true}).click();await page.locator('#mw-title').fill('弹性轮次任务');await page.locator('#mw-note-edit').fill('轮次原备注');await save();
-  await page.getByRole('button',{name:'新建轮次',exact:true}).click();await save();
-  assert.equal(await page.getByRole('combobox',{name:'选择轮次',exact:true}).inputValue(),'1');
+  await page.getByRole('button',{name:'日历',exact:true}).click();
+  await page.locator('.task-date-calendar .calendar-round-start[data-date="2026-11-21"]').waitFor();
+  await page.getByRole('button',{name:'查看2026-11-21任务'}).press('Enter');
+  assert.equal(await page.locator('#mw-day').inputValue(),'2026-11-21');
   for(const title of ['下一轮数学','下一轮专业课']){
    await page.getByRole('button',{name:'添加轮次任务',exact:true}).click();
    assert.equal(await page.locator('#mw-three-round').count(),0);
@@ -33,7 +36,10 @@ const server=http.createServer((req,res)=>{
   await page.getByRole('button',{name:/打开任务：下一轮数学/}).click();
   assert.equal(await page.locator('#mw-three-round').inputValue(),'2026-11-21');
   await page.locator('#mw-note-edit').fill('预排备注');await save();
-  const select=page.getByRole('combobox',{name:'选择轮次',exact:true});await select.selectOption('0');
+  await pickDay(24);
+  await page.getByRole('button',{name:'添加轮次任务',exact:true}).click();
+  await page.locator('#mw-title').fill('第三轮预排');await save();
+  await pickDay(16);
   await page.evaluate(async()=>{
    const day=App.memoCore.userDay();await App.memoActions.commit(()=>{App.store.getDay(day).tasks.ideal.push({id:'linked-round',text:'截止归入测试',note:'甘特原备注',points:4,memoGanttEnd:'2026-11-19'});});App.memoWorkspace.render();
   });
@@ -51,13 +57,14 @@ const server=http.createServer((req,res)=>{
    await App.memoActions.commit(()=>App.memoThree.assignCore({kind:'task',id:'linked-round',day,list:'ideal'},1));
    App.memoWorkspace.render();
   });
-  await select.selectOption('1');assert(await row.isVisible());
+  await pickDay(21);assert(await row.isVisible());
   assert.match(await row.innerText(),/手动安排/);
   assert.match(await row.innerText(),/截止日位于轮次外/);
   assert.equal(await page.getByRole('button',{name:'安排轮次',exact:true}).count(),0);
   await row.getByRole('button',{name:/打开任务/}).click();
+  await page.getByRole('button',{name:'编辑任务',exact:true}).click();
   await page.getByLabel('恢复按截止日关联轮次').check();await save();
-  await select.selectOption('0');assert(await row.isVisible());
+  await pickDay(16);assert(await row.isVisible());
   const native=page.getByRole('button',{name:/打开任务：弹性轮次任务/});
   await native.click();await page.getByRole('button',{name:'加入队列'}).click();
   await page.getByRole('button',{name:'已入队'}).waitFor();await page.locator('.modal [data-act=cancel]').click();
@@ -77,10 +84,14 @@ const server=http.createServer((req,res)=>{
   });
   assert.deepEqual(retained,{done:false,note:'轮次原备注',remark:'轮次完成备注',active:false,timing:true});
   await page.evaluate(async()=>{await App.memoActions.commit(()=>App.memoSchedule.startRef({kind:'three',id:App.memoThree.state().tasks[0].id,list:'three'}));});
-  await page.getByRole('button',{name:'提前结束本轮',exact:true}).click();await page.locator('#round-next-start').fill('2026-11-17');await page.getByRole('button',{name:'确认提前结束',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
+  await page.getByRole('button',{name:'提前结束本轮',exact:true}).click();await page.getByRole('button',{name:'确认提前结束',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
   assert.equal(await page.evaluate(()=>App.memoThree.byIndex(0).end),'2026-11-16');assert.equal(await page.evaluate(()=>App.memoThree.byIndex(0).originalEnd),'2026-11-20');assert.equal(await page.evaluate(()=>App.memoSchedule.state().sessions.at(-1).status),'paused');
-  await select.selectOption('1');await page.getByRole('button',{name:'调整日期',exact:true}).click();await range(17,23);await save();
-  await page.getByRole('button',{name:'新建轮次',exact:true}).click();await range(17,18);await page.locator('.modal [data-act=save]').click();assert.match(await page.locator('#round-error').innerText(),/重叠/);await page.locator('.modal [data-act=cancel]').click();
+  assert.equal(await page.locator('#mw-day').inputValue(),'2026-11-17');
+  assert.deepEqual(await page.evaluate(()=>App.memoThree.rounds().map(r=>[r.start,r.end])),
+    [['2026-11-16','2026-11-16'],['2026-11-17','2026-11-19'],['2026-11-20','2026-11-22']]);
+  await pickDay(20);assert(await page.getByRole('button',{name:/打开任务：第三轮预排/}).isVisible());
+  await page.getByRole('button',{name:'调整日期',exact:true}).click();await range(17,18);
+  await page.locator('.modal [data-act=save]').click();assert.match(await page.locator('#round-error').innerText(),/重叠/);await page.locator('.modal [data-act=cancel]').click();
   await page.clock.setFixedTime(new Date('2026-11-17T12:00:00+08:00'));await page.evaluate(()=>App.memoWorkspace.returnToday());
   const text=await page.evaluate(()=>App.memoFlow.copyQuote(App.memoCore.userDay()).text);assert.match(text,/轮次计划/);assert.match(text,/甘特原备注/);assert.match(text,/未完成/);
   // Exercise the actual copy control, including an asynchronous save and a denied clipboard.
@@ -103,6 +114,7 @@ const server=http.createServer((req,res)=>{
   await clickCopy();
   await page.waitForFunction(()=>App.memoFlow.state().lastCopy?.text.includes('轮次复制原文'));
   const pasted=await page.evaluate(()=>navigator.clipboard.readText());
+  assert.match(pasted,/^请逐项回应/);assert.equal(pasted.split('请逐项回应').length,2);
   assert.match(pasted,/轮次复制原文/);
   assert.match(pasted,/甘特原备注/);
   assert.equal(await page.evaluate(()=>window.copyPlanBuilds),1);

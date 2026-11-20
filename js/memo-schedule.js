@@ -215,6 +215,7 @@
     if (isDone({ ref: found.ref })) throw new Error('任务已完成；取消完成后再计时');
     const focused=App.memoWorkspace?.currentQueueItem?.();
     if(focused&&key(focused.ref)===key(found.ref))App.memoWorkspace.selectQueueCore(found.ref);
+    delete d.floatDismissed;
     const running = active(); if (running && timerKey(running.ref) === timerKey(found.ref) && (itemId == null || running.itemId === itemId)) return running;
     if (running) pauseCore(running, now);
     let session = d.sessions.slice().reverse().find(s => key(s.ref) === key(found.ref) && s.status === 'paused' && (s.itemId || null) === itemId);
@@ -337,7 +338,7 @@
       }
       const pending=App.memoWorkspace?.waitingQueue?.();
       const waiting=pending?{id:'waiting:'+key(pending.ref),ref:pending.ref,title:pending.task.text,status:'waiting'}:null;
-      const shown=current||waiting||paused[0];
+      const shown=current||(d.floatDismissed?null:waiting||paused[0]);
       const live=$('schedule-live');if(live)live.textContent=current?'执行中 · '+current.title+' '+duration(elapsed(current,now)):waiting?'待开始 · '+waiting.title:paused.length?'有 '+paused.length+' 项计时已暂停':'';
       const controls=$('mw-live-controls');
       if(controls){
@@ -388,6 +389,7 @@
           const ok=await perform(retry?()=>{}:()=>{
             const sessions=targets();if(!sessions.length)throw Error('计时状态已改变，请重新打开');
             const at=Date.now();sessions.forEach(x=>stopSession(x,at));
+            state().floatDismissed=true;
           },retry);
           if(ok){App.ui.closeModal();App.memoWorkspace?.timerEnded(ref);App.ui.toast('计时已结束，任务仍未完成');}
           else if(m.isConnected){m.querySelector('[role="alert"]').textContent=App.memoActions.busy()?'结束操作尚未保存，请重试保存':'计时操作失败，请重试';b.textContent=App.memoActions.busy()?'重试保存':'确认结束';}

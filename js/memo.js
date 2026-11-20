@@ -52,6 +52,7 @@
     });
   }
   function exportBlocks(list) {
+    list=App.memoActions?.visibleBlocks(list)||list;
     const all = S().data().memoEvents;
     const events = new Map((Array.isArray(all) ? all : []).filter(e => e).map(e => [e.id, e]));
     const sources = { queue: '任务队列', task: '当天任务', daily: '基础任务', project: '每日推进', checkin: '积分打卡' };
@@ -83,10 +84,15 @@
     state(st.phase === 'saved' ? '已保存到手机' : st.message, st.phase === 'error');
   }
   // 每次输入立即交给主存储同步落本地、异步镜像；同一笔数据进入原有完整备份。
+  let pendingLegacyBlocks = null;
   function persist() {
     if (!$('memo-editor')) return Promise.resolve(true);
     const epoch = ++inputVersion;
     try {
+      if(pendingLegacyBlocks){
+        App.memoActions?.archiveLegacyBlocks(pendingLegacyBlocks);
+        pendingLegacyBlocks=null;
+      }
       write(selected, App.memoEditor.text(), new Date().toISOString(), App.memoEditor.read());
       saving = true; state('正在保存…');
       pending = S().save().then(ok => {
@@ -105,7 +111,10 @@
       const previousDay = selected; selected = key; $('memo-date').value = key;
       const editor = $('memo-editor');
       if (document.activeElement === editor && key === previousDay && App.memoEditor.text() === (n ? n.text : '')) return;
-      App.memoEditor.show(segments(n), S().status().readOnly);
+      const blocks=segments(n);
+      const visible=App.memoActions?.visibleBlocks(blocks)||blocks;
+      pendingLegacyBlocks=visible.length!==blocks.length||visible.some((block,index)=>block!==blocks[index])?blocks:null;
+      App.memoEditor.show(visible, S().status().readOnly);
       $('memo-heading').textContent = key === userDay() ? '今天的笔记' : key + ' 的笔记';
       $('memo-day-hint').textContent = '北京时间 · ' + key + ' 04:00 至 ' + shiftDay(key, 1) + ' 03:59';
       $('memo-editor').dataset.day = key;
@@ -186,11 +195,12 @@
     return '用户日：' + selected + '（北京时间04:00分界）\n\n' + exportBlocks(App.memoEditor.read());
   }
   async function copyCurrent() {
-    const el = $('memo-editor');
     const selection = App.memoEditor.selection();
     if (selection && selection.start !== selection.end) return copyText(App.memoEditor.text().slice(selection.start, selection.end));
     return App.ui.toast('请先选中要复制的文字');
   }
+  const copyPrompt='请逐项回应我提出的问题、疑虑和请求。先给结论，再说明每项的理由。涉及行动时给出具体下一步。信息不足时，请指出缺哪条信息。';
+  function withCopyPrompt(text){return text.startsWith(copyPrompt+'\n\n')?text:copyPrompt+'\n\n'+text;}
   let copying = false;
   function copyStatus() {
     const el = $('memo-copy-status'); if (!el) return;
@@ -222,7 +232,7 @@
           return fallback;
         }
       })();
-      const copied=await copyText(text,()=>quote&&markCopied(quote));
+      const copied=await copyText(text.then(withCopyPrompt),()=>quote&&markCopied({...quote,text:withCopyPrompt(quote.text)}));
       if(notice)App.ui.toast(notice);
       return copied;
     } catch(e){App.ui.toast(e.message);} finally{copying=false;statusText();}
@@ -291,7 +301,7 @@
     $('memo-copy-export').onclick=()=>App.app.switchView('memo-history');
     const paper=$('memo-editor').parentElement; paper.querySelectorAll('.memo-help').forEach(el=>paper.before(el));
     $('memo-copy-full').onclick = copyFull;
-    $('memo-copy-again').onclick = () => { const last=S().data().memoFlow?.lastCopy; last ? copyText(last.text) : App.ui.toast('还没有完整复制记录'); };
+    $('memo-copy-again').onclick = () => { const last=S().data().memoFlow?.lastCopy; last ? copyText(withCopyPrompt(last.text)) : App.ui.toast('还没有完整复制记录'); };
     initCopyMenu();
     copyStatus();
     $('memo-search').oninput = history;

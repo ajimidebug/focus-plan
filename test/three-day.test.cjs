@@ -51,11 +51,13 @@ test('future rounds stay separate and retained task notes survive complete, undo
  b.setTime('2026-11-19T04:00:00+08:00');b.T.settleCore();assert.equal(b.T.projection().rows.length,2);assert.equal(b.T.projection().rows.filter(x=>x.delayed).length,1);
 });
 
-test('round view is safe before setup and survives remount within the same round',async()=>{
+test('selected day resolves saved, preview and distant rounds without persisting empty rounds',async()=>{
  const b=await harness(),state=b.S.data().memoThree;delete b.S.data().memoThree;
- assert.equal(b.T.viewOffset('2026-11-16'),0);
- b.S.data().memoThree=state;b.T.viewOffset('2026-11-16',1);
- assert.equal(b.T.viewOffset('2026-11-16'),1);assert.equal(b.T.viewOffset('2026-11-19'),0);
+ assert.equal(b.T.plannedRound('2026-11-20').start,'2026-11-19');
+ assert.equal(b.T.calendarRounds().length,11);assert.equal(b.T.state(),null);
+ b.S.data().memoThree=state;
+ assert.equal(b.T.plannedRound('2026-11-20').index,1);
+ assert.equal(b.T.plannedRound('2027-02-01').index,null);
 });
 
 test('full report includes unfinished unscheduled Gantt tasks and their notes',async()=>{
@@ -79,7 +81,9 @@ test('round ranges cannot overlap and early close releases dates while freezing 
  const ledger=JSON.stringify(b.S.data().ledger);b.T.closeCore(0,true);
  assert.equal(b.T.byIndex(0).end,'2026-11-16');assert.equal(b.T.byIndex(0).originalEnd,'2026-11-18');
  assert.equal(b.T.find(ref.id).roundIndex,1);assert.equal(JSON.stringify(b.S.data().ledger),ledger);
- b.T.saveRoundCore('2026-11-17','2026-11-23',1,false);
+ assert.equal(b.T.byIndex(1).start,'2026-11-17');
+ assert.equal(b.T.byIndex(1).end,'2026-11-21');
+ assert.equal(b.T.byIndex(2).start,'2026-11-23');
  b.setTime('2026-11-17T04:00:00+08:00');const e=b.A.completeCore({...ref,title:'跨轮完成'},'保留记录',b.at());b.A.undoCore(e.id,'',b.at());
  assert.equal(b.T.projection('2026-11-16').done,0);assert.equal(b.T.projection('2026-11-16').rows[0].note,'原始备注');assert.equal(b.S.validate(b.S.data()),true);
 });

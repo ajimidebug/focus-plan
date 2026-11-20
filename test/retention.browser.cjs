@@ -29,8 +29,8 @@ const server=http.createServer((req,res)=>{
   await page.evaluate(()=>App.memoActions.task('ideal','retain','2026-11-13'));
   await page.locator('.modal [data-act="commit"]').click();await page.getByRole('dialog').waitFor({state:'hidden'});
   await page.reload();await page.waitForFunction(()=>App?.app?.ready);await page.evaluate(()=>{App.app.switchView('memo');App.memo.show('2026-11-13');});
-  assert.equal(await page.locator('#memo-editor').innerText(),before);
-  assert.match(await page.evaluate(()=>App.memoCore.exportText(['2026-11-13'])),/已撤销完成/);
+  assert.equal(await page.locator('#memo-editor').innerText(),before.replace(/本次实际获得积分：5分\n?/,''));
+  assert.doesNotMatch(await page.evaluate(()=>App.memoCore.exportText(['2026-11-13'])),/已撤销完成/);
   assert(before.includes('备注A')&&before.includes('说明B')&&before.includes('段内C'));
   await page.evaluate(()=>App.memoActions.task('ideal','retain','2026-11-13'));
   assert.equal(await page.locator('#ma-remark').inputValue(),'备注A');assert.equal(await page.locator('#memo-action-text').inputValue(),'说明B\n第二行');

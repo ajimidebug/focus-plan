@@ -134,10 +134,18 @@ function chart(container:HTMLElement,type:'bar'|'line',data:any) {
 }
 function barChart(node:HTMLElement,rows:any[]) { node?.nextElementSibling?.classList.contains('framework-chart-data')&&node.nextElementSibling.remove();chart(node,'bar',{labels:rows.map(x=>x.label),datasets:[['study','学习','#2563eb'],['extend','拓展','#15803d'],['fun','辅助','#0891b2']].map(([key,label,color])=>({label,backgroundColor:color,data:rows.map(x=>Math.max(0,Number(x[key])||0)),borderRadius:3}))}) }
 function lineChart(node:HTMLElement,values:number[],labels:string[]) { node?.nextElementSibling?.classList.contains('framework-chart-data')&&node.nextElementSibling.remove();chart(node,'line',{labels,datasets:[{label:'学习',data:values,borderColor:'#2563eb',backgroundColor:'#2563eb20',fill:true,tension:.15,pointRadius:2}]}) }
-function calendar(node:HTMLElement,month:string,selected:string,onSelect:(day:string)=>void) {
+function calendar(node:HTMLElement,month:string,selected:string,onSelect:(day:string)=>void,showTaskCounts=true) {
+  const rounds=A().memoThree.calendarRounds()
   const days=A().store.data().days
-  const events=Object.keys(days).filter(k=>k.startsWith(month.slice(0,7))).flatMap(k=>{const d=days[k];const count=['required','ideal','extra'].reduce((n,c)=>n+(d.tasks?.[c]||[]).filter((t:any)=>!t.memoMovedTo&&!t.memoDismissed).length,0);return count?[{id:k,title:count+'项任务',start:k,allDay:true}]:[]})
-  mount(node,FullCalendar,{options:{plugins:[dayGridPlugin,interactionPlugin],locale:zh,firstDay:1,initialView:'dayGridMonth',initialDate:month,headerToolbar:false,height:'auto',fixedWeekCount:false,events,dayMaxEvents:1,editable:false,selectable:false,dateClick:(info:any)=>onSelect(info.dateStr),dayCellDidMount:(info:any)=>{const n=info.el.querySelector('.fc-daygrid-day-number');if(!n)return;const d=info.date,key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');n.setAttribute('role','button');n.setAttribute('tabindex','0');n.setAttribute('aria-label','查看'+key+'任务');n.addEventListener('keydown',(e:KeyboardEvent)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(key)}})},dayCellClassNames:(info:any)=>{const d=info.date;const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');return key===selected?['framework-selected-day']:[]}}})
+  const events=showTaskCounts?Object.keys(days).filter(k=>k.startsWith(month.slice(0,7))).flatMap(k=>{const d=days[k];const count=['required','ideal','extra'].reduce((n,c)=>n+(d.tasks?.[c]||[]).filter((t:any)=>!t.memoMovedTo&&!t.memoDismissed).length,0);return count?[{id:k,title:count+'项任务',start:k,allDay:true}]:[]}):[]
+  mount(node,FullCalendar,{options:{plugins:[dayGridPlugin,interactionPlugin],locale:zh,firstDay:1,initialView:'dayGridMonth',initialDate:month,headerToolbar:false,height:'auto',fixedWeekCount:false,events,dayMaxEvents:1,editable:false,selectable:false,dateClick:(info:any)=>onSelect(info.dateStr),dayCellDidMount:(info:any)=>{const n=info.el.querySelector('.fc-daygrid-day-number');if(!n)return;const d=info.date,key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');n.setAttribute('role','button');n.setAttribute('tabindex','0');n.setAttribute('aria-label','查看'+key+'任务');n.addEventListener('keydown',(e:KeyboardEvent)=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSelect(key)}})},dayCellClassNames:(info:any)=>{const d=info.date;const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');const round=rounds.find((r:any)=>r.start<=key&&key<=r.end)
+    const classes=key===selected?['framework-selected-day']:[]
+    if(round){
+      classes.push('calendar-round-day')
+      if(key===round.start)classes.push('calendar-round-start')
+      if(key===round.end)classes.push('calendar-round-end')
+    }
+    return classes}}})
 }
 function overview(node:HTMLElement,day:string) { mount(node,TaskOverview,{day,revision:screen.revision}) }
 

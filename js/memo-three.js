@@ -25,6 +25,39 @@
     const r = state()?.version === 1 ? legacyRound(day) : rounds().find(r => r.start <= day && day <= r.end);
     return r ? { ...r, day: Math.floor((Date.parse(day) - Date.parse(r.start)) / 86400000) + 1 } : null;
   }
+  function plannedRound(day) {
+    const saved = round(day);
+    if (saved || !M().validDate(day) || day < M().userDay()) return saved;
+    const list = rounds();
+    const previous = list.filter(r => r.end < day).at(-1);
+    const following = list.find(r => r.start > day);
+    const anchor = previous ? M().shiftDay(previous.end, 1) : M().userDay();
+    const offset = Math.floor((Date.parse(day) - Date.parse(anchor)) / 259200000) * 3;
+    const start = M().shiftDay(anchor, offset);
+    const normalEnd = M().shiftDay(start, 2);
+    const end = following && following.start <= normalEnd ? M().shiftDay(following.start, -1) : normalEnd;
+    return { index: null, start, end };
+  }
+  function calendarRounds() {
+    const result = [];
+    let day = M().userDay();
+    for (let i = 0; i < 11; i++) {
+      let r = plannedRound(day);
+      if (r?.closedAt) {
+        day = M().shiftDay(r.end, 1);
+        r = plannedRound(day);
+      }
+      if (!r || r.closedAt) break;
+      result.push(r);
+      day = M().shiftDay(r.end, 1);
+    }
+    return result;
+  }
+  function ensureRound(day) {
+    const r = plannedRound(day);
+    if (!r || r.closedAt || r.end < M().userDay()) throw Error('请选择今天或未来的开放轮次');
+    return r.index === null ? saveRoundCore(r.start, r.end, null, r.start <= M().userDay()) : r;
+  }
   function byIndex(index) { if(index===null||index===undefined)return null;return rounds().find(r => r.index === Number(index)) || null; }
   function current() { const r = round(); return r && !r.closedAt ? r : null; }
   function legacyRows(r) {
@@ -80,8 +113,12 @@
     const linked = linkedNodes().filter(n => targetOf(n) === r.index).map(n => linkedRow(n, r));
     return native.concat(linked);
   }
+  function score(row) {
+    if (!row.task) return row.points || 0;
+    return A.memoWorkspace ? A.memoWorkspace.score(row.task,row.ref) || 0 : Number(row.task.points) || 0;
+  }
   function snapshotRow(row) {
-    return { id: row.id, key: row.key, text: row.text, ref: clone(row.ref), kind: row.kind, done: row.done, delayed: row.delayed, note: row.note || '', due: row.due || '', manual: !!row.manual, overallDone: !!row.overallDone };
+    return { id: row.id, key: row.key, text: row.text, ref: clone(row.ref), kind: row.kind, points: score(row), done: row.done, delayed: row.delayed, note: row.note || '', due: row.due || '', manual: !!row.manual, overallDone: !!row.overallDone };
   }
   function pending() {
     if (!state()) return [];
@@ -101,7 +138,19 @@
     const at = early ? now : boundary(M().shiftDay(r.end, 1));
     r.closedAt = new Date(at).toISOString();
     if (early) { r.originalEnd = r.originalEnd || r.end; r.end = day; }
-    const next = rounds().find(next => !next.closedAt && next.start > r.end);
+    let next = rounds().find(next => !next.closedAt && next.start > r.end);
+    if (early) {
+      const start = M().shiftDay(day, 1);
+      if (next) {
+        const offset = (Date.parse(start) - Date.parse(next.start)) / 86400000;
+        for (const later of x.rounds.filter(other => !other.closedAt && other.start >= next.start)) {
+          later.start = M().shiftDay(later.start, offset);
+          later.end = M().shiftDay(later.end, offset);
+        }
+      } else {
+        next = saveRoundCore(start, M().shiftDay(start, 2), null, false);
+      }
+    }
     for (const row of rows.filter(row => !row.done)) {
       if (row.kind === 'three') { row.task.roundIndex = next?.index ?? null; row.task.carriedFrom = row.task.carriedFrom ?? r.index; }
       else row.task.memoRoundAssignment = { mode: 'carry', roundIndex: next?.index ?? null, carriedFrom: row.task.memoRoundAssignment?.carriedFrom ?? r.index, due: row.due };
@@ -117,15 +166,16 @@
     for (const r of rounds().filter(r => !r.closedAt && r.end < M().userDay())) closeCore(r.index);
   }
   function projection(day = M().userDay()) {
-    const r = round(day);
+    const r = plannedRound(day);
     if (!r) return { round: null, rows: [], done: 0, total: 0, historical: false, future: false };
-    const history = state().history.find(h => h.index === r.index);
+    const history = state()?.history.find(h => h.index === r.index);
     const historical = !!r.closedAt || !!history;
     let rows;
     if (historical) rows = (history?.rows || legacyRows(r)).map(row => ({ ...row, key: row.key || 'three:' + row.id, kind: row.kind || 'three', ref: row.ref || { kind: 'three', id: row.id, list: 'three' } }));
+    else if (r.index === null) rows = linkedNodes().filter(n => !n.task.memoRoundAssignment && n.task.memoGanttEnd >= r.start && n.task.memoGanttEnd <= r.end).map(n => linkedRow(n,r));
     else if (state().version === 1) rows = state().tasks.filter(t => t.originRound <= r.index && !t.done).map(nativeRow);
     else rows = liveRows(r);
-    return { round: r, rows, done: rows.filter(x => x.done).length, total: rows.length, historical, future: r.start > M().userDay() };
+    return { round: r, rows: rows.sort((a,b) => score(b) - score(a)), done: rows.filter(x => x.done).length, total: rows.length, historical, future: r.start > M().userDay() };
   }
   function items(day = M().userDay()) {
     const p = projection(day);
@@ -177,42 +227,35 @@
     catch (e) { const error = document.querySelector('#round-error'); if (error) error.textContent = e.message; else A.ui.toast(e.message);
       if(A.memoActions.busy()){const button=document.querySelector('[data-act=save],[data-act=close-round]');if(button)button.textContent='重试保存';} }
   }
-  function rangeEditor(index = null) {
+  function rangeEditor(index = null, day = M().userDay()) {
     if (A.memoActions.busy()) return A.ui.toast('请先重试保存');
     const r = index === null ? null : byIndex(index);
     if (r?.closedAt) return A.ui.toast('已关闭轮次保留原日期');
-    const last = rounds().at(-1), start = r?.start || (last && last.end >= M().userDay() ? M().shiftDay(last.end, 1) : M().userDay());
-    const end = r?.end || M().shiftDay(start, 2);
+    const proposed = r || plannedRound(day);
+    if (!proposed || proposed.closedAt) return A.ui.toast('请选择今天或未来日期');
+    const { start, end } = proposed;
     const modal = A.ui.openModal(r ? '调整轮次日期' : '新建轮次', A.memoGantt.dateFields('round', start, end) + '<label><input type="checkbox" id="round-pending" checked>接入尚未安排的轮次任务</label><p id="round-preview" role="status"></p><p id="round-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="save">确认保存</button>', { lock: true });
     A.memoGantt.bindDates(modal, 'round');
     modal.querySelector('[data-range-deadline]').hidden = true;
     const preview = () => { try { const rows = rangePreview(modal.querySelector('#round-start').value, modal.querySelector('#round-end').value, index); modal.querySelector('#round-preview').textContent = rows.length ? '关联任务及截止事项：' + rows.join('、') : '此范围暂无关联任务或截止事项'; modal.querySelector('#round-error').textContent = ''; } catch (e) { modal.querySelector('#round-error').textContent = e.message; } };
     modal.addEventListener('change', preview); modal.addEventListener('click', () => requestAnimationFrame(preview)); preview();
     A.ui.bindActions({ cancel: A.ui.closeModal, save: () => run(() => {
-      const saved = saveRoundCore(modal.querySelector('#round-start').value, modal.querySelector('#round-end').value, index, modal.querySelector('#round-pending').checked);
-      selectRound(saved.index);
+      saveRoundCore(modal.querySelector('#round-start').value, modal.querySelector('#round-end').value, index, modal.querySelector('#round-pending').checked);
     }) });
   }
   function earlyEnd(index) {
     const r = byIndex(index); if (!r || r.closedAt) return;
     const p = projection(r.start), rows = p.rows.filter(x => !x.done);
-    const next = rounds().find(n => !n.closedAt && n.start > M().userDay());
-    const nextField=next?'<label>下一轮开始日期<input type="date" id="round-next-start" value="'+E(next.start)+'" min="'+E(M().shiftDay(M().userDay(),1))+'" max="'+E(next.end)+'"></label>':'';
-    const modal = A.ui.openModal('提前结束本轮', '<p>' + E(r.start + ' — ' + r.end) + '</p><p>本轮结束于 ' + E(M().userDay()) + '，下一轮最早从 ' + E(M().shiftDay(M().userDay(), 1)) + ' 开始。</p><p>已完成 ' + p.done + ' 项，未完成 ' + rows.length + ' 项。未完成项将进入' + E(next ? next.start + ' — ' + next.end : '待安排') + '。</p><ul>' + rows.map(x => '<li>' + E(x.text) + (A.memoSchedule.timing(x.ref).session?.status === 'running' ? ' · 正在计时，确认后暂停并保留已有片段' : '') + '</li>').join('') + '</ul>'+nextField+'<p>原截止日期保留，剩余日期释放。</p><p id="round-error" role="alert"></p>', '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="close-round">确认提前结束</button>', { lock: true });
-    A.ui.bindActions({ cancel: A.ui.closeModal, 'close-round': () => {const nextStart=modal.querySelector('#round-next-start')?.value;run(() => {closeCore(index, true);if(next&&nextStart!==next.start)saveRoundCore(nextStart,next.end,next.index,false);});} });
+    const tomorrow = M().shiftDay(M().userDay(), 1);
+    const modal = A.ui.openModal('提前结束本轮',
+      '<p>本轮结束后的下一轮将从 '+E(tomorrow)+' 开始。后续轮次随之移动，已排任务保留。</p>'+
+      '<p>已完成 '+p.done+' 项，未完成 '+rows.length+' 项将结转至下一轮。</p>'+
+      '<p id="round-error" role="alert"></p>',
+      '<button class="btn" data-act="cancel">取消</button><button class="btn btn-primary" data-act="close-round">确认提前结束</button>', { lock: true });
+    A.ui.bindActions({ cancel: A.ui.closeModal,
+      'close-round': () => run(() => closeCore(index, true), () => A.memoWorkspace.setDay(tomorrow)) });
   }
-  let viewed = null;
-  function selected(day = M().userDay()) {
-    const list = rounds();
-    if (viewed?.day === day && list.some(r => r.index === viewed.index)) return byIndex(viewed.index);
-    return round(day) || list.find(r => !r.closedAt && r.start > day) || list.at(-1) || null;
-  }
-  function selectRound(index, day = M().userDay()) { viewed = { day, index: Number(index) }; }
-  function viewOffset(day, value) {
-    const list = rounds(), base = list.findIndex(r => r.index === round(day)?.index);
-    if (value !== undefined && list[base + value]) selectRound(list[base + value].index, day);
-    return viewed?.day === day ? Math.max(0, list.findIndex(r => r.index === selected(day)?.index) - Math.max(0, base)) : 0;
-  }
-  function editor(ref, day) { return A.memoWorkspace.editor(ref, 'three', false, day || selected()?.start); }
-  A.memoThree = { state, find, rounds, round, byIndex, current, nativeTarget, executable, targetOf, linkedNodes, pending, projection, items, needsSettlement, settleCore, migrateCore, closeCore, saveRoundCore, assignCore, rangeEditor, earlyEnd, selected, selectRound, viewOffset, setup: rangeEditor, editor };
+  function editor(ref, day) { return A.memoWorkspace.editor(ref, 'three', false, ref ? null : day); }
+
+  A.memoThree = { state, find, rounds, round, byIndex, current, nativeTarget, executable, targetOf, linkedNodes, pending, projection, items, needsSettlement, settleCore, migrateCore, closeCore, saveRoundCore, assignCore, rangeEditor, earlyEnd, plannedRound, calendarRounds, ensureRound, editor };
 })();

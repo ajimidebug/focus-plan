@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
+import TaskColumn from './TaskColumn.vue'
 import OverviewTask from './OverviewTask.vue'
 import ThreeDayColumn from './ThreeDayColumn.vue'
 const props=defineProps<{day:string;revision:number}>()
@@ -16,6 +17,23 @@ function visibleGroupRows(g:any){return g.rows.length>8&&!showAllGroup(g.id)?g.r
 function toggleGroup(id:string){const next=!showAllGroup(id);groupExpansion.value={...groupExpansion.value,[id]:next};try{localStorage.setItem('task-group:limit:'+id,next?'open':'closed')}catch{}}
 function choose(offset:number){const m=A().memoCore;A().memoWorkspace.setDay(m.shiftDay(m.userDay(),offset))}
 function dateChanged(e:Event){A().memoWorkspace.setDay((e.target as HTMLInputElement).value)}
+const monthCalendar=ref<HTMLElement>()
+const month=ref(props.day.slice(0,7)+'-01')
+const calendarOpen=ref(false)
+function monthStep(step:number){
+ const date=new Date(month.value+'T12:00:00Z')
+ date.setUTCMonth(date.getUTCMonth()+step)
+ month.value=date.toISOString().slice(0,10)
+}
+watch([month,calendarOpen,()=>props.revision],async()=>{
+ await nextTick()
+ if(!calendarOpen.value||!monthCalendar.value)return
+ A().framework.calendar(monthCalendar.value,month.value,props.day,(day:string)=>{
+   calendarOpen.value=false
+   A().memoWorkspace.setDay(day)
+ },false)
+})
+watch(()=>props.day,day=>{calendarOpen.value=false;month.value=day.slice(0,7)+'-01'})
 function pressed(offset:number){const m=A().memoCore;return props.day===m.shiftDay(m.userDay(),offset)}
 function habitRow(it:any,r:any,n:number,day:string){
  const mode=A().memoPenalty?.policy(it,day).mode||'reward'
@@ -49,10 +67,19 @@ const columns=computed(()=>{void props.revision;return lists.filter(col=>col.key
           <button class="btn" data-mw="today" :aria-pressed="pressed(0)" @click.stop="choose(0)">今天</button>
           <button class="btn" data-mw="tomorrow" :aria-pressed="pressed(1)" @click.stop="choose(1)">明天</button>
         </div>
+        <button class="btn" type="button" :aria-expanded="calendarOpen" @click="calendarOpen=!calendarOpen">日历</button>
       </div>
+      <section v-if="calendarOpen" class="task-date-calendar" aria-label="选择任务日期">
+        <div class="task-calendar-nav">
+          <button class="btn" type="button" aria-label="上个月" @click="monthStep(-1)">‹</button>
+          <span>{{month.slice(0,7)}}</span>
+          <button class="btn" type="button" aria-label="下个月" @click="monthStep(1)">›</button>
+        </div>
+        <div ref="monthCalendar" />
+      </section>
     </div>
     <div class="cal-cols framework-columns">
-      <q-card v-for="col in columns" :key="col.key" flat bordered class="cal-col" :data-overview-list="col.key" :data-category="col.key">
+      <TaskColumn v-for="col in columns" :key="col.key" :category="col.key" :label="'概览：添加'+col.name+'任务'" :add="()=>A().memoWorkspace.editor(null,col.key)">
         <div class="cal-col-head"><span><span aria-hidden="true">{{col.symbol}} </span>{{col.name}}</span><span class="mw-column-count">{{col.progress.label}}</span></div>
         <div class="mw-column-meter" role="img" :aria-label="col.full+'：'+col.progress.label+'，未完成延期'+col.progress.deferred+'项；'+col.progress.segments.map((s:any)=>s.label+s.count+'项').join('，')"><span v-for="seg in col.progress.segments" :key="seg.state" :class="'mw-column-'+seg.state" :data-progress-state="seg.state" :style="{width:seg.percent+'%'}" aria-hidden="true" /></div>
         <template v-for="section in col.key==='required' ? ['late','normal'] : ['normal','late']" :key="section">
@@ -84,7 +111,7 @@ const columns=computed(()=>{void props.revision;return lists.filter(col=>col.key
           <OverviewTask v-for="x in col.historical" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" />
         </details>
         <q-btn flat dense no-caps class="overview-add" :aria-label="'概览：添加'+col.name+'任务'" @click.stop="A().memoWorkspace.editor(null,col.key)">＋ 添加</q-btn>
-      </q-card>
+      </TaskColumn>
       <ThreeDayColumn :day="day" :revision="revision" />
     </div>
   </section>

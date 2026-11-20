@@ -12,12 +12,12 @@ test('completion selects next queue item without creating time, including paused
   const before=c.S.data().memoSchedule?.sessions?.length||0;c.ctx.App.memoSchedule.startRef(refs[1],now+1000);assert.equal(next.waitingQueue(),null);assert.equal(c.S.data().memoSchedule.sessions.length,before+1);
  }
 });
-test('clearing references pauses running queue time and preserves tasks, rewards and history',async()=>{
+test('clearing references ends running queue time and preserves tasks, rewards and history',async()=>{
  const {b,P,W,refs,day}=await setup(),now=Date.now();const run=P.startRef(refs[0],now-10000),tasks=JSON.stringify(b.S.getDay(day).tasks),ledger=JSON.stringify(b.S.data().ledger);
- W.clearExecCore(now);assert.equal(run.status,'paused');assert.equal(run.chunks[0].end,now);assert.equal(b.S.data().memoExecutionQueue.length,0);assert.equal(W.currentQueueItem(),null);assert.equal(JSON.stringify(b.S.getDay(day).tasks),tasks);assert.equal(JSON.stringify(b.S.data().ledger),ledger);assert.equal(P.elapsed(run,now+60000),10000);
+ W.clearExecCore(now);assert.equal(run.status,'ended');assert.equal(run.chunks[0].end,now);assert.equal(b.S.data().memoExecutionQueue.length,0);assert.equal(W.currentQueueItem(),null);assert.equal(JSON.stringify(b.S.getDay(day).tasks),tasks);assert.equal(JSON.stringify(b.S.data().ledger),ledger);assert.equal(P.elapsed(run,now+60000),10000);
  W.clearExecCore(now+1000);assert.equal(P.state().sessions.length,1);
 });
-test('failed clear save retries persistence without replaying the pause operation',async()=>{
+test('failed clear save retries persistence without replaying the stop operation',async()=>{
  const {b,A,P,W,refs}=await setup(),now=Date.now();P.startRef(refs[0],now-10000);await b.S.save();b.options.idbFails=true;
  await assert.rejects(A.commit(()=>W.clearExecCore(now)),/尚未保存/);b.options.idbFails=false;
  await A.commit(()=>{throw Error('must not replay');});assert.equal(b.S.data().memoExecutionQueue.length,0);assert.equal(P.state().sessions[0].chunks.length,1);assert.equal(P.state().sessions[0].chunks[0].end,now);

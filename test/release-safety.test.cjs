@@ -320,7 +320,7 @@ test('removing a generated passage keeps separate handwritten lines separated', 
   const event = A.completeCore({ kind: 'queue', id: 'q', title: 'task' }, '1752【任务勾选】task', actionAt);
   const blocks = M.segments(M.read('2026-10-19')); blocks.push({ id: 'outside', text: '1800独立说明' });
   M.write('2026-10-19', blocks.map(b => b.text).join(''), actionAt, blocks);
-  A.undoCore(event.id, '', actionAt); assert(M.read('2026-10-19').text.includes('1752【任务勾选】task'));assert(M.read('2026-10-19').text.endsWith('1800独立说明'));
+  A.undoCore(event.id, '', actionAt); assert(!M.read('2026-10-19').text.includes('1752【任务勾选】task'));assert(A.passage(event).includes('1752【任务勾选】task'));assert(M.read('2026-10-19').text.endsWith('1800独立说明'));
 });
 test('generated passage edges accept ordinary prose while edits inside remain owned', async () => {
   const b = browser(); await b.S.load(); const { E } = actionHarness(b);
@@ -347,7 +347,7 @@ test('exports include reliable provenance without rewriting notes or guessing ol
   assert.equal(M.exportBlocks([{ id: 'unknown', eventId: 'missing', text: '未知来源' }]), '未知来源');
   A.undoCore(event.id, '', actionAt);
   assert(!M.exportText(['2026-10-19']).includes('【任务生成开始'));
-  assert(M.read('2026-10-19').text.includes('1752【任务勾选】任务\n补充说明'));assert(M.exportText(['2026-10-19']).includes('任务 · 已撤销完成'));
+  assert(M.read('2026-10-19').text.includes('补充说明'));assert(!M.exportText(['2026-10-19']).includes('任务 · 已撤销完成'));assert(A.passage(event).includes('1752【任务勾选】任务\n补充说明'));
 });
 
 test('over-target punches keep individual event amounts and exact undo', async () => {
