@@ -56,7 +56,6 @@ body.framework-layout .legacy-host .framework-overview .cal-col { min-width:0!im
 .overview-task .q-btn__content { display:block; text-align:left; width:100%; min-width:0; overflow-wrap:anywhere; }
 .overview-task .ov-task-name { display:block; font-size:13.5px; line-height:1.45; font-weight:600; }
 .overview-task small { display:block; line-height:1.45; color:var(--muted); font-size:11.5px; overflow-wrap:anywhere; }
-.overview-task .mw-priority-note { color:var(--priority-rail,var(--muted)); }
 .overview-task .mw-score { display:inline-block; font-size:11.5px; color:var(--muted); }
 .overview-task.done .ov-task-name { color:#166534; }
 .overview-task.done { background:#f0fdf4; }

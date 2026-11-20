@@ -2648,7 +2648,7 @@ body[data-theme="dark"] [data-category="required"][data-priority="3"],body[data-
 body[data-theme="dark"] [data-category="required"][data-priority="4"],body[data-theme="purple"] [data-category="required"][data-priority="4"]{--priority-rail:#fdba74;}
 body[data-theme="dark"] [data-category="required"][data-priority="5"],body[data-theme="purple"] [data-category="required"][data-priority="5"]{--priority-rail:#fda4af;}
 [data-category="required"][data-priority]:is(.cal-task,.overview-task,.mw-task){border-left:3px solid var(--priority-rail,var(--task-rail,var(--primary)))!important;}
-.mw-priority-note{display:inline-block;max-width:100%;margin-top:2px;color:var(--priority-rail,var(--muted));font-weight:650;font-size:11px;overflow-wrap:anywhere;}
+:is(.mw-task,.overview-task) .mw-priority-note{display:inline-block;max-width:100%;margin-top:2px;color:var(--priority-rail,var(--muted));font-weight:650;font-size:11px;overflow-wrap:anywhere;}
 #mw-priority-field[hidden]{display:none!important;}
 #mw-priority{width:100%;min-height:40px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;}
 /* Reward textures communicate levels only; no additional badge or reward entry. */

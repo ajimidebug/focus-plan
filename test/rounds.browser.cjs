@@ -186,7 +186,7 @@ const server=http.createServer((req,res)=>{
     label:getComputedStyle(el.querySelector('.mw-priority-note')).color
    })));
    assert.equal(new Set(styles.map(x=>x.rail)).size,5);
-   assert(styles.every(x=>x.label===x.rail),'priority text and rail use the same color');
+   assert(styles.every(x=>x.label===x.rail),'priority text and rail use the same color: '+JSON.stringify(styles));
   }
   const cards=page.locator('.framework-overview .overview-task[data-category="required"]');
   await checkColors(cards);
