@@ -196,7 +196,8 @@ const server=http.createServer((req,res)=>{
   await checkColors(page.locator('#mw-details .mw-task[data-category="required"]'));
   await page.evaluate(()=>App.memoWorkspace.returnToday());
   const celebration=page.locator('.required-completion');
-  const requiredTask=(priority)=>page.getByRole('button',{name:new RegExp('打开任务：等级测试 '+priority+'，')});
+  const requiredColumn=page.locator('.framework-overview [data-overview-list="required"]');
+  const requiredTask=(priority)=>requiredColumn.getByRole('button',{name:new RegExp('打开任务：等级测试 '+priority+'，')});
   async function finishRequired(){
    const bonus=page.locator('.modal input[data-reward=base]');
    if(await bonus.count())await bonus.uncheck();
@@ -224,7 +225,7 @@ const server=http.createServer((req,res)=>{
   await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);
   assert.equal(await celebration.count(),0,'already-finished groups do not replay on page load');
   await page.evaluate(()=>{App.app.switchView('tasks');App.memoWorkspace.returnToday();});
-  const completed=page.locator('[data-overview-list=required] .mw-completed');
+  const completed=requiredColumn.locator('.mw-completed');
   if(!await completed.evaluate(el=>el.open))await completed.locator('summary').click();
   await requiredTask(5).click();
   await page.getByRole('button',{name:'确认取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
