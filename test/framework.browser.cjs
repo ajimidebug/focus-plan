@@ -56,12 +56,12 @@ for(const width of [320,390,1280]){
  const priority=level=>priorityControls.getByRole('radio',{name:new RegExp('^'+level+'级')});
  await page.getByRole('region',{name:'三栏任务概览'}).getByRole('button',{name:'概览：添加必须任务',exact:true}).click();
  assert(await priority(2).isChecked(),'a new required task starts at level 2');
- const options=await priorityControls.locator('.mw-priority-option').evaluateAll(nodes=>nodes.map(node=>{
-   const {left,top,width,height}=node.getBoundingClientRect();
-   return {level:node.querySelector('input').value,left,top,width,height};
- }));
+ // Layout dimensions are independent of the modal's opening scale animation.
+ const options=await priorityControls.locator('.mw-priority-option').evaluateAll(nodes=>nodes.map(node=>({
+   level:node.querySelector('input').value,left:node.offsetLeft,top:node.offsetTop,width:node.offsetWidth,height:node.offsetHeight
+ })));
  assert.deepEqual(options.map(e=>e.level),['1','2','3','4','5']);
- assert(options.every((e,i)=>e.top===options[0].top&&Math.abs(e.width-options[0].width)<1&&e.height>=44&&(i===0||e.left>options[i-1].left)),'priority options stay in one row at '+width+'px');
+ assert(options.every((e,i)=>e.top===options[0].top&&Math.abs(e.width-options[0].width)<=1&&e.height>=44&&(i===0||e.left>options[i-1].left)),'priority options stay in one row at '+width+'px: '+JSON.stringify(options));
  await page.locator('#mw-list').selectOption('ideal');
  assert.equal(await priorityControls.isVisible(),false);
  await page.locator('#mw-list').selectOption('required');
