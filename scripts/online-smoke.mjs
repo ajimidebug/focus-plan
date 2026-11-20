@@ -21,6 +21,13 @@ try{
   const colors=await page.locator('.framework-overview .overview-task[data-category="required"]').evaluateAll(cards=>cards.map(card=>getComputedStyle(card).borderLeftColor));
   assert.equal(new Set(colors).size,5);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
+  await page.getByRole('button',{name:'概览：添加必须任务',exact:true}).click();
+  const priorities=page.getByRole('group',{name:'必做优先级'});
+  const choices=priorities.getByRole('radio');
+  assert.deepEqual(await choices.evaluateAll(inputs=>inputs.map(input=>input.value)),['1','2','3','4','5']);
+  assert(await choices.nth(1).isChecked());
+  await choices.nth(3).check();
+  assert(await choices.nth(3).isChecked());
  }
  assert.deepEqual(errors,[]);await context.close();console.log('Isolated online startup verified. Existing user sessions were not accessed.');
 }finally{await browser.close();}
