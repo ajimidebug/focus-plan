@@ -462,9 +462,10 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .round-entry>small { display:block; padding:0 4px; opacity:.8; }
 .round-pending { margin-top:8px; }
 .three-round-header { border-radius:5px; background:color-mix(in srgb,var(--ov-accent) 9%,var(--card)); }
-.framework-overview .three-round-header .cal-col-head { flex-direction:row; align-items:center; justify-content:space-between; gap:2px; margin-bottom:0; }
-.three-round-header .mw-column-count { font-size:10.5px; font-variant-numeric:tabular-nums; }
-.three-round-controls { display:flex; align-items:center; justify-content:space-between; gap:2px; min-height:32px; padding:0 2px 2px; color:var(--ink); font-size:10.5px; }
+.framework-overview .three-round-header .cal-col-head { flex-direction:row; align-items:center; justify-content:space-between; gap:2px; margin-bottom:0; line-height:1.2; font-size:clamp(10px,3.3vw,13px); }
+.three-round-header .cal-col-head>span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.three-round-header .mw-column-count { font-size:10.5px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.three-round-controls { display:flex; align-items:center; justify-content:space-between; gap:2px; min-height:32px; padding:0 2px; color:var(--ink); font-size:10.5px; }
 .three-round-position { white-space:nowrap; font-variant-numeric:tabular-nums; }
 .three-round-controls .q-btn { min-height:32px; min-width:30px; padding:0 2px; font-size:11px; flex:none; }
 .three-future-row>span { min-width:0; }

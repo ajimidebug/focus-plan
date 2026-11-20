@@ -84,8 +84,13 @@ const server=http.createServer((req,res)=>{
   for(const width of [320,390,430,1280]){
    await page.setViewportSize({width,height:844});await page.evaluate(()=>App.memoSchedule.render());
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
-   assert((await page.locator('.schedule-axis').boundingBox()).height<700);
-   assert(await page.evaluate(()=>document.querySelector('.schedule-chart').getBoundingClientRect().bottom<=document.querySelector('.app-bottom-nav').getBoundingClientRect().top+2),'full day fits above navigation at '+width);
+   // Resizing redraws the chart. Measure the current rendered axis and chart in one frame.
+   await page.waitForFunction(()=>{
+    const axis=document.querySelector('.schedule-axis'),chart=document.querySelector('.schedule-chart'),nav=document.querySelector('.app-bottom-nav');
+    if(!axis||!chart||!nav)return false;
+    const height=axis.getBoundingClientRect().height;
+    return height>0&&height<700&&chart.getBoundingClientRect().bottom<=nav.getBoundingClientRect().top+2;
+   },null,{timeout:5000});
    await page.locator('.schedule-chart').screenshot({path:'test-results/17512-timeline-'+width+'.png',animations:'disabled'});
   }
   fs.mkdirSync('test-results',{recursive:true});await page.screenshot({path:'test-results/17512-timeline.png',fullPage:true,animations:'disabled'});

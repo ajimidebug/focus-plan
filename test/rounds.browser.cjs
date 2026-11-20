@@ -159,11 +159,12 @@ const server=http.createServer((req,res)=>{
     const bounds=buttons.map(button=>button.getBoundingClientRect());
     return bounds.length===4&&bounds.every(b=>b.width>=44&&Math.abs(b.width-bounds[0].width)<1&&b.top===bounds[0].top);
    }),'four date buttons have equal widths and stay on one row at '+width);
-   assert(await page.locator('.three-round-header').evaluate(header=>{
+   const headerLayout=await page.locator('.three-round-header').evaluate(header=>{
     const bounds=header.getBoundingClientRect();
     const children=[...header.querySelectorAll('.cal-col-head > span,.three-round-position,.three-round-controls > button')];
-    return bounds.height<=62&&children.every(child=>child.getBoundingClientRect().right<=bounds.right+1);
-   }),'round title and controls fit in two lines at '+width);
+    return {height:bounds.height,overflow:Math.max(...children.map(child=>child.getBoundingClientRect().right-bounds.right))};
+   });
+   assert(headerLayout.height<=62&&headerLayout.overflow<=1,'round title and controls fit in two lines at '+width+': '+JSON.stringify(headerLayout));
    await page.locator('.three-day-column').screenshot({path:'test-results/round-plan-'+width+'.png'});
    await page.evaluate(async()=>{const day=App.memoCore.userDay();App.memoCore.write(day,Array.from({length:100},(_,i)=>'第'+i+'行长笔记，用于末尾定位验证').join('\n'));await App.store.save();App.memo.show(day);window.scrollTo(0,document.body.scrollHeight);App.app.switchView('memo');});
    await page.waitForFunction(()=>{const root=document.querySelector('#memo-editor'),range=document.createRange();range.selectNodeContents(root);range.collapse(false);const rect=range.getClientRects()[0]||root.getBoundingClientRect(),nav=document.querySelector('.app-bottom-nav').getBoundingClientRect();return root.scrollHeight-root.clientHeight-root.scrollTop<3&&rect.bottom<=nav.top&&rect.top>=0;});
