@@ -12,7 +12,7 @@ try{
   await page.evaluate(()=>{
    const day=App.memoCore.userDay();
    App.store.getDay(day).tasks.required=Array.from({length:5},(_,i)=>({id:'online-priority-'+i,text:'等级验收 '+(i+1),priorityWeight:i+1}));
-   App.app.switchView('tasks');App.memoWorkspace.returnToday();
+   App.app.switchView('tasks');App.memoWorkspace.setDay(day);
   });
   const toolbar=page.locator('.framework-overview .mw-date-header');
   await toolbar.waitFor();

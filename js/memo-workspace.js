@@ -249,7 +249,7 @@
   }
   function overviewClick(e,day){
     const goal=e.target.closest('[data-goal]');if(goal){e.preventDefault();e.stopImmediatePropagation();return A.memoGoals.editor(goal.dataset.goal);}
-    if(e.target.closest('[data-goal-group]'))return;
+    if(e.target.closest('[data-goal-group],.three-round-header'))return;
     if(e.target.closest('[data-deferred-source]'))return;
     const quick=e.target.closest('[data-mw="exec-add"]');if(quick){e.preventDefault();e.stopImmediatePropagation();return execAdd(JSON.parse(quick.dataset.ref));}
     if(e.target.closest('summary,button,input,select,a'))return;if(window.getSelection()?.toString())return;

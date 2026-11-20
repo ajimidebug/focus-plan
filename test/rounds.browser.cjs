@@ -31,7 +31,7 @@ const server=http.createServer((req,res)=>{
   await pickDay(18);
   assert.equal(await roundPosition.innerText(),'第3/3天');
   assert.equal(await page.locator('.overview-heading input[type=date]').count(),0);
-  await page.getByRole('button',{name:'今天',exact:true}).click();
+  await page.getByRole('group',{name:'任务日期'}).getByRole('button',{name:'今天',exact:true}).click();
   await adjustRound();await range(16,20);assert.equal(await page.locator('#round-end').inputValue(),'2026-11-20');await save();
   await page.getByRole('button',{name:'添加轮次任务',exact:true}).click();await page.locator('#mw-title').fill('弹性轮次任务');await page.locator('#mw-note-edit').fill('轮次原备注');await save();
   await page.getByRole('button',{name:'日历',exact:true}).click();
@@ -177,7 +177,7 @@ const server=http.createServer((req,res)=>{
     App.memoWorkspace.clearExecCore();
     App.store.getDay(day).tasks.required=Array.from({length:5},(_,i)=>({id:'priority-'+(i+1),text:'等级测试 '+(i+1),priorityWeight:i+1}));
    });
-   App.app.switchView('tasks');App.memoWorkspace.returnToday();
+   App.app.switchView('tasks');App.memoWorkspace.setDay(day);
   });
   async function checkColors(cards){
    const styles=await cards.evaluateAll(elements=>elements.map(el=>({
@@ -223,7 +223,9 @@ const server=http.createServer((req,res)=>{
   await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);
   assert.equal(await celebration.count(),0,'already-finished groups do not replay on page load');
   await page.evaluate(()=>{App.app.switchView('tasks');App.memoWorkspace.returnToday();});
-  await page.locator('[data-overview-list=required] .mw-completed summary').click();await requiredTask(5).click();
+  const completed=page.locator('[data-overview-list=required] .mw-completed');
+  if(!await completed.evaluate(el=>el.open))await completed.locator('summary').click();
+  await requiredTask(5).click();
   await page.getByRole('button',{name:'确认取消',exact:true}).click();await page.locator('.modal').waitFor({state:'detached'});
   assert.equal(await celebration.count(),0);
   await page.emulateMedia({reducedMotion:'reduce'});

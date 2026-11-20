@@ -63,7 +63,7 @@ const server=http.createServer((req,res)=>{
   assert.doesNotMatch(await page.locator('.three-day-column').innerText(),/三天内复盘数学错题/);
   const copied=await page.evaluate(()=>App.memoFlow.copyQuote(App.memoCore.userDay()).text);
   assert.match(copied,/保留自定义备注/);assert.match(copied,/未来任务备注/);assert.match(copied,/预排/);assert.match(copied,/未完成/);
-  await page.getByRole('button',{name:'今天',exact:true}).click();
+  await page.getByRole('group',{name:'任务日期'}).getByRole('button',{name:'今天',exact:true}).click();
   await page.clock.setFixedTime(new Date('2026-11-19T04:00:00+08:00'));
   await page.evaluate(async()=>{await App.memoActions.commit(()=>{});App.memoWorkspace.returnToday();});
   assert.match(await page.locator('.three-day-column').innerText(),/延期/);
