@@ -77,13 +77,15 @@ const server=http.createServer((req,res)=>{
     App.memoWorkspace.setDay('2026-11-14');
   });
   const ideal=page.locator('[data-overview-list="ideal"]');
-  const delayed=ideal.locator('.mw-late-section [data-overview-ref]');
-  assert.equal(await delayed.innerText().then(text=>text.includes('逾期理想')),true);
+  const delayed=ideal.locator('.mw-late-section').getByRole('button',{name:/打开任务：逾期理想/});
   assert.equal(await delayed.getAttribute('data-carried'),'true');
   const freshIdeal=ideal.getByRole('button',{name:/打开任务：当日理想/});
   assert((await delayed.boundingBox()).y<(await freshIdeal.boundingBox()).y);
   await page.evaluate(()=>App.memoWorkspace.setDay('2026-11-13'));
-  assert.match(await ideal.locator('.mw-history-section').innerText(),/逾期顺延记录（1）/);
+  const history=ideal.locator('.mw-history-section');
+  await history.locator('summary').first().click();
+  const original=history.locator('[data-deferred-source]').filter({hasText:'逾期理想'});
+  assert.match(await original.innerText(),/已顺延至2026-11-14/);
   assert.equal(errors.length,0,errors.join('\n'));
  }finally{await browser.close();await new Promise(r=>server.close(r));}
  console.log('Retention, redo, persisted editing and search pagination passed');

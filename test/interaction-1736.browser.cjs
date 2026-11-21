@@ -118,7 +118,17 @@ async function run(){
     await page.evaluate(()=>{delete window.visualViewport;window.dispatchEvent(new Event('resize'));});
    }
    check(await page.evaluate(id=>App.memoSchedule.state().sessions.find(s=>s.status==='running').id===id,session),'position changes never replace running session '+width);
-   await page.evaluate(()=>{App.app.switchView('timeline');App.memoSchedule.open({workspace:true});window.__axis=document.querySelector('.schedule-axis');window.__liveHeight=parseFloat(document.querySelector('.schedule-actual-lane [data-live-start]').style.height);});
+   await page.evaluate(()=>{App.app.switchView('timeline');App.memoSchedule.open({workspace:true});});
+   await page.waitForURL('**/#/timeline');
+   // Let the viewport change and its resize-driven layout settle before measuring ticks.
+   await page.waitForFunction(()=>{
+    const axis=document.querySelector('.schedule-axis');
+    if(!axis||!document.querySelector('.schedule-actual-lane [data-live-start]'))return false;
+    window.__stableFrames=window.__axis===axis?(window.__stableFrames||0)+1:0;
+    window.__axis=axis;
+    return window.__stableFrames>=3;
+   });
+   await page.evaluate(()=>{window.__liveHeight=parseFloat(document.querySelector('.schedule-actual-lane [data-live-start]').style.height);});
    if(process.env.FOCUS_DEBUG)console.log('before tick',width);
    await page.clock.runFor(1200);await page.evaluate(()=>App.memoSchedule.tick());
    check(await page.evaluate(()=>window.__axis===document.querySelector('.schedule-axis')),'tick preserves chart node and scroll '+width);
