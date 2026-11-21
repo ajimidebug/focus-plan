@@ -21,7 +21,7 @@ test('cancel preserves latest handwritten edits, input snapshots and exported ca
 });
 for(const [end,expected] of [['02:00','2026-11-13'],['04:00','2026-11-14'],['08:00','2026-11-14']])test('04:00 day boundary '+end,async()=>{
  const b=H.browser();await b.S.load();const {F,P}=H.flowHarness(b,'2026-11-13');const ref={kind:'task',id:'t',day:'2026-11-13',list:'required'};b.S.getDay(ref.day).tasks.required.push({id:'t',text:'边界'});
- const plan=P.savePlan({ref,day:ref.day,type:'span',start:Date.parse('2026-11-13T23:00+08:00'),end:Date.parse('2026-11-14T'+end+'+08:00')});assert.equal(F.requiredDueDay(ref,ref.day),expected);plan.deleted=true;assert.equal(F.requiredDueDay(ref,ref.day),ref.day);
+ const plan=P.savePlan({ref,day:ref.day,type:'span',start:Date.parse('2026-11-13T23:00+08:00'),end:Date.parse('2026-11-14T'+end+'+08:00')});assert.equal(F.scheduledDueDay(ref,ref.day),expected);plan.deleted=true;assert.equal(F.scheduledDueDay(ref,ref.day),ref.day);
 });
 test('required overdue items precede higher-priority fresh items, and deletion still removes only its previewed event',async()=>{
  const b=H.browser();await b.S.load();const {F,A,M}=H.flowHarness(b),day=M.userDay();
@@ -38,4 +38,55 @@ test('legacy rolled required tasks render above fresh high-priority tasks',async
  const W=b.ctx.App.memoWorkspace;
  assert.deepEqual(Array.from(W.taskItems(day,'required'),x=>x.task.id),['legacy-low','fresh-high','fresh-planned','legacy-done']);
  const html=W.overviewHTML(day);assert(html.indexOf('旧版延期低优先级')<html.indexOf('普通高优先级'));assert.equal(F.isCarried({rolled:true}),true);assert.equal(F.isCarried({rolled:true,originalDay:day,backfillDay:day}),false);assert.equal(F.isCarried({memoPlannedDueDay:day,originalDay:day}),false);
+});
+
+test('overdue ideal tasks and queue assignments advance without penalties and keep history',async()=>{
+ const b=H.browser();await b.S.load();
+ const {F,P,A}=H.flowHarness(b,'2026-11-13');
+ const finance=H.financeHarness(b), d=b.S.data();
+ const original='2026-11-13', due='2026-11-14', today='2026-11-15', next='2026-11-16';
+ const at=(day,time='04:00')=>Date.parse(day+'T'+time+':00+08:00');
+ const ref={kind:'task',id:'ideal-cross',day:original,list:'ideal'};
+ const queueRef={kind:'queue',id:'ideal-overdue'};
+ b.S.getDay(original).tasks.ideal.push(
+   {id:ref.id,text:'跨日理想',points:3,note:'保留备注'},
+   {id:'fixed',text:'周期实例',memoNoAutoCarry:true},
+   {id:'review',text:'复习实例',memoReviewRoundId:'round'},
+   {id:'finished',text:'已经完成',done:true}
+ );
+ b.S.getDay(original).tasks.required.push({id:'required-overdue',text:'必做'});
+ d.queue.push({id:queueRef.id,text:'队列理想',points:1,assignment:{day:due,list:'ideal'}});
+ P.savePlan({ref,day:original,type:'span',start:at(original,'23:00'),end:at(due,'08:00')});
+ P.startRef(ref,at(original,'23:30'));
+ P.stopRef(ref,at(original,'23:45'));
+
+ F.settleCore(at(due,'03:59'));
+ assert.equal(P.resolve(ref).ref.day,original);
+ F.settleCore(at(due));
+ assert.equal(P.resolve(ref).ref.day,due);
+ assert.equal(F.isCarried(P.find(ref)),false);
+ F.settleCore(at(today));
+ assert.equal(P.resolve(ref).ref.day,today);
+ assert.equal(P.find(ref).note,'保留备注');
+ assert.equal(P.timing(ref,at(today)).totalMs,15*60000);
+ assert.equal(P.find(queueRef).assignment.day,today);
+ assert.equal(finance.column(today,'ideal').deferred,2);
+ assert.equal(F.deferred(due,'ideal').filter(x=>x.automatic).length,2);
+ assert.equal(F.deferred(original,'ideal').filter(x=>x.automatic).length,0);
+
+ F.settleCore(at(today));
+ F.settleCore(at(next));
+ assert.equal(P.resolve(ref).ref.day,next);
+ assert.equal(P.find(queueRef).assignment.day,next);
+ assert.equal(P.find(ref).originalDay,due);
+ assert.equal(P.find(queueRef).assignmentHistory.length,2);
+ assert.equal(P.columnItems(next,'ideal').length,2);
+ assert.deepEqual(Array.from(d.memoFlow.settlements,e=>e.taskId),['required-overdue']);
+ assert.deepEqual(Array.from(d.ledger.filter(e=>e.type==='penalty-required'),e=>e.taskId),['required-overdue']);
+ assert.equal(b.S.getDay(original).tasks.ideal.filter(t=>!t.memoMovedTo).length,3);
+
+ A.completeCore({...P.resolve(ref).ref,title:'跨日理想'},'',next+'T12:00:00+08:00');
+ assert.equal(finance.column(next,'ideal').lateDone,1);
+ assert.equal(d.ledger.find(e=>e.taskId===ref.id).points,3);
+ assert(b.S.validate(d));
 });

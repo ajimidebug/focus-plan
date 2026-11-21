@@ -72,7 +72,7 @@
     A.memoActions?.reconcileRewards?.(r.day);
     if(day!==r.day)A.memoActions?.reconcileRewards?.(day);
   }
-  function requiredDueDay(ref, day) {
+  function scheduledDueDay(ref, day) {
     const found=A.memoSchedule.resolve(ref);if(!found)return day;
     const task=found.task;
     if(task.overdueEventId||task.memoPlannedDueDay)return task.memoPlannedDueDay||day;
@@ -80,22 +80,36 @@
     return (S().data().memoSchedule?.items||[]).filter(p=>p.day===day&&p.type==='span'&&!p.deleted&&!p.suspendedByArchive&&!p.suspendedByBackfill&&!p.suspendedByReview&&Number.isFinite(p.end)&&p.end>p.start&&A.memoSchedule.key(p.ref)===key)
       .reduce((due,p)=>{const end=M().userDay(p.end);return end>due?end:due;},day);
   }
-  function plannedPending(now=Date.now()) {
-    const today=M().userDay(now),out=[];
-    Object.entries(S().data().days||{}).forEach(([day,d])=>{if(day>=today)return;(d.tasks?.required||[]).forEach(t=>{
-      const ref={kind:'task',id:t.id,day,list:'required'};
-      if(!t.done&&!t.memoMovedTo&&!t.memoDismissed&&!t.memoNoAutoCarry&&!t.fromQueue&&!t.fromDaily&&!t.memoProjectId&&!A.memoReview?.skipCarry(t)&&requiredDueDay(ref,day)>day)out.push({ref,day});
-    });});
-    (S().data().queue||[]).forEach(t=>{const day=t.assignment?.day,ref={kind:'queue',id:t.id};if(day&&day<today&&t.assignment.list==='required'&&!t.doneAt&&!t.archived&&!t.memoDismissed&&!t.memoNoAutoCarry&&!A.memoReview?.skipCarry(t)&&requiredDueDay(ref,day)>day)out.push({ref,day});});
+  function pendingBefore(today, fromDay = '') {
+    const data = S().data(), out = [], lists = ['required', 'ideal'];
+    const isPast = day => !!day && day >= fromDay && day < today;
+    const canCarry = (task, list) => !task.done && !task.doneAt && !task.archived &&
+      !task.memoDismissed && !task.memoNoAutoCarry && !task.memoReviewHidden &&
+      !(list === 'ideal' && task.memoReviewRoundId) && !A.memoReview?.skipCarry(task);
+    Object.entries(data.days).filter(([day]) => isPast(day)).sort(([a], [b]) => a.localeCompare(b)).forEach(([day, entry]) => {
+      lists.forEach(list => {
+        (entry.tasks[list] || []).filter(task => canCarry(task, list) && !task.fromDaily &&
+          !task.fromQueue && !task.memoProjectId && !task.memoMovedTo).forEach(task => {
+          out.push({ task, ref: { kind: 'task', id: task.id, day, list }, day, list });
+        });
+      });
+    });
+    (data.queue || []).forEach(task => {
+      const { day, list } = task.assignment || {};
+      if (lists.includes(list) && isPast(day) && canCarry(task, list)) {
+        out.push({ task, ref: { kind: 'queue', id: task.id }, day, list });
+      }
+    });
     return out;
   }
-  function overdue(now = Date.now()) {
-    const today = M().userDay(now), f = state(), out = [];
-    Object.entries(S().data().days).filter(([day]) => day >= f.startedDay && day < today).sort(([a], [b]) => a.localeCompare(b)).forEach(([day, d]) => {
-      (d.tasks.required || []).filter(t => !t.done && !t.memoNoAutoCarry && !t.fromDaily && !t.fromQueue && !t.memoProjectId && !t.memoMovedTo && !t.memoDismissed && !A.memoReview?.skipCarry(t)).forEach(t => out.push({ task: t, ref: { kind: 'task', id: t.id, day, list: 'required' } }));
+  function plannedPending(now = Date.now()) {
+    return pendingBefore(M().userDay(now)).flatMap(item => {
+      const due = scheduledDueDay(item.ref, item.day);
+      return due > item.day ? [{ ...item, due }] : [];
     });
-    (S().data().queue || []).filter(t => !t.memoDismissed && !t.archived && !t.memoNoAutoCarry && !t.doneAt && t.assignment?.list === 'required' && t.assignment.day >= f.startedDay && t.assignment.day < today && !A.memoReview?.skipCarry(t)).forEach(task => out.push({ task, ref: { kind: 'queue', id: task.id }, day: task.assignment.day }));
-    return out;
+  }
+  function overdue(now = Date.now()) {
+    return pendingBefore(M().userDay(now), state().startedDay);
   }
   function longOverdue(now = Date.now()) {
     const today=M().userDay(now),out=[];
@@ -108,13 +122,19 @@
   function settleCore(now = Date.now()) {
     const f = state(), today = M().userDay(now), at = new Date(now).toISOString();
     A.memoRecurrence?.ensureCore(M().userDay(now),now);
-    plannedPending(now).forEach(({ref,day})=>{
-      const due=requiredDueDay(ref,day);moveCore(ref,due,'required','task','planned-next-day');
+    plannedPending(now).forEach(({ ref, due, list }) => {
+      moveCore(ref, due, list, 'task', 'planned-next-day');
       const current=A.memoSchedule.resolve(ref)?.task;if(current){current.memoPlannedDueDay=due;current.originalDay=due;}
     });
     longOverdue(now).forEach(({task:t,ref,day})=>{t.originalDay=t.originalDay||day;t.memoAutoCarry={kind:'extra',at,origin:t.memoAutoCarry?.origin||day};moveCore(ref,today,'extra','task','automatic');});
-    overdue(now).forEach(({ task: t, ref, day }) => {
-      const dueDay = day || ref.day, origin = t.originalDay || dueDay;
+    overdue(now).forEach(({ task: t, ref, day: dueDay, list }) => {
+      const origin = t.originalDay || dueDay;
+      if (list === 'ideal') {
+        t.originalDay = origin;
+        t.memoAutoCarry = { kind: list, at, origin };
+        moveCore(ref, today, list, 'task', 'automatic');
+        return;
+      }
       let event = f.settlements.find(e => e.taskId === t.id && e.origin === origin);
       if (!event) {
         const paid = f.settlements.filter(e => e.dueDay === dueDay).reduce((s, e) => s + e.points, 0);
@@ -216,5 +236,5 @@
     finally { settling = false; }
   }
   async function init() { await settle(); setInterval(settle, 30000); document.addEventListener('visibilitychange', () => { if (!document.hidden) settle(); }); }
-  A.memoFlow = { requiredDueDay, plannedPending, restoreBackfillCore, backfill, state, enableCore, queues, assignment, assigned, deferred, moveCore, longOverdue, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
+  A.memoFlow = { scheduledDueDay, plannedPending, restoreBackfillCore, backfill, state, enableCore, queues, assignment, assigned, deferred, moveCore, longOverdue, overdue, settleCore, settle, forgiveCore, isCarried, lateLabel, copyQuote, markCopyCore, init };
 })();

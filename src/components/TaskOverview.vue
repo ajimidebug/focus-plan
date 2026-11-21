@@ -79,7 +79,7 @@ const columns=computed(()=>{void props.revision;return lists.filter(col=>col.key
       <TaskColumn v-for="col in columns" :key="col.key" :category="col.key" :label="'概览：添加'+col.name+'任务'" :add="()=>A().memoWorkspace.editor(null,col.key)">
         <div class="cal-col-head"><span><span aria-hidden="true">{{col.symbol}} </span>{{col.name}}</span><span class="mw-column-count">{{col.progress.label}}</span></div>
         <div class="mw-column-meter" role="img" :aria-label="col.full+'：'+col.progress.label+'，未完成延期'+col.progress.deferred+'项；'+col.progress.segments.map((s:any)=>s.label+s.count+'项').join('，')"><span v-for="seg in col.progress.segments" :key="seg.state" :class="'mw-column-'+seg.state" :data-progress-state="seg.state" :style="{width:seg.percent+'%'}" aria-hidden="true" /></div>
-        <template v-for="section in col.key==='required' ? ['late','normal'] : ['normal','late']" :key="section">
+        <template v-for="section in ['late','normal']" :key="section">
           <details v-if="section==='late' && col.late.length" class="mw-late-section" :open="expanded(foldedKey(day,col.key,'late'),true)" @toggle="remember(foldedKey(day,col.key,'late'),$event)">
             <summary>延期待办（{{col.late.length}}）</summary>
             <OverviewTask v-for="x in col.late" :key="JSON.stringify(x.ref)" :x="x" :category="col.key" />

@@ -8,7 +8,7 @@ const server=http.createServer((req,res)=>{
 });
 (async()=>{
  await new Promise(ok=>server.listen(0,'127.0.0.1',ok));
- const browser=await chromium.launch({headless:true});
+ const browser=await chromium.launch({headless:true,executablePath:process.env.FOCUS_BROWSER_EXECUTABLE||undefined});
  try{
   const page=await browser.newPage({viewport:{width:390,height:844},timezoneId:'Asia/Shanghai',serviceWorkers:'block'}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
@@ -66,6 +66,24 @@ const server=http.createServer((req,res)=>{
   }
   await page.reload();await page.waitForFunction(()=>window.App?.app?.ready);await page.evaluate(()=>{App.app.switchView('tasks');App.memoWorkspace.setDay('2026-11-13');});
   assert.equal(await page.locator('[data-overview-list="required"] [data-overview-ref]:not(.done)').first().getAttribute('data-carried'),'true');
+  await page.evaluate(async()=>{
+    App.store.getDay('2026-11-13').tasks.ideal.push({id:'ideal-late',text:'逾期理想',points:1});
+    App.store.getDay('2026-11-14').tasks.ideal.push({id:'ideal-fresh',text:'当日理想',points:5});
+    await App.store.save();
+  });
+  await page.clock.setSystemTime(new Date('2026-11-14T04:00:01+08:00'));
+  await page.evaluate(async()=>{
+    await App.memoFlow.settle();
+    App.memoWorkspace.setDay('2026-11-14');
+  });
+  const ideal=page.locator('[data-overview-list="ideal"]');
+  const delayed=ideal.locator('.mw-late-section [data-overview-ref]');
+  assert.equal(await delayed.innerText().then(text=>text.includes('逾期理想')),true);
+  assert.equal(await delayed.getAttribute('data-carried'),'true');
+  const freshIdeal=ideal.getByRole('button',{name:/打开任务：当日理想/});
+  assert((await delayed.boundingBox()).y<(await freshIdeal.boundingBox()).y);
+  await page.evaluate(()=>App.memoWorkspace.setDay('2026-11-13'));
+  assert.match(await ideal.locator('.mw-history-section').innerText(),/逾期顺延记录（1）/);
   assert.equal(errors.length,0,errors.join('\n'));
  }finally{await browser.close();await new Promise(r=>server.close(r));}
  console.log('Retention, redo, persisted editing and search pagination passed');

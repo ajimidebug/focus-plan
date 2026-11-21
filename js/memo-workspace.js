@@ -222,7 +222,7 @@
   function scoreHTML(n){return n===null?'':(A.memoOrganize?.badge(n)||'')+'<small class="mw-score">+'+esc(n)+'分</small>';}
   function scoreBand(n){return n===null?'group':n===0?'zero':n<5?'low':n<10?'medium':'high';}
   function taskItems(day,list){
-    return A.memoSchedule.columnItems(day,list).concat((A.memoFlow.deferred?.(day,list)||[]).filter(x=>x.automatic)).map((x,i)=>({x,i})).sort((a,b)=>Number(a.x.done)-Number(b.x.done)||(list==='required'?Number(!!(b.x.deferred||A.memoFlow.isCarried(b.x.task)))-Number(!!(a.x.deferred||A.memoFlow.isCarried(a.x.task))):0)||(!a.x.done&&!a.x.deferred&&!b.x.deferred&&list==='required'?priorityWeight(b.x.task)-priorityWeight(a.x.task):0)||(!a.x.done&&list!=='required'?score(b.x.task,b.x.ref)-score(a.x.task,a.x.ref):0)||a.i-b.i).map(v=>v.x);
+    return A.memoSchedule.columnItems(day,list).concat((A.memoFlow.deferred?.(day,list)||[]).filter(x=>x.automatic)).map((x,i)=>({x,i})).sort((a,b)=>Number(a.x.done)-Number(b.x.done)||(list!=='extra'?Number(!!(b.x.deferred||A.memoFlow.isCarried(b.x.task)))-Number(!!(a.x.deferred||A.memoFlow.isCarried(a.x.task))):0)||(!a.x.done&&!a.x.deferred&&!b.x.deferred&&list==='required'?priorityWeight(b.x.task)-priorityWeight(a.x.task):0)||(!a.x.done&&list!=='required'?score(b.x.task,b.x.ref)-score(a.x.task,a.x.ref):0)||a.i-b.i).map(v=>v.x);
   }
   function deferredHTML(x,compact=false){
     const t=x.task,current=A.memoSchedule.find(x.currentRef),attrs='data-deferred-source="'+esc(JSON.stringify(x.ref))+'"';
