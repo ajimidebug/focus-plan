@@ -795,6 +795,43 @@ test('carry rails distinguish automatic overdue from manual moves and timely bac
  const b=browser();await b.S.load();const {F}=flowHarness(b),d=b.S.data();F.enableCore();const t={id:'r',originalDay:'2026-10-20'};assert.equal(F.isCarried(t),false);d.memoFlow.settlements.push({id:'event',taskId:'r',points:0});t.overdueEventId='event';assert.equal(F.isCarried(t),true);t.backfillDay='2026-10-20';assert.equal(F.isCarried(t),false);t.backfillDay='2026-10-21';assert.equal(F.isCarried(t),true);assert.equal(F.isCarried({id:'legacy',carried:true}),true);
 });
 
+test('confirming a carried task for the same day clears the active overdue status until the next carry', async () => {
+  const b = browser();
+  await b.S.load();
+  const { F, M, P, setTime } = executionReportHarness(b, '2026-11-25T12:00:00+08:00');
+  const finance = b.ctx.App.memoFinance;
+  const today = M.userDay(), yesterday = M.shiftDay(today, -1), tomorrow = M.shiftDay(today, 1);
+  b.S.getDay(yesterday).tasks.required.push({ id: 'carry-required', text: '必做' });
+  b.S.getDay(yesterday).tasks.ideal.push({ id: 'carry-ideal', text: '理想' });
+  b.S.data().queue.push({ id: 'carry-queue', text: '队列', assignment: { day: yesterday, list: 'ideal' } });
+  F.settleCore();
+  const ledgerAfterCarry = JSON.stringify(b.S.data().ledger);
+  const refs = [
+    { kind: 'task', day: today, list: 'required', id: 'carry-required' },
+    { kind: 'task', day: today, list: 'ideal', id: 'carry-ideal' },
+    { kind: 'queue', list: 'ideal', id: 'carry-queue' }
+  ];
+  for (const ref of refs) {
+    assert.equal(F.isCarried(P.find(ref)), true);
+    F.moveCore(ref, today, ref.list);
+    F.moveCore(ref, today, ref.list);
+    assert.equal(F.isCarried(P.find(ref)), false);
+  }
+  assert.equal(finance.column(today, 'required').deferred, 0);
+  assert.equal(finance.column(today, 'ideal').deferred, 0);
+  assert.equal(finance.column(yesterday, 'required').deferred, 1);
+  assert.equal(finance.column(yesterday, 'ideal').deferred, 2);
+  assert.equal(JSON.stringify(b.S.data().ledger), ledgerAfterCarry);
+  assert(await b.S.save());
+  const reloaded = browser({ shared: b });
+  assert(await reloaded.S.load());
+  assert.equal(executionReportHarness(reloaded).F.isCarried(reloaded.S.getDay(today).tasks.required[0]), false);
+  setTime(tomorrow + 'T04:00:00+08:00');
+  F.settleCore();
+  for (const ref of refs) assert.equal(F.isCarried(P.find(ref)), true);
+  assert.equal(JSON.stringify(b.S.data().ledger), ledgerAfterCarry);
+});
+
 test('one-off long tasks carry without ledger writes and keep one live identity',async()=>{
  const b=browser();await b.S.load();const {M,F}=flowHarness(b),d=b.S.data(),day=M.userDay(),old=M.shiftDay(day,-3);d.days['2026-10-18'].tasks.required=[];b.S.getDay(old).tasks.extra=[{id:'long',text:'长期',points:10},{id:'done',done:true},{id:'dismissed',memoDismissed:'yes'},{id:'daily',memoProjectId:'p'}];d.queue=[{id:'q',assignment:{day:old,list:'extra'}},{id:'unassigned'}];const before=d.ledger.length;F.settleCore();assert.equal(d.ledger.length,before);assert.equal(b.S.getDay(day).tasks.extra.filter(t=>t.id==='long').length,1);assert.equal(d.queue[0].assignment.day,day);assert.equal(d.queue[1].assignment,undefined);assert.equal(F.isCarried(b.S.getDay(day).tasks.extra.find(t=>t.id==='long')),true);F.settleCore();assert.equal(F.longOverdue().length,0);assert.equal(b.S.getDay(day).tasks.extra.filter(t=>t.id==='long').length,1);assert.equal(d.ledger.length,before);
 });

@@ -3483,12 +3483,12 @@
     if (t.fromDaily) {
       return '<span class="fromqueue-tag" title="这条来自「今天的基础任务」—— 是你在队列页点 ▶ 开始做的那条。它不进「必须 0/x」的统计，做完会自动把基础任务勾上">📌 来自今天的基础</span>';
     }
-    if (t.carried) {
+    if (t.carried && !t.memoCarryReset) {
       return '<span class="carry-tag" title="昨天没做完，自动移到今天来的 \u2014\u2014 今天做完就不扣分">\u21A9 昨天移过来' +
         (t.carriedFailed ? ' \u00b7 已扣分' : '') + '</span>';
     }
     // ↩ v74：必须/理想栏昨天没做完顺延过来的（原来没有任何标记，混在今天的清单里认不出来）
-    if (t.rolled) {
+    if (t.rolled && !t.memoCarryReset) {
       return '<span class="rolled-tag" title="昨天没做完，自动顺延到今天的 —— 想做就直接做，不想做可以在清单顶上「一键清掉」">\u21A9 昨天没做完</span>';
     }
     if (t.movedOut) {

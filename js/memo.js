@@ -125,15 +125,24 @@
     if (!await flush()) { state('当前内容尚未安全保存，请先复制全文，暂不切换日期', true); $('memo-date').value = selected; return false; }
     show(key); return true;
   }
-  function insertTime() {
-    if (S().status().readOnly) return;
+  let insertingTime = false;
+  async function insertTime() {
+    if (insertingTime || S().status().readOnly) return;
     if (App.memoEditor.busy()) return App.ui.toast('请先完成正在输入的文字');
-    const now = Date.now(), date = naturalDay(now);
-    const stamp = date === selected ? clock(now) : (date === shiftDay(selected, 1) && userDay(now) === selected ? '次日' + clock(now) : date + ' ' + clock(now));
-    const a = App.memoEditor.text().length;
-    App.memoEditor.select(a);
-    App.memoEditor.insert((a > 0 && App.memoEditor.text()[a - 1] !== '\n' ? '\n' : '') + stamp.replace(':', '') + ' ');
-    App.memoEditor.revealEnd();
+    const now = Date.now(), today = userDay(now);
+    insertingTime = true;
+    try {
+      if (selected !== today && !await openDay(today)) return;
+      if ($('memo-editor').contentEditable === 'false') return;
+      const stamp = (naturalDay(now) === today ? '' : '次日') + clock(now).replace(':', '');
+      const text = App.memoEditor.text();
+      App.memoEditor.select(text.length);
+      App.memoEditor.insert((text && !text.endsWith('\n') ? '\n' : '') + stamp + ' ');
+      App.memoEditor.revealEnd();
+      await pending;
+    } finally {
+      insertingTime = false;
+    }
   }
   function writeClipboard(text) {
     const clipboard = navigator.clipboard;

@@ -17,11 +17,29 @@ const server=http.createServer((req,res)=>{
   await page.waitForFunction(()=>window.App?.app?.ready&&window.App?.memoGantt?.nodes&&window.App?.memoOrganize?.openGroups);
 
   const day='2026-11-13';
-  await page.evaluate(async()=>{App.store.getDay('2026-11-13').tasks.ideal.push({id:'retain',text:'数学复盘',points:5});await App.store.save();App.memoWorkspace.render();App.memoActions.task('ideal','retain','2026-11-13');});
+  await page.context().grantPermissions(['clipboard-read','clipboard-write']);
+  async function checkTaskNoteCopy(completed){
+   await page.evaluate(day=>{App.app.switchView('memo');App.memo.show(day);},day);
+   await page.locator('#memo-copy-menu summary').click();
+   await page.getByRole('button',{name:'复制全文',exact:true}).click();
+   await page.waitForFunction(async done=>(await navigator.clipboard.readText()).includes((done?'✓':'○')+' 数学复盘〔'+(done?'已完成':'未完成')+'〕'),completed);
+   await page.waitForFunction(()=>!App.memoActions.busy());
+   await page.evaluate(()=>{
+    const field=document.createElement('textarea');field.id='test-paste';field.style.position='fixed';
+    document.body.append(field);field.focus();
+   });
+   const field=page.locator('#test-paste');await field.press('Control+v');
+   const pasted=await field.inputValue();await field.evaluate(node=>node.remove());
+   assert.match(pasted,/数学复盘〔[^\n]*〕\n  任务备注：复盘错因\n保留第二行/);
+  }
+  await page.evaluate(async()=>{App.store.getDay('2026-11-13').tasks.ideal.push({id:'retain',text:'数学复盘',points:5,note:'复盘错因\n保留第二行'});await App.store.save();App.memoWorkspace.render();});
+  await checkTaskNoteCopy(false);
+  await page.evaluate(()=>App.memoActions.task('ideal','retain','2026-11-13'));
   await page.locator('#ma-remark').fill('备注A');
   await page.locator('#memo-action-text').fill('说明B\n第二行');
   await page.locator('.modal [data-act="commit"]').click();
   await page.getByRole('dialog').waitFor({state:'hidden'});
+  await checkTaskNoteCopy(true);
   await page.evaluate(()=>{App.app.switchView('memo');App.memo.show('2026-11-13');App.memoEditor.select(3,3);});
   await page.locator('#memo-editor').pressSequentially('段内C');
   await page.evaluate(()=>App.memo.flush());
@@ -34,6 +52,8 @@ const server=http.createServer((req,res)=>{
   for(const handWritten of ['备注A','说明B','第二行','段内C'])assert(after.includes(handWritten));
   assert.doesNotMatch(await page.evaluate(()=>App.memoCore.exportText(['2026-11-13'])),/已撤销完成/);
   assert(before.includes('备注A')&&before.includes('说明B')&&before.includes('段内C'));
+  await page.evaluate(()=>navigator.clipboard.writeText(''));
+  await checkTaskNoteCopy(false);
   await page.evaluate(()=>App.memoActions.task('ideal','retain','2026-11-13'));
   assert.equal(await page.locator('#ma-remark').inputValue(),'备注A');assert.equal(await page.locator('#memo-action-text').inputValue(),'说明B\n第二行');
   await page.locator('.modal [data-act="commit"]').click();await page.getByRole('dialog').waitFor({state:'hidden'});
@@ -76,11 +96,22 @@ const server=http.createServer((req,res)=>{
     await App.memoFlow.settle();
     App.memoWorkspace.setDay('2026-11-14');
   });
-  const ideal=page.locator('[data-overview-list="ideal"]');
+  const ideal=page.locator('.framework-overview [data-overview-list="ideal"]');
   const delayed=ideal.locator('.mw-late-section').getByRole('button',{name:/打开任务：逾期理想/});
   assert.equal(await delayed.getAttribute('data-carried'),'true');
   const freshIdeal=ideal.getByRole('button',{name:/打开任务：当日理想/});
   assert((await delayed.boundingBox()).y<(await freshIdeal.boundingBox()).y);
+  const overdueBar=ideal.locator('[data-progress-state="deferred"]');
+  const overdueBefore=await overdueBar.evaluate(el=>parseFloat(el.style.width));
+  await delayed.click();
+  await page.getByRole('button',{name:'调整安排',exact:true}).click();
+  assert.match(await page.locator('.modal-date-context').innerText(),/今天/);
+  await page.locator('.modal [data-act="pick"][data-list="ideal"]').click();
+  await page.locator('.task-action-modal [data-act="cancel"]').click();
+  const rescheduled=ideal.getByRole('button',{name:/打开任务：逾期理想/});
+  assert.equal(await rescheduled.getAttribute('data-carried'),'false');
+  assert.equal(await delayed.count(),0);
+  assert((await overdueBar.evaluate(el=>parseFloat(el.style.width)))<overdueBefore);
   await page.evaluate(()=>App.memoWorkspace.setDay('2026-11-13'));
   const history=ideal.locator('.mw-history-section');
   await history.locator('summary').first().click();

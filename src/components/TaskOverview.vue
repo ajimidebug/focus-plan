@@ -34,6 +34,11 @@ watch([month,calendarOpen,()=>props.revision],async()=>{
 })
 watch(()=>props.day,day=>{calendarOpen.value=false;month.value=day.slice(0,7)+'-01'})
 function pressed(offset:number){const m=A().memoCore;return props.day===m.shiftDay(m.userDay(),offset)}
+const dateContext=computed(()=>{
+ void props.revision
+ const today=A().memoCore.userDay()
+ return props.day===today?'today':props.day<today?'past':'future'
+})
 function habitRow(it:any,r:any,n:number,day:string){
  const mode=A().memoPenalty?.policy(it,day).mode||'reward'
  const target=Number(r.target)||0,limits=A().store.habitRules(it),achieved=mode!=='punch'&&target>0&&n>=target
@@ -58,7 +63,7 @@ const columns=computed(()=>{void props.revision;return lists.filter(col=>col.key
 </script>
 <template>
   <section class="mw-overview framework-overview" aria-label="三栏任务概览">
-    <div class="overview-heading">
+    <div class="overview-heading" :data-date-context="dateContext">
       <h2><time :datetime="day">{{day.slice(0,4)}}年{{Number(day.slice(5,7))}}月{{Number(day.slice(8))}}日 周{{weekday}}</time></h2>
       <div class="mw-toolbar mw-day-shortcuts mw-date-header" role="group" aria-label="任务日期">
         <button class="btn" data-mw="yesterday" :aria-pressed="pressed(-1)" @click.stop="choose(-1)">昨天</button>

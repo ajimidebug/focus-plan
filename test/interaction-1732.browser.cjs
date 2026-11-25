@@ -70,10 +70,30 @@ async function run(){
    check(await page.locator('.memo-popup-layer').isHidden(),'copy closes popup '+width);
    await page.waitForFunction(()=>!App.memoActions.busy()&&App.store.status().phase==='saved');
    if(width===390){
-    const oldDay=await page.evaluate(async day=>{await App.memo.flush();const old=App.memoCore.shiftDay(day,-1);App.memoCore.write(old,'历史正文');App.memo.show(old);App.memoEditor.select(0,4);return old;},day);
+    for (const offset of [-1,1]) {
+     const otherDay=await page.evaluate(async ({day,offset})=>{
+      await App.memo.flush();
+      const other=App.memoCore.shiftDay(day,offset);
+      App.memoCore.write(other,'其他日正文');App.memo.show(other);
+      App.memoEditor.select(App.memoEditor.text().length);App.memoEditor.insert('，刚输入');
+      return other;
+     },{day,offset});
+     const previousText=await page.evaluate(day=>App.memoCore.read(day).text,day);
+     await page.locator('#memo-time').click();
+     await page.waitForFunction(day=>App.memo.selected()===day&&App.memoEditor.selection()?.end===App.memoEditor.text().length,day);
+     check(await page.evaluate(other=>App.memoCore.read(other).text==='其他日正文，刚输入',otherDay),'non-today draft is saved without receiving a stamp '+offset);
+     const currentText=await page.evaluate(()=>App.memoEditor.text());
+     check(currentText.startsWith(previousText)&&/^\n?(?:次日)?\d{4} $/.test(currentText.slice(previousText.length)),
+      'time is appended to the current user day '+offset);
+    }
+    await page.evaluate(async day=>{
+     await App.memo.flush();App.memo.show(App.memoCore.shiftDay(day,-1));
+     window.originalMemoFlush=App.store.flush;App.store.flush=async()=>false;
+    },day);
     await page.locator('#memo-time').click();
-    check(await page.evaluate(old=>App.memoCore.read(old).text.startsWith('历史正文\n')&&App.memoEditor.selection().end===App.memoEditor.text().length,oldDay),'historical note gets dated stamp at its own tail '+width);
-    await page.evaluate(day=>App.memo.show(day),day);
+    await page.waitForFunction(()=>document.querySelector('#memo-save').textContent.includes('暂不切换日期'));
+    check(await page.evaluate(day=>App.memo.selected()===App.memoCore.shiftDay(day,-1),day),'time leaves the source day selected when save fails');
+    await page.evaluate(day=>{App.store.flush=window.originalMemoFlush;App.memo.show(day);},day);
    }
 
    await page.evaluate(()=>{document.querySelector('#memo-editor').blur();document.querySelector('#memo-heading').focus?.();});
@@ -127,6 +147,27 @@ async function run(){
    check((await page.locator('.modal [data-act="save"]').innerText()).includes(target),'save button names target date '+width);
    check(!await page.locator('.modal [data-act="save-start"]').isVisible(),'future task cannot start accidentally '+width);
    await page.locator('.modal [data-act="cancel"]').click();
+   if(width===320||width===390){
+    for(const theme of ['', 'dark', 'purple']){
+     for(const [offset, relation] of [[-1,'past'],[1,'future']]){
+      await page.evaluate(({theme,offset})=>{
+       document.body.dataset.theme=theme;
+       App.memoWorkspace.setDay(App.memoCore.shiftDay(App.memoCore.userDay(),offset));
+       App.memoWorkspace.editor(null,'ideal');
+      },{theme,offset});
+      await page.waitForSelector('.overview-heading[data-date-context="'+relation+'"]');
+      check(await page.evaluate(relation=>{
+       const header=document.querySelector('.overview-heading'),modal=document.querySelector('.modal');
+       const background=element=>getComputedStyle(element).backgroundColor;
+       const tone=background(header);
+       return modal.dataset.dateContext===relation&&tone!=='rgba(0, 0, 0, 0)'&&
+        tone===background(modal.querySelector('.modal-heading'))&&tone===background(modal.querySelector('.modal-date-context'));
+      },relation),'task and dialog date regions share a visible '+relation+' background in '+(theme||'light')+' at '+width);
+      await page.locator('.modal [data-act="cancel"]').click();
+     }
+    }
+    await page.evaluate(()=>{document.body.dataset.theme='';});
+   }
    await page.evaluate(()=>App.memoWorkspace.editor({kind:'queue',id:'visual-clock'}));
    check((await page.locator('.modal-date-context').innerText()).includes('尚未安排日期'),'undated queue is labeled honestly '+width);
    await page.locator('.modal [data-act="cancel"]').click();
@@ -155,6 +196,11 @@ async function run(){
   check((await page.locator('.modal [data-act="save"]').innerText()).includes('2026-10-27'),'open form retains original date after boundary');
   check(!await page.locator('.modal [data-act="save-start"]').isVisible(),'cross-boundary save cannot start old-day task');
   check(Number(await page.locator('#float-meter .float-meter-track').getAttribute('aria-valuenow'))===0,'daily estimate resets its scope after 04:00 while session keeps running');
+  await page.locator('.modal [data-act="cancel"]').click();
+  await page.clock.setFixedTime(new Date('2026-10-29T00:35:00+08:00'));
+  await page.evaluate(()=>{App.app.switchView('memo');App.memo.show('2026-10-27');});
+  await page.locator('#memo-time').click();
+  await page.waitForFunction(()=>App.memo.selected()==='2026-10-28'&&App.memoEditor.text().endsWith('次日0035 '));
   await context.close();
   console.log(checks+' browser interaction checks passed across five viewports and the 04:00 boundary.');
  }finally{await browser.close();await new Promise(r=>server.close(r));}

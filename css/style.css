@@ -2390,10 +2390,23 @@ body #mw-live.float-editor-focus{opacity:.9;}
 .modal-date-context small{display:block;margin-top:2px;font-size:11px;font-weight:400;color:var(--muted);}
 .modal[data-date-context="future"]{border:2px solid #5c8ed0;box-shadow:0 0 0 4px #5486ce22,0 12px 40px #15294333;}
 .modal[data-date-context="past"]{border:2px solid #c59038;box-shadow:0 0 0 4px #c5903825,0 12px 40px #15294333;}
-.modal[data-date-context="future"] .modal-date-context{color:#28538c;}
-.modal[data-date-context="past"] .modal-date-context{color:#805412;}
-body:is([data-theme="dark"],[data-theme="purple"]) .modal[data-date-context="future"] .modal-date-context{color:#b0d3ff;}
-body:is([data-theme="dark"],[data-theme="purple"]) .modal[data-date-context="past"] .modal-date-context{color:#ffdb9d;}
+[data-date-context="past"]{--date-surface:#ffe4ac;--date-ink:#5a3707;}
+[data-date-context="future"]{--date-surface:#d6e8ff;--date-ink:#153c70;}
+body:is([data-theme="dark"],[data-theme="purple"]) [data-date-context="past"]{--date-surface:#59401f;--date-ink:#ffe7b8;}
+body:is([data-theme="dark"],[data-theme="purple"]) [data-date-context="future"]{--date-surface:#233f66;--date-ink:#d8eaff;}
+.overview-heading:is([data-date-context="past"],[data-date-context="future"]){
+  padding:8px;border-radius:8px;background:var(--date-surface);color:var(--date-ink);
+}
+.modal:is([data-date-context="past"],[data-date-context="future"]) > :is(.modal-heading,.modal-date-context){
+  background:var(--date-surface);color:var(--date-ink);
+}
+.modal[data-date-context]:is([data-date-context="past"],[data-date-context="future"]) > .modal-heading{
+  margin:0;padding:6px 28px 2px 16px;border-radius:8px 8px 0 0;
+}
+.modal:is([data-date-context="past"],[data-date-context="future"]) > .modal-date-context{
+  border:0;border-radius:0 0 8px 8px;
+}
+.modal:is([data-date-context="past"],[data-date-context="future"]) .modal-date-context small{color:inherit;}
 
 /* Attainment is independent of the reward cap. Preserve supervision textures. */
 body :is(.habit-plan-row.habit-plan-goal-done,.task-habit-grid article.habit-plan-goal-done,#checkin-view .ck-row.done):not([data-habit-kind="punch"]){background-color:#e8f5ec!important;border-color:#82b893!important;color:#214e33;opacity:1;}

@@ -491,5 +491,3 @@ body.framework-layout #mw-live button{pointer-events:auto;}
 .task-note-preview { display:block; max-width:100%; border:0; background:transparent; color:var(--task-note-color,#235fa7); font-size:.85rem; text-align:start; padding:6px 0; overflow-wrap:anywhere; cursor:pointer; }
 body:is([data-theme="dark"],[data-theme="purple"]) .task-note-preview { --task-note-color:#a9ccff; }
 .round-project-actions { display:flex; flex-wrap:wrap; gap:8px; margin-block-end:8px; }
-.modal[data-date-context="past"] .modal-heading { background:color-mix(in srgb, #c59038 16%, var(--card)); }
-.modal[data-date-context="future"] .modal-heading { background:color-mix(in srgb, #5c8ed0 17%, var(--card)); }

@@ -36,6 +36,10 @@
     });
     return out;
   }
+  function updateCarryOnMove(task, reason) {
+    if (reason === 'manual' && isCarried(task)) task.memoCarryReset = true;
+    if (reason === 'automatic') delete task.memoCarryReset;
+  }
   function moveCore(ref, day, list, target = 'task', reason = 'manual') {
     if (!M().validDate(day) || !['required', 'ideal', 'extra'].includes(list)) throw new Error('请选择有效日期和任务栏目');
     const found = A.memoSchedule.resolve(ref); if (!found) throw new Error('任务已移动或删除');
@@ -45,12 +49,16 @@
     if (t.done || t.doneAt || t.archived || t.memoDismissed) throw new Error('请先恢复未完成状态');
     if (r.kind === 'queue') {
       if (target === 'queue') { const oldDay=t.assignment?.day;if(t.assignment){const old=clone(t.assignment);old.moveReason=reason;(t.assignmentHistory||(t.assignmentHistory=[])).push(old);}delete t.assignment;if(oldDay)A.memoActions?.reconcileRewards?.(oldDay);return; }
-      if (t.assignment?.day === day && t.assignment.list === list) return;
+      if (t.assignment?.day === day && t.assignment.list === list) {
+        updateCarryOnMove(t, reason);
+        return;
+      }
       const old=clone(t.assignment||{at:new Date().toISOString(),state:'待安排'});
       if(t.assignment&&t.assignment.day!==day){old.toDay=day;old.moveReason=reason;old.snapshot=clone(Object.assign({},t,{assignmentHistory:undefined,assignment:undefined}));}
       (t.assignmentHistory || (t.assignmentHistory = [])).push(old);
       const oldDay=t.assignment?.day;
       t.assignment = { day, list, at: new Date().toISOString() };
+      updateCarryOnMove(t, reason);
       if(oldDay)A.memoActions?.reconcileRewards?.(oldDay);
       A.memoActions?.reconcileRewards?.(day);return;
     }
@@ -61,10 +69,14 @@
       (S().data().queue || (S().data().queue = [])).push(q);
       t.memoMovedTo = { kind: 'queue', id: q.id };A.memoActions?.reconcileRewards?.(r.day);return;
     }
-    if (r.day === day && r.list === list) return;
+    if (r.day === day && r.list === list) {
+      updateCarryOnMove(t, reason);
+      return;
+    }
     const destination = S().getDay(day).tasks[list];
     if (r.day!==day && Object.values(S().getDay(day).tasks).flat().some(x => x.id === t.id && !x.memoMovedTo)) throw new Error('此任务已在目标日，请刷新');
     const next = clone(t);next.originalDay=t.originalDay||r.day;delete next.memoMovedTo;delete next.memoDeferred;
+    updateCarryOnMove(next, reason);
     if (r.day === day) S().getDay(r.day).tasks[r.list] = S().getDay(r.day).tasks[r.list].filter(x => x.id !== t.id);
     else {t.memoMovedTo = { kind: 'task', id: t.id, day, list };t.memoDeferred={version:1,at:new Date().toISOString(),toDay:day,reason};}
     Object.values(S().getDay(day).tasks).forEach(items => { for(let i=items.length-1;i>=0;i--)if(items[i].id===t.id && items[i].memoMovedTo)items.splice(i,1); });
@@ -156,6 +168,7 @@
     if (original) { const refundId=S().uid();e.refundLedgerId=refundId;S().data().ledger.push({ id: refundId, operationId: 'forgive:' + e.id + ':' + refundId, date: M().userDay(), type: 'refund-penalty', points: -original.points, leisure: 0, at: e.forgivenAt, refundOf:original.id, note: '撤销错误扣分：' + e.title + '；' + e.reason });return refundId; }
   }
   function isCarried(t) {
+    if (t.memoCarryReset) return false;
     if (t.backfillDay && t.originalDay && t.backfillDay <= t.originalDay) return false;
     return !!t.memoAutoCarry || !!(t.overdueEventId && S().data().memoFlow?.settlements.some(e => e.id === t.overdueEventId && e.taskId === t.id)) || !!t.carried || !!t.rolled;
   }
