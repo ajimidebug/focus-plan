@@ -241,7 +241,7 @@
     });
     // Review metadata is optional in v1; unknown module versions are protected.
     if (clean.memoReview !== undefined) {
-      const x=clean.memoReview, obj=v=>!!v&&typeof v==='object'&&!Array.isArray(v), ref=v=>obj(v)&&['task','queue'].includes(v.kind)&&typeof v.id==='string'&&(v.kind==='queue'||typeof v.day==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v.day)&&['required','ideal','extra'].includes(v.list));
+      const x=clean.memoReview, obj=v=>!!v&&typeof v==='object'&&!Array.isArray(v), ref=v=>obj(v)&&['task','queue','three'].includes(v.kind)&&typeof v.id==='string'&&(v.kind==='queue'||v.kind==='three'||typeof v.day==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v.day)&&['required','ideal','extra'].includes(v.list));
       if(!obj(x)||x.version!==1||!Array.isArray(x.series)||!Array.isArray(x.rounds))throw Error('复习数据版本或结构不兼容');
       const ids=new Set(),numbers=new Set();
       x.series.forEach(v=>{if(v.intervals!==undefined&&(!Array.isArray(v.intervals)||v.intervals.length>32||v.intervals.some(n=>!Number.isSafeInteger(n)||n<1||n>525600)))throw Error('复习间隔模板异常');if(!obj(v)||typeof v.id!=='string'||!v.id||ids.has(v.id)||typeof v.text!=='string'||!v.text.trim()||!Number.isFinite(v.points)||v.points<0||!Number.isFinite(v.estimatedMinutes)||v.estimatedMinutes<0||v.estimatedMinutes>1440||!['required','ideal','extra'].includes(v.list)||typeof v.paused!=='boolean'||v.source!=null&&!ref(v.source))throw Error('复习系列结构异常');ids.add(v.id);});
@@ -253,7 +253,7 @@
     }
     if(clean.memoRecurrence!==undefined){
       const x=clean.memoRecurrence,obj=v=>!!v&&typeof v==='object'&&!Array.isArray(v),date=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v+'T12:00:00Z'));
-      const ref=v=>obj(v)&&['task','queue'].includes(v.kind)&&typeof v.id==='string'&&(v.kind==='queue'||date(v.day)&&['required','ideal','extra'].includes(v.list));
+      const ref=v=>obj(v)&&['task','queue','three'].includes(v.kind)&&typeof v.id==='string'&&(v.kind==='queue'||v.kind==='three'||date(v.day)&&['required','ideal','extra'].includes(v.list));
       if(!obj(x)||x.version!==1||!Array.isArray(x.series)||!Array.isArray(x.occurrences))throw Error('周期数据版本或结构不兼容');
       const ids=new Set(),occ=new Set();
       x.series.forEach(s=>{if(s.pausedRanges!==undefined&&(!Array.isArray(s.pausedRanges)||s.pausedRanges.some(v=>!obj(v)||!date(v.from)||!date(v.until)||v.until<=v.from)))throw Error('周期暂停区间异常');});
@@ -295,6 +295,11 @@
         new Set(x.tasks.map(t=>t?.id)).size!==x.tasks.length||
         x.tasks.some(t=>!t||typeof t.id!=='string'||typeof t.text!=='string'||!validDay(t.createdDay)||!validIndex(t.originRound)||typeof t.done!=='boolean'||!Number.isFinite(t.points)||t.points<0||!Number.isFinite(t.estimatedMinutes)||t.estimatedMinutes<0||t.estimatedMinutes>1440||(t.done&&!Number.isFinite(Date.parse(t.doneAt))))||
         x.history.some(h=>!h||!validIndex(h.index)||!validRows(h.rows)))throw new Error('轮次记录结构异常或版本不支持');
+      if (x.redirects !== undefined && (!x.redirects || typeof x.redirects !== 'object' || Array.isArray(x.redirects) || Object.values(x.redirects).some(ref =>
+        !ref || typeof ref.id !== 'string' || !['task','queue','three'].includes(ref.kind) ||
+        (ref.kind === 'task' && (!validDay(ref.day) || !['required','ideal','extra'].includes(ref.list)))))) {
+        throw Error('轮次任务移动关联异常');
+      }
       if(x.version===1&&x.history.some((h,i)=>h.index!==i))throw new Error('旧三天轮次历史异常');
       if(x.version===2){
         if(!Array.isArray(x.rounds)||new Set(x.rounds.map(r=>r?.index)).size!==x.rounds.length||
