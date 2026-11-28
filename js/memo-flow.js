@@ -40,10 +40,82 @@
     if (reason === 'manual' && isCarried(task)) task.memoCarryReset = true;
     if (reason === 'automatic') delete task.memoCarryReset;
   }
+  function moveRoundTask(found, day, list, target) {
+    const {task, ref} = found, data = S().data(), schedule = A.memoSchedule, rounds = A.memoThree;
+    const sourceDay = ref.day || task.assignment?.day;
+    if (task.done || task.doneAt || task.archived || task.memoDismissed) throw Error('请先恢复未完成状态');
+    if (!['task','queue','three'].includes(ref.kind)) throw Error('请选择一次性任务或单次复习期次');
+    const entering = list === 'three' && target === 'task';
+    const round = entering ? rounds.ensureRound(day) : null;
+    const session = schedule.timing(ref).session;
+    if (session && session.status !== 'ended' && (round ? round.start : day) > M().userDay()) {
+      schedule.stopRef(ref);
+    }
+    if (entering && ref.kind === 'three') {
+      if (round.index !== rounds.nativeTarget(task)) rounds.assignCore(ref, round.index);
+      task.roundSelectedDay = day;
+      return ref;
+    }
+
+    const toQueue = !entering && (target === 'queue' || task.roundSourceKind === 'queue');
+    const destination = entering
+      ? {kind:'three', id:task.id, list:'three'}
+      : toQueue ? {kind:'queue', id:task.id} : {kind:'task', id:task.id, day, list};
+    const destinationList = entering ? rounds.state().tasks : toQueue ? data.queue : S().getDay(day).tasks[list];
+    const collides = entering || toQueue ? destinationList.some(item => item.id === task.id)
+      : Object.values(S().getDay(day).tasks).some(items => items.some(item => item.id === task.id && !item.memoMovedTo));
+    if (collides) throw Error('目标已经有同一项任务，请刷新');
+
+    const redirects = rounds.state().redirects ||= {};
+    const oldKey = schedule.locationKey(ref), newKey = schedule.locationKey(destination);
+    delete redirects[newKey];
+    redirects[oldKey] = destination;
+    const sourceList = ref.kind === 'three' ? rounds.state().tasks : ref.kind === 'queue' ? data.queue : S().getDay(ref.day).tasks[ref.list];
+    sourceList.splice(sourceList.indexOf(task), 1);
+
+    if (entering) {
+      const settings = S().settings();
+      const oldList = ref.list || task.assignment?.list;
+      const points = ref.kind === 'queue' ? settings.queuePoints ?? 5
+        : oldList === 'required' ? 0 : oldList === 'ideal' ? settings.idealPoints ?? 1 : settings.extPoints ?? 5;
+      task.points = Math.max(0, Number(task.points ?? points) || 0);
+      task.estimatedMinutes = Number(task.estimatedMinutes) || 0;
+      task.createdDay = task.createdDay || sourceDay || M().userDay();
+      task.roundSourceKind = ref.kind;
+      task.roundSelectedDay = day;
+      task.originRound = round.index;
+      task.roundIndex = round.index;
+      task.done = false;
+      if (task.assignment) {
+        (task.assignmentHistory ||= []).push({...task.assignment, toDay:day});
+        delete task.assignment;
+      }
+    } else {
+      delete task.roundSourceKind;
+      delete task.roundIndex;
+      delete task.roundSelectedDay;
+      delete task.carriedFrom;
+      if (toQueue && target !== 'queue') task.assignment = {day,list,at:new Date().toISOString()};
+      if (!toQueue) {
+        for (const items of Object.values(S().getDay(day).tasks)) {
+          const former = items.findIndex(item => item.id === task.id && item.memoMovedTo);
+          if (former >= 0) items.splice(former, 1);
+        }
+      }
+    }
+    delete task.memoPlannedDueDay;
+    updateCarryOnMove(task, 'manual');
+    destinationList.push(task);
+    schedule.invalidate();
+    if (sourceDay) A.memoActions?.reconcileRewards?.(sourceDay);
+    if (!entering && target !== 'queue') A.memoActions?.reconcileRewards?.(day);
+    return destination;
+  }
   function moveCore(ref, day, list, target = 'task', reason = 'manual') {
-    if (!M().validDate(day) || !['required', 'ideal', 'extra'].includes(list)) throw new Error('请选择有效日期和任务栏目');
+    if (!M().validDate(day) || !['required', 'ideal', 'extra', 'three'].includes(list)) throw new Error('请选择有效日期和任务栏目');
     const found = A.memoSchedule.resolve(ref); if (!found) throw new Error('任务已移动或删除');
     const t = found.task, r = found.ref;
+    if (list === 'three' || r.kind === 'three') return moveRoundTask(found, day, list, target);
     if(reason==='manual'&&((r.day||t.assignment?.day)!==day||target==='queue'))delete t.memoPlannedDueDay;
     A.memoSchedule.invalidate?.();
     if (t.done || t.doneAt || t.archived || t.memoDismissed) throw new Error('请先恢复未完成状态');

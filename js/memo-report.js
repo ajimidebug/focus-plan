@@ -72,6 +72,7 @@ function executionText(day,x,now,revision=false){
   lines.push('该任务当日有效合计：'+span(A.memoSchedule.unionMs(cs)));
  });
  if(!x.segments.length)lines.push('本用户日无可列出的有效计时片段；旧快照另列，不推测缺失起止点。');
+ for(const chunk of x.unverified || [])lines.push(chunk.title+'｜'+clock(chunk.start)+'开始〔片段 '+chunk.id+'〕结束时间待核对，暂未计入。');
  lines.push('本用户日有效合计（跨任务重合已去重）：'+span(x.actualMs));
  return lines.join('\n');
 }

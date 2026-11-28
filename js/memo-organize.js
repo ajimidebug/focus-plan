@@ -32,7 +32,7 @@ function editor(m,t,list,ref){
  select.innerHTML='<option value="">未分组</option>'+groups().map(g=>'<option value="'+E(g.id)+'">'+E(g.name)+'</option>').join('');
  select.value=t?.memoGroup||context;context='';label.append(select);m.querySelector('#mw-note-edit').after(label);
 }
-function change(ref,list){
+function change(ref,list,day){
  const f=A.memoSchedule.resolve(ref);if(!f)throw Error('任务已不存在');
  const t=f.task,r=f.ref;if(t.done||t.doneAt||t.days?.[r.day])throw Error('已完成记录保留原分类');
  if(r.kind==='checkin'){
@@ -40,7 +40,7 @@ function change(ref,list){
   (S().data().memoHabitPlans||(S().data().memoHabitPlans=[])).push(Object.assign({},x.r,{id:S().uid(),mode:'once',from:r.day,until:undefined,list,at:new Date().toISOString()}));
  }else if(r.kind==='project'||r.kind==='daily'){
   (t.memoCategoryDays||(t.memoCategoryDays={}))[r.day]=list;
- }else A.memoFlow.moveCore(r,r.day||t.assignment?.day||M().userDay(),list);
+ }else A.memoFlow.moveCore(r,day||r.day||t.assignment?.day||M().userDay(),list);
  A.memoActions?.reconcileRewards?.(r.day||t.assignment?.day);
  return A.memoSchedule.canonical(r);
 }

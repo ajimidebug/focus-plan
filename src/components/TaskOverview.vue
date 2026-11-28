@@ -6,6 +6,12 @@ import ThreeDayColumn from './ThreeDayColumn.vue'
 const props=defineProps<{day:string;revision:number}>()
 const A=()=>window.App
 const lists=[{key:'required',name:'必须',symbol:'✅',full:'必做任务'},{key:'ideal',name:'理想',symbol:'⭐',full:'理想任务'},{key:'extra',name:'拓展',symbol:'🌱',full:'长期拓展'}]
+const thirdColumn=ref<'three'|'extra'>('three')
+try { if(localStorage.getItem('task-third-column')==='extra')thirdColumn.value='extra' } catch {}
+function selectColumn(value:'three'|'extra'){
+ thirdColumn.value=value
+ try { localStorage.setItem('task-third-column',value) } catch {}
+}
 const weekday=computed(()=>['日','一','二','三','四','五','六'][new Date(props.day+'T12:00:00+08:00').getUTCDay()]||'')
 function done(x:any){return !x.deferred&&(['project','daily'].includes(x.ref.kind)?!!x.task.days?.[x.ref.day]:x.ref.kind==='queue'?!!(x.task.doneAt||x.task.doneDay):!!x.task.done)}
 function foldedKey(day:string,list:string,section:string){return 'task-fold:overview:'+day+':'+list+':'+section}
@@ -46,7 +52,7 @@ function habitRow(it:any,r:any,n:number,day:string){
  const points=A().checkin?.memoPoints(it,day)??0
  return {it,r,n,mode,target,achieved,continuing,points,limit:limits.rewardLimit}
 }
-const columns=computed(()=>{void props.revision;return lists.filter(col=>col.key!=='extra').map(col=>{
+const columns=computed(()=>{void props.revision;return lists.filter(col=>col.key!=='extra'||thirdColumn.value==='extra').map(col=>{
  const items=A().memoWorkspace.taskItems(props.day,col.key)
  const active=items.filter((x:any)=>!x.deferred&&!done(x))
  const normal=active.filter((x:any)=>!A().memoFinance.deferredTarget(x.task,x.ref,props.day))
@@ -79,6 +85,10 @@ const columns=computed(()=>{void props.revision;return lists.filter(col=>col.key
         </div>
         <div ref="monthCalendar" />
       </section>
+    </div>
+    <div class="task-column-switch" role="group" aria-label="第三栏">
+      <button type="button" class="btn btn-small" :aria-pressed="thirdColumn==='three'" @click="selectColumn('three')">三日</button>
+      <button type="button" class="btn btn-small" :aria-pressed="thirdColumn==='extra'" @click="selectColumn('extra')">拓展</button>
     </div>
     <div class="cal-cols framework-columns">
       <TaskColumn v-for="col in columns" :key="col.key" :category="col.key" :label="'概览：添加'+col.name+'任务'" :add="()=>A().memoWorkspace.editor(null,col.key)">
@@ -114,7 +124,7 @@ const columns=computed(()=>{void props.revision;return lists.filter(col=>col.key
         </details>
         <q-btn flat dense no-caps class="overview-add" :aria-label="'概览：添加'+col.name+'任务'" @click.stop="A().memoWorkspace.editor(null,col.key)">＋ 添加</q-btn>
       </TaskColumn>
-      <ThreeDayColumn :day="day" :revision="revision" />
+      <ThreeDayColumn v-if="thirdColumn==='three'" :day="day" :revision="revision" />
     </div>
   </section>
 </template>

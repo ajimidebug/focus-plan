@@ -93,9 +93,9 @@
     return state().version === 1 ? t.originRound <= r.index : t.roundIndex === r.index;
   }
   function nativeRow(t) {
-    return { id: t.id, key: 'three:' + t.id, text: t.text, task: t, ref: { kind: 'three', id: t.id, list: 'three' }, done: !!t.done, delayed: t.carriedFrom != null, note: t.note || '', kind: 'three' };
+    return { id: t.id, key: 'three:' + t.id, text: t.text, task: t, ref: { kind: 'three', id: t.id, list: 'three' }, done: !!t.done, delayed: t.carriedFrom != null, note: t.note || '', due:t.memoGanttEnd || '', kind: 'three' };
   }
-  function linkedNodes() { return A.memoGantt?.nodes?.().filter(n => M().validDate(n.task.memoGanttEnd) || n.task.memoRoundAssignment) || []; }
+  function linkedNodes() { return A.memoGantt?.nodes?.().filter(n => n.ref.kind !== 'three' && (M().validDate(n.task.memoGanttEnd) || n.task.memoRoundAssignment)) || []; }
   function targetOf(node) {
     const a = node.task.memoRoundAssignment;
     if (a?.mode === 'manual') return a.roundIndex;
@@ -108,10 +108,25 @@
     const progressed = n.kind === 'project' && r && Object.entries(n.task.days || {}).some(([d, value]) => value && d >= r.start && d <= r.end);
     return { id: n.id, key: n.key, text: n.title, task: n.task, ref: n.ref, kind: n.kind, done: overallDone || !!progressed, overallDone, delayed: n.task.memoRoundAssignment?.carriedFrom != null, note: n.task.note || '', due: n.task.memoGanttEnd || '', manual: n.task.memoRoundAssignment?.mode === 'manual', conflict: !!r && !!n.task.memoGanttEnd && (n.task.memoGanttEnd < r.start || n.task.memoGanttEnd > r.end) };
   }
+  function habitRows(round) {
+    if (!A.memoFinance?.plans) return [];
+    // Each habit stays associated with its own user day inside the round.
+    const rows = [];
+    for (let day = round.start; day <= round.end; day = M().shiftDay(day, 1)) {
+      for (const {it,r,n} of A.memoFinance.plans(day)) {
+        if (r.hidden || r.list !== 'three') continue;
+        const punch = A.memoPenalty?.policy(it,day).mode === 'punch';
+        const done = !punch && n >= Math.max(1,r.target);
+        rows.push({id:it.id, key:'checkin:'+it.id+':'+day, text:it.text, task:it,
+          ref:{kind:'checkin',id:it.id,day}, done, note:it.note || '', due:day, delayed:false, kind:'checkin'});
+      }
+    }
+    return rows;
+  }
   function liveRows(r) {
-    const native = state()?.tasks.filter(t => nativeTarget(t) === r.index).map(nativeRow) || [];
+    const native = state()?.tasks.filter(t => !t.memoDismissed && !A.memoReview?.hidden(t, 'three') && nativeTarget(t) === r.index).map(nativeRow) || [];
     const linked = linkedNodes().filter(n => targetOf(n) === r.index).map(n => linkedRow(n, r));
-    return native.concat(linked);
+    return native.concat(linked,habitRows(r));
   }
   function score(row) {
     if (!row.task) return row.points || 0;
@@ -122,7 +137,7 @@
   }
   function pending() {
     if (!state()) return [];
-    const native = state().tasks.filter(t => !t.done && nativeTarget(t) === null).map(nativeRow);
+    const native = state().tasks.filter(t => !t.done && !t.memoDismissed && !A.memoReview?.hidden(t, 'three') && nativeTarget(t) === null).map(nativeRow);
     return native.concat(linkedNodes().filter(n => targetOf(n) === null).map(n => linkedRow(n, null)).filter(r => !r.overallDone));
   }
   function closeCore(index, early = false, now = Date.now()) {
@@ -151,7 +166,7 @@
         next = saveRoundCore(start, M().shiftDay(start, 2), null, false);
       }
     }
-    for (const row of rows.filter(row => !row.done)) {
+    for (const row of rows.filter(row => !row.done && row.kind !== 'checkin')) {
       if (row.kind === 'three') { row.task.roundIndex = next?.index ?? null; row.task.carriedFrom = row.task.carriedFrom ?? r.index; }
       else row.task.memoRoundAssignment = { mode: 'carry', roundIndex: next?.index ?? null, carriedFrom: row.task.memoRoundAssignment?.carriedFrom ?? r.index, due: row.due };
     }

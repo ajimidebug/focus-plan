@@ -14,11 +14,14 @@
     if (x.items.some(p => !p || typeof p.id !== 'string' || !M().validDate(p.day) || !Number.isFinite(p.start) || (p.type !== 'point' && p.type !== 'span') || (p.type === 'span' && (!Number.isFinite(p.end) || p.end <= p.start))) || x.sessions.some(s => !s || !Array.isArray(s.chunks) || !['running', 'paused', 'ended'].includes(s.status) || s.chunks.some(c => !Number.isFinite(c.start) || (c.end != null && (!Number.isFinite(c.end) || c.end < c.start))))) throw new Error('时间线记录异常，请先下载完整备份');
     return x;
   }
+  function locationKey(ref) { return JSON.stringify([ref.kind, ref.id, ['queue','three'].includes(ref.kind) ? '' : ref.day || '']); }
   function resolve(ref, visited = new Set()) {
-    const token = JSON.stringify(ref); if (visited.has(token)) return null; visited.add(token);
     if (!ref) return null;
+    const token = locationKey(ref); if (visited.has(token)) return null; visited.add(token);
+    const redirect = App.memoThree?.state()?.redirects?.[token];
+    if (redirect) return resolve(redirect, visited);
     const d = S().data();
-    if (ref.kind === 'three') { const task=App.memoThree?.find(ref.id);return task?{task,ref:{kind:'three',id:task.id,list:'three'}}:null; }
+    if (ref.kind === 'three') { const task=App.memoThree?.find(ref.id);return task&&!task.memoDismissed?{task,ref:{kind:'three',id:task.id,list:'three'}}:null; }
     if (ref.kind === 'checkin') {const task=(d.checkins||[]).find(t=>t.id===ref.id);return task?{task,ref:{kind:'checkin',id:task.id,day:ref.day||M().userDay()}}:null;}
     if (ref.kind === 'queue') { const task = (d.queue || []).concat(d.queueDone || []).find(t => t.id === ref.id); return task && !task.memoDismissed ? { task, ref: { kind: 'queue', id: task.id } } : null; }
     if (ref.kind === 'project') { const task = (d.memoProjects || []).find(t => t.id === ref.id); return task ? { task, ref: { kind: 'project', id: task.id, day: ref.day || M().userDay() } } : null; }
@@ -37,7 +40,7 @@
   }
   function find(ref) { return resolve(ref)?.task; }
   function canonical(ref) { return resolve(ref)?.ref || ref; }
-  function key(ref) { const r = canonical(ref); return JSON.stringify([r.kind, r.id, ['queue','three'].includes(r.kind) ? '' : r.day || '']); }
+  function key(ref) { return locationKey(canonical(ref)); }
   const repeats = ref => ['project', 'daily', 'checkin'].includes(ref.kind);
   // Statistics can span dates; completion and ledger identities remain dated.
   function timerKey(ref) { const r = canonical(ref); return repeats(r) ? JSON.stringify([r.kind, r.id]) : key(r); }
@@ -59,9 +62,9 @@
     if (!x || !Array.isArray(x.sessions)) return 0;
     const start = dayStart(day), end = start + 86400000;
     const intervals = [];
-    x.sessions.forEach(session => (session.chunks || []).forEach(chunk => {
+    x.sessions.forEach(session => (session.chunks || []).forEach((chunk, index) => {
       const a = Math.max(start, Number(chunk.start));
-      const b = Math.min(end, Number(chunk.end == null ? now : chunk.end), now);
+      const b = Math.min(end, effectiveEnd(session, chunk, index, now), now);
       if (Number.isFinite(a) && Number.isFinite(b) && b > a) intervals.push([a, b]);
     }));
     intervals.sort((a, b) => a[0] - b[0]);
@@ -81,8 +84,34 @@
       else right=Math.max(right,x.end);
     });return total+(right===null?0:right-left);
   }
+  function timerSource(session) {
+    const found = resolve(session.ref);
+    return found && !found.task.archived && (found.ref.kind !== 'three' || App.memoThree.executable(found.ref));
+  }
+  function snapshotEnd(session, chunk, index) {
+    if (!session.id) return null;
+    const matches = new Set();
+    for (const event of S().data().memoEvents || []) {
+      for (const segment of event.timing?.segments || []) {
+        if (segment.sessionId === session.id && segment.index === index && segment.rawStart === chunk.start &&
+            Number.isFinite(segment.rawEnd) && segment.rawEnd >= chunk.start) matches.add(segment.rawEnd);
+      }
+    }
+    return matches.size === 1 ? matches.values().next().value : null;
+  }
+  function liveChunk(session, index) {
+    return session.status === 'running' && index === session.chunks.length - 1 && timerSource(session);
+  }
+  function effectiveEnd(session, chunk, index, now) {
+    if (chunk.end != null) return chunk.end;
+    if (liveChunk(session, index)) return now;
+    return snapshotEnd(session, chunk, index) ?? chunk.start;
+  }
+  function needsEnd(session, chunk, index) {
+    return chunk.end == null && !liveChunk(session, index) && snapshotEnd(session,chunk,index) === null;
+  }
   function chunks(sessions, now, from=-Infinity, to=now) {
-    return sessions.flatMap(s=>(s.chunks||[]).map((c,i)=>({id:(s.id||'legacy:'+s.ref.kind+':'+s.ref.id+':'+s.chunks[0]?.start)+':'+i,sessionId:s.id||null,index:i,start:Math.max(c.start,from),end:Math.min(c.end??now,now,to),rawStart:c.start,rawEnd:c.end??null}))).filter(c=>c.end>c.start).sort((a,b)=>a.start-b.start||a.end-b.end);
+    return sessions.flatMap(s=>(s.chunks||[]).map((c,i)=>({id:(s.id||'legacy:'+s.ref.kind+':'+s.ref.id+':'+s.chunks[0]?.start)+':'+i,sessionId:s.id||null,index:i,start:Math.max(c.start,from),end:Math.min(effectiveEnd(s,c,i,now),now,to),rawStart:c.start,rawEnd:c.end??null}))).filter(c=>c.end>c.start).sort((a,b)=>a.start-b.start||a.end-b.end);
   }
   function elapsed(session, now = Date.now()) { return unionMs(chunks([session],now)); }
   function execution(ref, now=Date.now()) {
@@ -100,13 +129,19 @@
     sessions.forEach(s => {
       const found = resolve(s.ref), r = found?.ref || s.ref, taskKey = timerKey(r);
       const title = found?.task.text || s.title || '历史任务（关联已不可用）';
+      (s.chunks || []).forEach((chunk,index)=>{
+        if (chunk.start > limit || !needsEnd(s,chunk,index)) return;
+        const day = M().userDay(chunk.start);
+        (days[day] ||= {segments:[],actualMs:0}).unverified ||= [];
+        days[day].unverified.push({title,start:chunk.start,id:(s.id || taskKey)+':'+index});
+      });
       chunks([s], limit).forEach(c => {
         for (let day = M().userDay(c.start); day <= throughDay; day = M().shiftDay(day, 1)) {
           const left = dayStart(day), right = dayStart(M().shiftDay(day, 1));
           if (left >= c.end) break;
           const start = Math.max(left, c.start), end = Math.min(right, c.end);
           if (end <= start) continue;
-          const ongoing = c.rawEnd === null && s.status === 'running' && end === now && now < right;
+          const ongoing = c.rawEnd === null && liveChunk(s,c.index) && end === now && now < right;
           const status = !found ? '历史记录，关联已不可用' : found.task.archived ? '已停用' : isDone({ref:repeats(r)?{...r,day}:r}) ? '已完成' : s.status === 'paused' ? '未完成，已暂停' : '未完成';
           (days[day] || (days[day] = {segments:[],actualMs:0})).segments.push({
             id:c.id, taskKey, title, status, start, end,
@@ -206,9 +241,10 @@
     const remaining=now<window.start?'距开始 '+duration(window.start-now):over?'已过截止 '+duration(now-window.end):'距截止 '+duration(window.end-now);
     return {valid:true,over,bounded:true,fill:ratio,previous:0,current:ratio,rangeMs:total,stepMinutes:total/240000,expectedPosition:100,detail:'计划 '+label+' · '+remaining+' · 有效计时 '+duration(executedMs),tick:'25%',state:over?'deadline-passed':'window',timeStart:fmt(window.start),timeEnd:fmt(window.end)};
   }
-  function active() { return state().sessions.find(s => s.status === 'running'); }
+  function active() { return state().sessions.find(s => s.status === 'running' && timerSource(s)); }
   function pauseCore(session, now) { summaryCache = null; if (session.status !== 'running') return; const chunk = session.chunks[session.chunks.length - 1]; chunk.end = Math.max(chunk.start, now); session.status = 'paused'; }
   function startRef(ref, now = Date.now(), itemId = null) {
+    ref = canonical(ref);
     if(ref.kind==='three' && !App.memoThree.executable(ref))throw Error('请先把任务移到本轮再开始');
     summaryCache = null; const d = state(), found = resolve(ref); if (!found || found.task.archived) throw new Error('任务已删除或停用，请重新选择');
     App.memoReview?.assertExecutable(found.ref);
@@ -321,7 +357,7 @@
   function visibleRecords(day, now = Date.now()) {
     const base = dayStart(day), end = base + 86400000, d = state();
     const plans = d.items.filter(p => !p.deleted && !p.suspendedByArchive && !p.suspendedByBackfill && !p.suspendedByReview && p.start < end && (p.type === 'point' ? p.start >= base : p.end > base));
-    const sessions = d.sessions.filter(s => s.chunks.some(c => c.start < end && (c.end ?? now) > base));
+    const sessions = d.sessions.filter(s => s.chunks.some((c,i) => c.start < end && (effectiveEnd(s,c,i,now) > Math.max(base,c.start) || needsEnd(s,c,i) && c.start >= base)));
     const legacy = legacyRecords(day).filter(x => showHidden || !x.record.memoHidden);
     const matches = title => !keyword || String(title).toLocaleLowerCase().includes(keyword.toLocaleLowerCase());
     const completions = (S().data().memoEvents || []).filter(e => e.active && e.kind !== 'cancellation' && (S().data().memoFlow ? M().userDay(e.at) : M().naturalDay(e.at)) === day && matches(e.title));
@@ -329,7 +365,7 @@
   }
   function tick() {
     try {
-      const d = state(), now = Date.now(), current = d.sessions.find(s => s.status === 'running'), paused = d.sessions.filter(s => s.status === 'paused').sort((a,b)=>(b.chunks.at(-1)?.end||b.chunks.at(-1)?.start||0)-(a.chunks.at(-1)?.end||a.chunks.at(-1)?.start||0));
+      const d = state(), now = Date.now(), current = active(), paused = d.sessions.filter(s => s.status === 'paused' && timerSource(s)).sort((a,b)=>(b.chunks.at(-1)?.end||b.chunks.at(-1)?.start||0)-(a.chunks.at(-1)?.end||a.chunks.at(-1)?.start||0));
       App.memoFinance?.dayTick();
       const stat = $('stat-memo-execution');
       if (stat) {
@@ -359,6 +395,10 @@
       const pos = (now - f.dayMs) / 60000, line = $('schedule-now');
       if (line) { line.hidden = pos < f.from || pos > f.to; line.style.top = (pos - f.from) * f.scale + 'px'; line.textContent = '现在 ' + time(now); }
       document.querySelectorAll('[data-schedule-elapsed]').forEach(el => { const session = d.sessions.find(s => s.id === el.dataset.scheduleElapsed); if (session) el.textContent = duration(elapsed(session, now)); });
+      document.querySelectorAll('[data-schedule-day-elapsed]').forEach(el => {
+        const session=d.sessions.find(s=>s.id===el.dataset.scheduleDayElapsed);
+        if(session)el.textContent=duration(unionMs(chunks([session],now,f.dayMs,f.dayMs+86400000)));
+      });
       document.querySelectorAll('[data-plan-clock]').forEach(el => { const p = d.items.find(p => p.id === el.dataset.planClock); if (!p) return;
         el.textContent = isDone(p) ? '任务已完成' : now < p.start ? '距计划时间 ' + duration(p.start - now) : p.type === 'point' ? '时间已到' : now < p.end ? '距计划结束 ' + duration(p.end - now) : '计划区间已结束';
       });
@@ -499,7 +539,7 @@
         return Object.assign({ start, end: Math.max(start + .001, end), realEnd: end, originalStart:startMs, originalEnd:endMs }, props);
       }
       const planned = records.plans.map(p => event(p.start, p.end ?? p.start, { title: find(p.ref)?.text || p.title, type: p.type, planned: true, card: 'p-' + p.id, id: p.id })).filter(Boolean), actual = [], completed = [];
-      records.sessions.forEach(s => s.chunks.forEach((c, i) => { const e = event(c.start, c.end ?? now, { title: s.title, type: 'span', card: 's-' + s.id, id: s.id + '-' + i, taskToken:timerKey(s.ref), live: c.end == null ? c.start : null }); if (e) actual.push(e); }));
+      records.sessions.forEach(s => s.chunks.forEach((c, i) => { const e = event(c.start, effectiveEnd(s,c,i,now), { title: s.title, type: 'span', card: 's-' + s.id, id: s.id + '-' + i, taskToken:timerKey(s.ref), live: c.end == null && liveChunk(s,i) ? c.start : null }); if (e) actual.push(e); }));
       if (showLegacy) records.legacy.forEach(x => { const r = x.record; if (!Number.isFinite(r.start) || !Number.isFinite(r.end)) return; const e = event(x.startMs, x.endMs, { title: r.content, type: 'span', card: 'l-' + x.id, id: x.id, legacy: true, aggregate: !!r.hourPlanId }); if (e) actual.push(e); });
       records.completions.forEach(e => { const marker = event(Date.parse(e.at), Date.parse(e.at), { title: e.title, type: 'point', card: 'c-' + e.id, id: e.id, completed: true }); if (marker) completed.push(marker); });
       const pointGroups = [];
@@ -521,10 +561,18 @@
         }).join('');
       }
       const chart = '<div class="schedule-chart" data-mode="' + view + '" data-range="' + rangeHours + '" style="--schedule-hour:' + (60*f.scale) + 'px"><div class="schedule-legend"><span class="schedule-time-heading">时间</span><strong class="schedule-plan-heading">预计</strong><strong class="schedule-actual-heading">计时</strong><strong class="schedule-completion-heading">完成</strong></div><div class="schedule-axis" style="height:' + (f.to - f.from) * f.scale + 'px"><div class="schedule-hours">' + Array.from({ length: Math.floor((f.to - f.from) / 60) + 1 }, (_, i) => { const minute = f.from + i * 60; return '<span style="top:' + i * 60 * f.scale + 'px">' + ((S().data().memoFlow && minute >= 1200 ? '次日' : '') + S().hhmmOf((minute + (S().data().memoFlow ? 240 : 0)) % 1440)) + '</span>'; }).join('') + '</div><div class="schedule-lane schedule-plan-lane" aria-label="预计安排">' + blocks(planned) + '</div><div class="schedule-lane schedule-actual-lane" aria-label="实际计时与来源记录">' + blocks(actual) + '</div><div class="schedule-lane schedule-completion-lane" aria-label="完成时刻">' + blocks(completed, true) + '</div><div id="schedule-now"></div></div></div>';
+      const selectedStart = dayStart(selectedDay), selectedEnd = selectedStart + 86400000;
+      const dayDuration = (session, now) => duration(unionMs(chunks([session],now,selectedStart,selectedEnd)));
+      function chunkEndLabel(s,c,i){
+        const terminal = c.end ?? snapshotEnd(s,c,i);
+        if (terminal == null) return needsEnd(s,c,i) ? '结束时间待核对' : '进行中';
+        return (M().naturalDay(terminal)!==M().naturalDay(c.start) ? M().naturalDay(terminal)+' ' : '') + time(terminal)
+          + (c.end == null ? '（据已保存快照）' : '');
+      }
       const status = { running: '执行中', paused: '已暂停', ended: '本段已结束' };
       const button = (act, id, text, primary = false) => '<button class="btn btn-small' + (primary ? ' btn-primary' : '') + '" data-sc="' + act + '" data-id="' + esc(id) + '">' + text + '</button>';
       const allWaiting=unscheduled(selectedDay),waiting=allWaiting.filter(x=>!keyword||x.title.toLocaleLowerCase().includes(keyword.toLocaleLowerCase()));
-      root.innerHTML = '<div class="schedule-header"><h2>时间轴</h2><div class="memo-queue-actions">' + button('add', '', '＋ 安排时间', true) + button('legacy-add', '', '补记时段') + '</div></div><p class="hint schedule-explanation">北京时间04:00分日 · 预计安排、实际计时、完成时刻分轨；完成点不代表用时。</p><div class="schedule-toolbar"><input type="date" id="schedule-date" aria-label="时间线日期" data-transient="true" value="' + selectedDay + '">' + button('today', '', '今天') + button('now', '', '现在') + '<select id="schedule-view" aria-label="时间轴视图"><option value="combined">综合：预计／计时／完成</option><option value="compare">对照：计时／预计／完成</option><option value="plan">图表：计划</option><option value="actual">图表：计时与完成</option></select><select id="schedule-range" aria-label="显示时间范围"><option value="4">附近4小时</option><option value="8">附近8小时</option><option value="24">全天</option></select>' + button('prev', '', '前一段') + button('next', '', '后一段') + '</div><details class="schedule-filters"><summary>筛选与备份</summary><input type="search" id="schedule-keyword" aria-label="筛选时间记录" placeholder="搜索任务或记录" data-transient="true"><label><input type="checkbox" id="schedule-legacy">显示旧时间记录</label><label><input type="checkbox" id="schedule-hidden">包括已隐藏记录</label>' + button('backup', '', '下载完整备份') + button('import', '', '导入完整备份') + button('csv', '', '导出旧记录CSV') + '</details><button class="btn btn-small" id="schedule-retry" data-sc="retry" hidden>重试保存</button>' + chart + '<div class="schedule-cards">' + records.completions.map(e => '<article class="schedule-card" id="schedule-card-c-' + esc(e.id) + '"><span class="schedule-kind">勾选完成</span><strong>' + esc(e.title) + '</strong><p>' + esc(M().naturalDay(e.at) + ' ' + time(Date.parse(e.at))) + (e.sourceDay !== selectedDay ? ' · 任务日期 ' + esc(e.sourceDay) : '') + '</p>'+executionHTML(e.timing)+'</article>').join('') + records.plans.map(p => '<article class="schedule-card" id="schedule-card-p-' + esc(p.id) + '"><span class="schedule-kind">计划</span><strong>' + esc(find(p.ref)?.text || p.title) + '</strong><p>' + esc(time(p.start) + (p.end ? '—' + (M().naturalDay(p.end) !== p.day ? '次日' : '') + time(p.end) : ' · 时间点')) + ' · <span data-plan-clock="' + esc(p.id) + '"></span></p><div class="memo-queue-actions">' + (find(p.ref) ? (isDone(p) ? '' : button('start', p.id, '开始本段')) + button('complete', p.id, isDone(p) ? '取消任务完成' : '完成任务', true) : '<span>原任务已移动或删除</span>') + button('edit', p.id, '改时间') + button('unschedule', p.id, '移除安排') + '</div></article>').join('') + records.sessions.map(s => '<article class="schedule-card" id="schedule-card-s-' + esc(s.id) + '"><span class="schedule-kind">执行' + (s.itemId ? ' · 关联计划' : ' · 未预先安排') + '</span><strong>' + esc(s.title) + '</strong><p>' + status[s.status] + ' · <span data-schedule-elapsed="' + esc(s.id) + '">' + duration(elapsed(s)) + '</span></p><details class="execution-detail"><summary>执行片段（'+s.chunks.length+'段）</summary><p class="hint">' + s.chunks.map(c => esc(M().naturalDay(c.start) + ' ' + time(c.start) + '—' + (c.end == null ? '进行中' : (M().naturalDay(c.end) !== M().naturalDay(c.start) ? M().naturalDay(c.end) + ' ' : '') + time(c.end)))).join('；') + '</p></details><div class="memo-queue-actions">' + (s.status === 'running' ? button('pause-session', s.id, '暂停') : s.status === 'paused' ? button('resume-session', s.id, '继续计时') : '') + (s.status !== 'ended' ? button('stop-session', s.id, '结束本段') : '') + (find(s.ref) ? button('complete-session', s.id, isDone(s) ? '取消任务完成' : '完成任务') : '<span>原任务已删除；执行记录保留</span>') + '</div></article>').join('') + (showLegacy ? records.legacy.map(x => '<article class="schedule-card schedule-old-card" id="schedule-card-l-' + esc(x.id) + '"><span class="schedule-kind">' + (x.record.hourPlanId ? '小时代汇总 · 不重复累计' : x.record.auto ? '原版自动记录' : '手动时间记录') + (x.record.memoHidden ? ' · 已隐藏' : '') + '</span><strong>' + esc(x.record.content) + '</strong><p>' + esc(S().hhmmOf(x.record.start) + '—' + S().hhmmOf(x.record.end)) + ' · 原记录 ' + esc(x.record.minutes ?? 0) + ' 分钟</p>' + button('legacy-edit', x.id, '查看／编辑') + '</article>').join('') : '') + '</div><details class="card schedule-waiting"><summary>未排时间（' + (keyword?'匹配 '+waiting.length+'／共 '+allWaiting.length:allWaiting.length) + '）</summary>' + waiting.map((x, i) => '<div class="memo-queue-row"><small>'+esc(x.ref.kind==='queue'&&!find(x.ref)?.assignment?'尚未安排到当天的队列':'所选日期任务')+'</small><strong>' + esc(x.title) + '</strong> <button class="btn btn-small" data-sc="arrange" data-index="' + i + '">安排时间</button><button class="btn btn-small" data-sc="start-now" data-index="' + i + '">现在开始</button></div>').join('') + '</details>';
+      root.innerHTML = '<div class="schedule-header"><h2>时间轴</h2><div class="memo-queue-actions">' + button('add', '', '＋ 安排时间', true) + button('legacy-add', '', '补记时段') + '</div></div><p class="hint schedule-explanation">北京时间04:00分日 · 预计安排、实际计时、完成时刻分轨；完成点不代表用时。</p><div class="schedule-toolbar"><input type="date" id="schedule-date" aria-label="时间线日期" data-transient="true" value="' + selectedDay + '">' + button('today', '', '今天') + button('now', '', '现在') + '<select id="schedule-view" aria-label="时间轴视图"><option value="combined">综合：预计／计时／完成</option><option value="compare">对照：计时／预计／完成</option><option value="plan">图表：计划</option><option value="actual">图表：计时与完成</option></select><select id="schedule-range" aria-label="显示时间范围"><option value="4">附近4小时</option><option value="8">附近8小时</option><option value="24">全天</option></select>' + button('prev', '', '前一段') + button('next', '', '后一段') + '</div><details class="schedule-filters"><summary>筛选与备份</summary><input type="search" id="schedule-keyword" aria-label="筛选时间记录" placeholder="搜索任务或记录" data-transient="true"><label><input type="checkbox" id="schedule-legacy">显示旧时间记录</label><label><input type="checkbox" id="schedule-hidden">包括已隐藏记录</label>' + button('backup', '', '下载完整备份') + button('import', '', '导入完整备份') + button('csv', '', '导出旧记录CSV') + '</details><button class="btn btn-small" id="schedule-retry" data-sc="retry" hidden>重试保存</button>' + chart + '<div class="schedule-cards">' + records.completions.map(e => '<article class="schedule-card" id="schedule-card-c-' + esc(e.id) + '"><span class="schedule-kind">勾选完成</span><strong>' + esc(e.title) + '</strong><p>' + esc(M().naturalDay(e.at) + ' ' + time(Date.parse(e.at))) + (e.sourceDay !== selectedDay ? ' · 任务日期 ' + esc(e.sourceDay) : '') + '</p>'+executionHTML(e.timing)+'</article>').join('') + records.plans.map(p => '<article class="schedule-card" id="schedule-card-p-' + esc(p.id) + '"><span class="schedule-kind">计划</span><strong>' + esc(find(p.ref)?.text || p.title) + '</strong><p>' + esc(time(p.start) + (p.end ? '—' + (M().naturalDay(p.end) !== p.day ? '次日' : '') + time(p.end) : ' · 时间点')) + ' · <span data-plan-clock="' + esc(p.id) + '"></span></p><div class="memo-queue-actions">' + (find(p.ref) ? (isDone(p) ? '' : button('start', p.id, '开始本段')) + button('complete', p.id, isDone(p) ? '取消任务完成' : '完成任务', true) : '<span>原任务已移动或删除</span>') + button('edit', p.id, '改时间') + button('unschedule', p.id, '移除安排') + '</div></article>').join('') + records.sessions.map(s => '<article class="schedule-card" id="schedule-card-s-' + esc(s.id) + '"><span class="schedule-kind">执行' + (s.itemId ? ' · 关联计划' : ' · 未预先安排') + '</span><strong>' + esc(s.title) + '</strong><p>' + (timerSource(s) || s.status==='ended' ? status[s.status] : '已停止显示活动计时') + ' · <span data-schedule-elapsed="' + esc(s.id) + '">' + duration(elapsed(s)) + '</span>（整段） · 当日 <span data-schedule-day-elapsed="' + esc(s.id) + '">' + dayDuration(s,now) + '</span></p><details class="execution-detail"><summary>执行片段（'+s.chunks.length+'段）</summary><p class="hint">' + s.chunks.map((c,i) => esc(M().naturalDay(c.start) + ' ' + time(c.start) + '—' + chunkEndLabel(s,c,i))).join('；') + '</p></details><div class="memo-queue-actions">' + (timerSource(s) ? (s.status === 'running' ? button('pause-session', s.id, '暂停') : s.status === 'paused' ? button('resume-session', s.id, '继续计时') : '') + (s.status !== 'ended' ? button('stop-session', s.id, '结束本段') : '') : '') + (find(s.ref) ? button('complete-session', s.id, isDone(s) ? '取消任务完成' : '完成任务') : '<span>原任务已删除；执行记录保留</span>') + '</div></article>').join('') + (showLegacy ? records.legacy.map(x => '<article class="schedule-card schedule-old-card" id="schedule-card-l-' + esc(x.id) + '"><span class="schedule-kind">' + (x.record.hourPlanId ? '小时代汇总 · 不重复累计' : x.record.auto ? '原版自动记录' : '手动时间记录') + (x.record.memoHidden ? ' · 已隐藏' : '') + '</span><strong>' + esc(x.record.content) + '</strong><p>' + esc(S().hhmmOf(x.record.start) + '—' + S().hhmmOf(x.record.end)) + ' · 原记录 ' + esc(x.record.minutes ?? 0) + ' 分钟</p>' + button('legacy-edit', x.id, '查看／编辑') + '</article>').join('') : '') + '</div><details class="card schedule-waiting"><summary>未排时间（' + (keyword?'匹配 '+waiting.length+'／共 '+allWaiting.length:allWaiting.length) + '）</summary>' + waiting.map((x, i) => '<div class="memo-queue-row"><small>'+esc(x.ref.kind==='queue'&&!find(x.ref)?.assignment?'尚未安排到当天的队列':'所选日期任务')+'</small><strong>' + esc(x.title) + '</strong> <button class="btn btn-small" data-sc="arrange" data-index="' + i + '">安排时间</button><button class="btn btn-small" data-sc="start-now" data-index="' + i + '">现在开始</button></div>').join('') + '</details>';
       foldDetails(root, records, expanded); root.dataset.foldDay = selectedDay;
       const toolbar=root.querySelector('.schedule-toolbar'), controls=document.createElement('div');
       controls.className='schedule-display-controls';controls.setAttribute('aria-label','时间轴显示选项');
@@ -605,6 +653,6 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (mode) render(); tick(); } }); window.addEventListener('focus-storage', tick);
     if (interval) clearInterval(interval); interval = setInterval(tick, 1000); tick();
   }
-  App.memoSchedule = { invalidate:()=>{summaryCache=null;},meterTiming,meterState,planWindow,windowMeter,setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
+  App.memoSchedule = { invalidate:()=>{summaryCache=null;},meterTiming,meterState,planWindow,windowMeter,setDay: day => { if (M().validDate(day)) selectedDay = day; }, init, render, tick, open, rowControls, arrange, resolve, canonical, key, locationKey, timerKey, state, pauseCore, startCore, startRef, stopCore, stopRef, pause, savePlan, elapsed, unionMs, execution, executionIndex, executionHTML, columnItems, dayExecutionMs, timing, timingText, columns, find, frame, visibleRecords, detailGroups, denseLayout, sources, unscheduled, busy: () => { try { return state().sessions.some(s => s.status !== 'ended'); } catch (_) { return true; } } };
 })();
 

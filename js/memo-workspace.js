@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const A = window.App, S = () => A.store, M = () => A.memoCore, $ = id => document.getElementById(id), esc = x => S().esc(String(x ?? ''));
-  const names = { required: '必做任务', ideal: '理想任务', extra: '长期拓展', three: '轮次计划' };
+  const names = { required: '必做任务', ideal: '理想任务', extra: '长期拓展', three: '三日' };
   const priorities = ['较低', '次要', '正常', '重要', '最重要'];
   let pane = 'today', taskDay, positions = {}, ready = false, lastDay, lastCivilDay, completionFocus;
   const projects = () => S().data().memoProjects || [];
@@ -88,7 +88,13 @@
     const hadCurrent=!!S().data().memoExecutionCurrent;
     const seen=new Set();
     S().data().memoExecutionQueue=execEntries().filter(e=>{
-      const x=execResolve(e);if(!x||doneFor(x.task,x.ref))return false;
+      const x=execResolve(e);
+      if(!x){
+        const planned = A.memoSchedule.resolve(e.ref);
+        const round = planned?.ref.kind==='three' && A.memoThree.byIndex(A.memoThree.nativeTarget(planned.task));
+        return !!round && round.start > M().userDay() && !planned.task.done;
+      }
+      if(doneFor(x.task,x.ref))return false;
       const key=execKey(x.ref);if(seen.has(key))return false;seen.add(key);return true;
     });
     if(hadCurrent&&!currentQueueItem())advanceQueueCore({});
@@ -483,10 +489,11 @@
   }
   function editor(ref, list, reviewExecution = false, threeDay = null, planningOnly = false, roundActions = false) {
     if (A.memoActions.busy()) return A.ui.toast('请先重试保存当前操作');
+    if (ref) ref = A.memoSchedule.canonical(ref);
     const isThree=ref?.kind==='three'||(!ref&&list==='three');
     const reviewLink=ref&&A.memoReview?.locate(ref);if(reviewLink&&!reviewExecution)return A.memoReview.manage(reviewLink.series.id);
     const existing = ref && A.memoSchedule.find(ref), day = isThree?(threeDay || (existing ? A.memoThree.byIndex(A.memoThree.nativeTarget(existing))?.start || M().userDay() : taskDay || M().userDay())):ref?.day || taskDay || M().userDay(), kind = ref?.kind || (isThree?'three':list === 'queue' ? 'queue' : 'task');
-    const newRound = isThree && !existing ? A.memoThree.plannedRound(day) : null;
+    const newRound = !existing ? A.memoThree?.plannedRound(day) : null;
     if (isThree && !ref && (!newRound || newRound.closedAt || newRound.end < M().userDay())) {
       return A.ui.toast('请选择今天或未来的开放轮次');
     }
@@ -498,7 +505,7 @@
       return '<label class="mw-priority-option" data-category="required" data-priority="'+level+'">'+
         '<input type="radio" name="mw-priority" value="'+level+'" aria-label="'+level+'级 · '+label+'"'+(level===initialPriority?' checked':'')+'><span>'+level+'</span></label>';
     }).join('');
-    const m = A.ui.openModal(existing ? '编辑任务' : newRound ? '添加轮次任务 · '+newRound.start+' — '+newRound.end : '添加' + (names[list] || '队列任务'), (!existing && kind === 'task' ? '<label>任务栏目<select id="mw-list">' + Object.keys(names).map(k => '<option value="' + k + '"' + (k === list ? ' selected' : '') + '>' + names[k] + '</option>').join('') + '</select></label>' : '') + '<div class="mw-title-field"><label for="mw-title">任务名称</label><textarea id="mw-title" rows="2"></textarea></div>' +
+    const m = A.ui.openModal(existing ? '编辑任务' : isThree && newRound ? '添加轮次任务 · '+newRound.start+' — '+newRound.end : '添加' + (names[list] || '队列任务'), (!existing && ['task','three'].includes(kind) ? '<label>任务栏目<select id="mw-list">' + Object.keys(names).map(k => '<option value="' + k + '"' + (k === list ? ' selected' : '') + '>' + names[k] + '</option>').join('') + '</select></label>' : '') + '<div class="mw-title-field"><label for="mw-title">任务名称</label><textarea id="mw-title" rows="2"></textarea></div>' +
       (existing && kind === 'task' && ref?.list === 'required' ? '' : '<div id="mw-points-field"><label for="mw-points">完成积分</label><input type="number" id="mw-points" min="0" inputmode="decimal"></div>') +
       '<fieldset id="mw-priority-field"'+(showPriority?'':' hidden')+'><legend>必做优先级</legend><div class="mw-priority-options">'+priorityOptions+'</div></fieldset>'+
       '<label for="mw-note-edit">备注（选填）</label><textarea id="mw-note-edit" rows="2"></textarea>' + (!existing && kind === 'task' ? '<fieldset id="mw-repeat-wrap"><legend>重复方式</legend><label><input type="radio" name="mw-repeat" value="once" checked>一次性完成</label><label><input type="radio" name="mw-repeat" value="daily">每日推进</label><label><input type="radio" name="mw-repeat" value="review">间隔复习</label><label><input type="radio" name="mw-repeat" value="cycle">固定周期</label></fieldset>' : '') +
@@ -512,7 +519,9 @@
       const date = document.createElement('input');
       date.type = 'date';
       date.id = 'mw-three-round';
-      date.value = A.memoThree.byIndex(A.memoThree.nativeTarget(existing))?.start || '';
+      const round = A.memoThree.byIndex(A.memoThree.nativeTarget(existing));
+      const previousDay = existing.roundSelectedDay;
+      date.value = round && previousDay >= round.start && previousDay <= round.end ? previousDay : round?.start || '';
       date.disabled = !!existing.done;
       field.append(date);
       m.querySelector('#mw-title').parentElement.after(field);
@@ -525,13 +534,10 @@
       note.focus();
     });
     if (roundActions && kind === 'project') {
-      const today = M().userDay();
       const actions = document.createElement('div');
       actions.className = 'round-project-actions';
-      actions.innerHTML = '<button type="button" class="btn btn-primary" data-project-today>'+ (existing.days?.[today]?'撤销今日推进':'记录今日推进') +'</button>'+
-        '<button type="button" class="btn" data-project-achieve>'+ (existing.memoGanttCompletedAt?'撤销项目达成':'标记项目达成') +'</button>';
+      actions.innerHTML = '<button type="button" class="btn" data-project-achieve>'+ (existing.memoGanttCompletedAt?'撤销项目达成':'标记项目达成') +'</button>';
       q('#mw-title').parentElement.before(actions);
-      actions.querySelector('[data-project-today]').onclick=()=>complete({...ref,day:M().userDay()},'记录今日推进');
       actions.querySelector('[data-project-achieve]').onclick=async event=>{
         const control=event.currentTarget;control.disabled=true;
         try {
@@ -541,6 +547,12 @@
           }))A.ui.closeModal();
         } finally {control.disabled=false;}
       };
+    }
+    if (existing && kind === 'three' && !existing.done) {
+      const assign = document.createElement('button');
+      assign.type = 'button';assign.className = 'btn';assign.textContent = '调整安排';
+      assign.onclick = () => assignmentEditor(ref);
+      m.querySelector('.modal-actions').prepend(assign);
     }
     if (roundActions && ['task','queue'].includes(kind)) {
       const action = document.createElement('button');
@@ -552,7 +564,30 @@
     }
     q('#mw-estimate').value = existing?.estimatedMinutes || '';
     A.memoOrganize?.editor(m,existing,list||ref?.list,ref); A.memoGantt?.editor(m,existing,kind,list||ref?.list);const selectList = q('#mw-list');
-    if (selectList) { let pointsEdited = false; q('#mw-points').addEventListener('input', () => { pointsEdited = true; }); const update = () => { if (!pointsEdited) q('#mw-points').value = selectList.value === 'ideal' ? S().settings().idealPoints ?? 1 : S().settings().extPoints ?? 5; q('#mw-repeat-wrap').hidden = false;q('[name="mw-repeat"][value="daily"]').closest('label').hidden=selectList.value!=='extra'; q('#mw-points-field').hidden = selectList.value === 'required';q('#mw-priority-field').hidden=selectList.value!=='required'; }; selectList.onchange = ()=>{if(selectList.value==='three'){A.ui.closeModal();A.memoThree.editor();}else update();}; update(); }
+    if (selectList) {
+      let pointsEdited = false;
+      const points = q('#mw-points');
+      const roundHint = document.createElement('p');
+      roundHint.className = 'hint';
+      selectList.closest('label').after(roundHint);
+      points.addEventListener('input', () => { pointsEdited = true; });
+      const update = () => {
+        const value = selectList.value;
+        if (!pointsEdited) points.value = value === 'ideal' ? S().settings().idealPoints ?? 1 : S().settings().extPoints ?? 5;
+        const repeat = q('#mw-repeat-wrap');
+        if (repeat) {
+          repeat.hidden = value === 'three';
+          q('[name="mw-repeat"][value="daily"]').closest('label').hidden = value !== 'extra';
+          if (repeat.hidden) q('[name="mw-repeat"][value="once"]').checked = true;
+        }
+        q('#mw-points-field').hidden = value === 'required';
+        q('#mw-priority-field').hidden = value !== 'required';
+        roundHint.hidden = value !== 'three';
+        roundHint.textContent = newRound ? '所属轮次 '+newRound.start+' — '+newRound.end : '请选择今天或未来的开放轮次';
+      };
+      selectList.addEventListener('change', update);
+      update();
+    }
     m.querySelectorAll('[name="mw-repeat"]').forEach(r=>r.addEventListener('change',()=>{if(r.checked&&['review','cycle'].includes(r.value)&&!A.memoActions.busy()){const draft={text:q('#mw-title').value,note:q('#mw-note-edit').value};A.ui.closeModal();if(r.value==='review')A.memoReview.newEditor(null,draft);else A.memoRecurrence.newEditor({...draft,list:q('#mw-list')?.value||list,points:Number(q('#mw-points')?.value)||0,estimatedMinutes:Number(q('#mw-estimate').value)||0});}}));
     if(existing&&!reviewLink&&A.memoReview&&['task','queue'].includes(kind)){const link=document.createElement('button');link.className='btn';link.type='button';link.textContent='建立间隔复习';link.onclick=()=>{if(!A.memoActions.busy())A.memoReview.newEditor(ref);};m.querySelector('.modal-actions').prepend(link);}
     if(existing&&A.memoRecurrence?.locate(ref)){const manage=document.createElement('button');manage.className='btn';manage.textContent='周期历史与后续规则';manage.onclick=()=>A.memoRecurrence.manage(A.memoRecurrence.locate(ref).series.id);m.querySelector('.modal-actions').prepend(manage);}
@@ -571,7 +606,7 @@
       : A.memoThree.byIndex(newRound.index);
     const canStart = () => {
       if (planningOnly || (existing && (existing.archived || doneFor(existing,ref)))) return false;
-      if (!isThree) return day === M().userDay();
+      if (!isThree && selectList?.value !== 'three') return day === M().userDay();
       const current = A.memoThree.current();
       return existing ? !!current && chosenRound()?.index === current.index : !!newRound && newRound.start <= M().userDay() && newRound.end >= M().userDay();
     };
@@ -600,7 +635,7 @@
         } else if (!t) {
           t = { id: S().uid(), createdAt: new Date().toISOString() };
           if (kind === 'queue') { (d.queue || (d.queue = [])).push(t); targetRef = { kind: 'queue', id: t.id }; }
-          else if(kind==='three'){const round=A.memoThree.ensureRound(day);Object.assign(t,{createdDay:M().userDay(),originRound:round.index,roundIndex:round.index,done:false});A.memoThree.state().tasks.push(t);targetRef={kind:'three',id:t.id,list:'three'};}
+          else if(selectedList==='three'){const round=A.memoThree.ensureRound(day);Object.assign(t,{createdDay:M().userDay(),originRound:round.index,roundIndex:round.index,roundSelectedDay:day,done:false});A.memoThree.state().tasks.push(t);targetRef={kind:'three',id:t.id,list:'three'};}
           else { S().getDay(day).tasks[selectedList].push(t); targetRef = { kind: 'task', id: t.id, list: selectedList, day }; }
         }
         if(kind==='three' && existing && !t.done){
@@ -608,17 +643,18 @@
           const target = value ? A.memoThree.ensureRound(value) : null;
           if(value&&(!target||target.closedAt||target.end<M().userDay()))throw Error('请选择开放的轮次');
           if((target?.index??null)!==A.memoThree.nativeTarget(t))A.memoThree.assignCore(targetRef,target?.index??null);
+          if(value)t.roundSelectedDay=value;
         }
         if (q('#mw-round-auto')?.checked) A.memoThree.assignCore(targetRef, 'auto');
         t.estimatedMinutes = Math.min(1440, Math.max(0, Number(q('#mw-estimate').value) || 0)); t.dateBasis = 'user';
-        if(kind==='three'){const points=Number(q('#mw-points').value);if(!Number.isFinite(points)||points<0||points>1000000||Math.abs(Math.round(points*100)-points*100)>1e-7)throw Error('积分须为0—1000000之间的两位小数');}
+        if(targetRef.kind==='three'){const points=Number(q('#mw-points').value);if(!Number.isFinite(points)||points<0||points>1000000||Math.abs(Math.round(points*100)-points*100)>1e-7)throw Error('积分须为0—1000000之间的两位小数');}
         t.text = text; t.note = q('#mw-note-edit').value; if (q('#mw-points')) t.points = Math.max(0, Number(q('#mw-points').value) || 0);
         if(selectedList==='required'||(!q('#mw-list')&&ref?.list==='required')||(kind==='queue'&&t.assignment?.list==='required')){
           const weight=Number(q('[name="mw-priority"]:checked')?.value);
           if(!Number.isInteger(weight)||weight<1||weight>priorities.length)throw Error('必做优先级必须为1—5');
           t.priorityWeight=weight;
         }
-        if(q('#task-group'))t.memoGroup=q('#task-group').value;A.memoGantt?.apply(t,m);saveTiming(m, targetRef, text, targetRef.kind === 'project' ? targetRef.day : isThree ? (canStart() ? M().userDay() : chosenRound()?.start || newRound?.start || day) : day); savedRef=targetRef;
+        if(q('#task-group'))t.memoGroup=q('#task-group').value;A.memoGantt?.apply(t,m);saveTiming(m, targetRef, text, targetRef.kind === 'project' ? targetRef.day : targetRef.kind === 'three' ? (canStart() ? M().userDay() : chosenRound()?.start || newRound?.start || day) : day); savedRef=targetRef;
         A.memoActions?.reconcileRewards?.(day);
       })){taskSaved=true;}else return;}
       if(begin){if(!canStart())throw Error('当前安排无法开始计时，请关闭后重新打开任务');if(!await A.memoActions.commit(()=>A.memoSchedule.startRef(savedRef)))return;}
@@ -675,21 +711,38 @@
   function assignmentEditor(ref, onReturn) {
     if (A.memoActions.busy()) return A.ui.toast('请先重试保存当前操作');
     const t = A.memoSchedule.find(ref); if (!t) return;
-    const active=A.memoSchedule.timing(ref).session;
-    if(active?.status==='running'){return A.ui.confirm('调整日期前会暂停当前计时，已有时段保留。','暂停并调整安排',async()=>{if(await commit(()=>A.memoSchedule.pauseCore(active))){assignmentEditor(ref,onReturn);}});}
+    ref = A.memoSchedule.canonical(ref);
     const finish=()=>{A.ui.closeModal();render();A.memoSchedule.render();onReturn?.();};
-    const review=A.memoReview?.locate(ref);if(review&&!onReturn)return A.memoReview.scheduleEditor(review.series.id,review.round.id);
+    const review=A.memoReview?.locate(ref);
     const startDay=M().userDay(),weekday=['日','一','二','三','四','五','六'];
     const week=Array.from({length:7},(_,i)=>{const value=M().shiftDay(startDay,i),w=new Date(value+'T12:00:00+08:00').getUTCDay();return '<button type="button" class="btn mw-assign-day" data-ma-pick-day="'+value+'" aria-pressed="'+(i===0)+'"><small>周'+weekday[w]+'</small><strong>'+Number(value.slice(8))+'</strong></button>';}).join('');
     const m = A.ui.openModal('安排 · '+t.text,
-      '<label>安排日期</label><div class="mw-assign-week" role="group" aria-label="最近七天">'+week+'</div><label>其他日期<input type="date" id="ma-day" value="'+startDay+'"></label><p class="hint">选择日期后直接选择安排栏目。</p><div class="mw-assign-choices">'+['required','ideal','extra'].map((list,i)=>'<button class="btn" data-act="pick" data-list="'+list+'">'+['必做','理想','拓展'][i]+'</button>').join('')+'</div><div class="mw-assign-options"><button class="btn btn-small" data-act="time-settings">安排时间与预计用时</button><button class="btn btn-small" data-act="edit-task">编辑任务</button><button class="btn btn-small" data-act="queue">暂不安排</button>'+(t.overdueEventId?'<button class="btn btn-small" data-act="forgive">纠正错误扣分</button>':'')+'</div><p id="ma-error" role="alert"></p>',
+      '<label>安排日期</label><div class="mw-assign-week" role="group" aria-label="最近七天">'+week+'</div><label>其他日期<input type="date" id="ma-day" value="'+startDay+'"></label><p class="hint">选择日期后直接选择安排栏目。</p><div class="mw-assign-choices">'+['required','ideal','three','extra'].map((list,i)=>'<button class="btn" data-act="pick" data-list="'+list+'">'+['必做','理想','三日','拓展'][i]+'</button>').join('')+'</div><div class="mw-assign-options"><button class="btn btn-small" data-act="time-settings">安排时间与预计用时</button><button class="btn btn-small" data-act="edit-task">编辑任务</button><button class="btn btn-small" data-act="queue">暂不安排</button>'+(t.overdueEventId?'<button class="btn btn-small" data-act="forgive">纠正错误扣分</button>':'')+'</div><p id="ma-error" role="alert"></p>',
       '<button class="btn" data-act="cancel">取消</button>', {lock:true});
     const date=m.querySelector('#ma-day');
     const updateWeek=()=>m.querySelectorAll('[data-ma-pick-day]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.maPickDay===date.value)));
     m.querySelectorAll('[data-ma-pick-day]').forEach(b=>b.onclick=()=>{date.value=b.dataset.maPickDay;date.dispatchEvent(new Event('change',{bubbles:true}));updateWeek();});
-    date.addEventListener('change',updateWeek);updateWeek();
+    const roundHint = document.createElement('p');
+    roundHint.className = 'hint';
+    m.querySelector('.mw-assign-choices').after(roundHint);
+    function updateRound(){
+      const round = A.memoThree.plannedRound(date.value);
+      const valid = round && !round.closedAt && round.end >= M().userDay();
+      m.querySelector('[data-list="three"]').disabled = !valid;
+      roundHint.textContent = valid ? '三日 · '+round.start+' — '+round.end : '这天没有可安排的开放轮次';
+      updateWeek();
+    }
+    date.addEventListener('change',updateRound);updateRound();
     A.ui.dateContext(m,{getDay:()=>date.value,label:'安排到',sourceDay:ref.day||t.assignment?.day,choiceSelector:'[data-act=pick]'});
-    async function save(b,target,list){if(A.memoActions.busy())return;const buttons=m.querySelectorAll('[data-act="pick"],[data-act="queue"]');buttons.forEach(x=>x.disabled=true);try{if(await A.memoActions.commit(()=>{if(review){if(target==='queue')throw Error('复习轮次请保留日期安排');const clock=M().clock(review.round.due);A.memoReview.rescheduleCore(review.round.id,Date.parse((clock<'04:00'?M().shiftDay(date.value,1):date.value)+'T'+clock+':00+08:00'),list||ref.list);}else A.memoFlow.moveCore(ref,date.value,list||t.assignment?.list||ref.list||'ideal',target);})){finish();A.ui.toast('已安排');}}catch(e){m.querySelector('#ma-error').textContent=e.message;}finally{buttons.forEach(x=>x.disabled=false);}}
+    async function save(b,target,list){if(A.memoActions.busy()&&!b.dataset.retry)return;const buttons=m.querySelectorAll('[data-act="pick"],[data-act="queue"]');buttons.forEach(x=>x.disabled=true);try{if(await A.memoActions.commit(()=>{
+      const toRound = list === 'three' ? A.memoThree.plannedRound(date.value) : null;
+      const willMove = target === 'queue' || (toRound?.start || date.value) !== (ref.day || t.assignment?.day || M().userDay());
+      const session = A.memoSchedule.timing(ref).session;
+      if (willMove && session?.status === 'running') {
+        if ((toRound?.start || date.value) > M().userDay() || target === 'queue') A.memoSchedule.stopRef(ref);
+        else A.memoSchedule.pauseCore(session, Date.now());
+      }
+      if(review){if(target==='queue')throw Error('复习轮次请保留日期安排');const clock=M().clock(review.round.due);A.memoReview.rescheduleCore(review.round.id,Date.parse((clock<'04:00'?M().shiftDay(date.value,1):date.value)+'T'+clock+':00+08:00'),list||ref.list);}else A.memoFlow.moveCore(ref,date.value,list||t.assignment?.list||ref.list||'ideal',target);})){finish();A.ui.toast('已安排');}}catch(e){m.querySelector('#ma-error').textContent=e.message;if(A.memoActions.busy()){b.dataset.retry='1';b.textContent='重试保存';}}finally{buttons.forEach(x=>x.disabled=A.memoActions.busy()&&x!==b);if(!A.memoActions.busy())updateRound();}}
     A.ui.bindActions({cancel:()=>{if(!A.memoActions.busy())finish();},pick:b=>save(b,'task',b.dataset.list),queue:b=>save(b,'queue'),'time-settings':()=>{if(!A.memoActions.busy()){A.ui.closeModal();A.memoSchedule.arrange(ref);}},'edit-task':()=>{if(!A.memoActions.busy()){A.ui.closeModal();editor(ref);}},forgive:()=>{if(A.memoActions.busy()||m.querySelector('#ma-reason'))return;const reason=document.createElement('input');reason.id='ma-reason';reason.placeholder='说明错误原因';m.querySelector('#ma-error').before(reason);const b=m.querySelector('[data-act="forgive"]');b.textContent='确认纠正';b.onclick=async()=>{try{if(await A.memoActions.commit(()=>A.memoFlow.forgiveCore(ref,reason.value))){A.ui.closeModal();render();A.app.refreshStats();}}catch(e){m.querySelector('#ma-error').textContent=e.message;}};}});
   }
 
@@ -759,6 +812,6 @@
     A.memoReview?.init();A.memoRecurrence?.init();
     render();
   }
-  A.memoWorkspace = { clearPinsCore, currentQueueItem, selectQueueCore, advanceQueueCore, waitingQueue, clearExecCore, captureQueueAdvance, queueSettled, timerStarted, timerEnded, pruneExec, execAdd, execHas, execHTML, setDay, celebrateRequired, assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
+  A.memoWorkspace = { viewDay: () => taskDay, clearPinsCore, currentQueueItem, selectQueueCore, advanceQueueCore, waitingQueue, clearExecCore, captureQueueAdvance, queueSettled, timerStarted, timerEnded, pruneExec, execAdd, execHas, execHTML, setDay, celebrateRequired, assignmentEditor, complete, score, scoreBand, priorityWeight, priorityLabel, deferredHTML, taskItems, pendingRows, waitingRow, overviewHTML, overviewClick, init, render, enter, leave, returnToday, showPane, editor, sortedQueue, orderQueue, moveQueue, saveTiming, projects, renderHistory, renderReview };
 })();
 

@@ -28,6 +28,10 @@ function edit(row:any){
  A().memoWorkspace.editor(row.ref,row.ref.list,false,null,!active.value)
 }
 function open(row:any){
+ if(row.kind==='checkin'){
+   if(row.ref.day>A().memoCore.userDay())return A().ui.toast('请在安排日打卡')
+   return A().memoWorkspace.complete(row.ref)
+ }
  if(row.kind==='project'){
    return A().memoWorkspace.editor({...row.ref,day:A().memoCore.userDay()},'extra',false,props.day,true,true)
  }
@@ -40,11 +44,11 @@ function open(row:any){
 </script>
 <template>
   <TaskColumn area category="three" class="three-day-column" label="添加轮次任务" :add="selected&&!plan.historical?add:undefined">
-    <div class="three-round-header" @click.stop>
-      <div class="cal-col-head"><span>轮次计划</span><span v-if="selected" class="mw-column-count">{{plan.done}}/{{plan.total}}</span></div>
+    <div class="three-round-header">
+      <div class="cal-col-head"><span>三日</span><span v-if="selected" class="mw-column-count">{{plan.done}}/{{plan.total}}</span></div>
       <div v-if="roundDay && selected" class="three-round-controls">
-        <span class="three-round-position" role="img" :aria-label="'第 '+roundDay.number+' 天，共 '+roundDay.total+' 天'">第{{roundDay.number}}/{{roundDay.total}}天</span>
-        <q-btn v-if="!plan.historical" flat dense no-caps aria-label="调整日期" @click="A().memoThree.rangeEditor(selected.index,day)">调整</q-btn>
+        <span class="three-round-position" data-no-column-add role="img" :aria-label="'第 '+roundDay.number+' 天，共 '+roundDay.total+' 天'">第{{roundDay.number}}/{{roundDay.total}}天</span>
+        <q-btn v-if="!plan.historical" flat dense no-caps aria-label="调整日期" @click.stop="A().memoThree.rangeEditor(selected.index,day)">调整</q-btn>
       </div>
       <div v-else class="three-round-controls">尚未安排</div>
     </div>

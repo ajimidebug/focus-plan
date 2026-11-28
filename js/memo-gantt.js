@@ -24,6 +24,10 @@ function nodes(){
   if(t.memoDismissed||t.archived||t.memoOccurrenceId||t.memoReviewRoundId)continue;
   out.set('once:'+t.id,{key:'once:'+t.id,kind:'once',id:t.id,task:t,ref:{kind:'queue',id:t.id},day:t.assignment?.day||'',group:category(t),title:t.text});
  }
+ for (const t of A.memoThree?.state()?.tasks || []) {
+  if (t.memoDismissed || t.memoOccurrenceId || t.memoReviewRoundId) continue;
+  out.set('once:'+t.id,{key:'once:'+t.id,kind:'once',id:t.id,task:t,ref:{kind:'three',id:t.id,list:'three'},day:t.roundSelectedDay||'',group:category(t),title:t.text});
+ }
  return [...out.values()];
 }
 function normalizeKey(id){if(typeof id!=='string')return '';if(id.startsWith('once:')||id.startsWith('project:'))return id;return 'project:'+id;}
@@ -85,7 +89,7 @@ function editor(modal,task,kind,list){
  modal.querySelector('#mw-form-error').before(field);
  const group=field.querySelector('#memo-gantt-group');group.value=category(task||{});
  const outer=modal.querySelector('#task-group');if(outer){group.closest('label').hidden=true;group.value=outer.value;outer.addEventListener('change',()=>{group.value=outer.value;group.dispatchEvent(new Event('change'));});}
- const update=()=>{const selected=modal.querySelector('#mw-list')?.value||list;field.hidden=!(kind==='project'||kind==='task'||kind==='queue'||selected==='extra');};
+ const update=()=>{const selected=modal.querySelector('#mw-list')?.value||list;field.hidden=!(kind==='project'||kind==='task'||kind==='queue'||kind==='three'||selected==='extra');};
  modal.querySelector('#mw-list')?.addEventListener('change',update);
  modal.querySelectorAll('[name="mw-repeat"]').forEach(x=>x.addEventListener('change',update));update();
  bindDeps(modal,task,group,field.querySelector('#memo-gantt-dependency-list'));bindDates(modal,'memo-gantt');

@@ -2,7 +2,7 @@
 const props=defineProps<{category:string;label:string;add?:()=>void;area?:boolean}>()
 function background(event:MouseEvent) {
   if (props.add && event.target instanceof Element &&
-      !event.target.closest('button,a,input,select,textarea,summary,label,[data-round-key],[data-overview-ref],[data-gantt-root],[data-deferred-source],.mw-column-meter')) {
+      !event.target.closest('button,a,input,select,textarea,summary,label,[data-round-key],[data-overview-ref],[data-gantt-root],[data-deferred-source],.mw-column-meter,[data-no-column-add]')) {
     event.stopPropagation()
     props.add()
   }

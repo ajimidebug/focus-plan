@@ -342,7 +342,7 @@
       }
       if (!await App.memo.flush()) throw new Error('笔记尚未安全保存，请先复制或下载');
       const d = S().data(), before = copy(d);
-      try { App.memoThree?.settleCore(); App.memoWorkspace?.clearPinsCore?.(); mutate(); App.memoWorkspace?.pruneExec?.(); } catch (e) { Object.keys(d).forEach(k => delete d[k]); Object.assign(d, before); throw e; }
+      try { App.memoThree?.settleCore(); App.memoWorkspace?.clearPinsCore?.(); mutate(); App.memoWorkspace?.pruneExec?.(); } catch (e) { Object.keys(d).forEach(k => delete d[k]); Object.assign(d, before); App.memoSchedule?.invalidate?.(); throw e; }
       if (!await S().save()) { unsettled = true; throw new Error('此次操作尚未保存；文字仍在，请点“重试保存”，不要刷新'); }
       return true;
     } finally { committing = false; }
@@ -419,15 +419,27 @@
     m.addEventListener('input',()=>{pendingEdits=true;});
     m.addEventListener('change',()=>{pendingEdits=true;});
     remark.addEventListener('input',()=>{if(textarea.value===initialText){textarea.value=stamp(at,day)+'【'+label+'】'+spec.title+suffix+'\n'+(remark.value.trim()?'本次备注：'+remark.value.trim()+'\n':'')+timingSnapshot(spec,Date.parse(at)).text;initialText=textarea.value;}remember();});textarea.addEventListener('input',remember);m.querySelector('#ma-estimate').addEventListener('input',remember);
-    if(['task','queue'].includes(spec.kind)){const assign=document.createElement('button');assign.type='button';assign.className='btn';assign.textContent='调整安排';assign.onclick=()=>{if(!App.memoActions.busy()){remember();App.memoWorkspace.assignmentEditor(ref,()=>{const next=Object.assign({},spec,App.memoSchedule.canonical(ref));completionDrafts.set(draftKey(next),completionDrafts.get(draftId));complete(next);});}};m.querySelector('.modal-actions').prepend(assign);}
+    if(['task','queue','three'].includes(spec.kind)){const assign=document.createElement('button');assign.type='button';assign.className='btn';assign.textContent='调整安排';assign.onclick=()=>{if(!App.memoActions.busy()){remember();App.memoWorkspace.assignmentEditor(ref,()=>{const next=Object.assign({},spec,App.memoSchedule.canonical(ref));completionDrafts.set(draftKey(next),completionDrafts.get(draftId));complete(next);});}};m.querySelector('.modal-actions').prepend(assign);}
     const detail=document.createElement('details');detail.className='execution-detail';const title=document.createElement('summary');title.textContent='查看执行时段（确认时更新）';const pre=document.createElement('pre');pre.textContent=timingSnapshot(spec,Date.parse(at)).executionText;detail.append(title,pre);m.querySelector('.action-passage').after(detail);
     const editButton=document.createElement('button');editButton.type='button';editButton.className='btn';editButton.textContent='编辑任务';editButton.onclick=()=>{if(textarea.value!==initialText||remark.value.trim())return App.ui.toast('请先完成本次记录，再编辑任务');App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list});};if(spec.kind!=='checkin')m.querySelector('.modal-actions').prepend(editButton);
-    if(spec.kind!=='checkin')App.ui.taskNotePreview?.(m.querySelector('.action-task-title'),sourceTask?.note,()=>{
-      remember();
-      App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list},spec.list,true);
-      const note=document.querySelector('#mw-note-edit');
-      if(note){const details=note.closest('details');if(details)details.open=true;note.focus();}
-    });
+    if (spec.kind !== 'checkin' && sourceTask?.note?.trim()) {
+      const note = document.createElement('details');
+      note.className = 'completion-task-note';
+      const summary = document.createElement('summary');
+      summary.textContent = '任务备注 · ' + sourceTask.note.trim();
+      const anchor = document.createElement('span');
+      note.append(summary, anchor);
+      remark.after(note);
+      App.ui.taskNotePreview?.(anchor, sourceTask.note, () => {
+        remember();
+        App.memoWorkspace.editor({kind:spec.kind,id:spec.id,day:spec.day,list:spec.list},spec.list,true);
+        const input = document.querySelector('#mw-note-edit');
+        const details = input?.closest('details');
+        if (details) details.open = true;
+        input?.focus();
+      });
+      note.addEventListener('toggle', () => { summary.textContent = note.open ? '收起任务备注' : '任务备注 · ' + sourceTask.note.trim(); });
+    }
     const ref={kind:spec.kind,id:spec.id,day:spec.day,list:spec.list};
     const habitPlan=spec.kind==='checkin'&&App.memoFinance?.plans(spec.day).find(x=>x.it.id===spec.id);
     if(spec.kind!=='checkin'||(spec.day===M().userDay()&&habitPlan)){
@@ -470,11 +482,49 @@
       }catch(e){m.querySelector('#memo-action-error').textContent=e.message;if(unsettled)timerButton.textContent='重试保存';else timerState();}
       finally{timerButton.disabled=false;if(m.isConnected&&!unsettled)m._timerTick?.();}
     };
-    let chosenList=habitPlan?.r?.list||spec.list||sourceTask?.assignment?.list||sourceTask?.memoCategoryDays?.[spec.day]||'extra';
-    function applyCategory(){if(!App.memoOrganize)return;const latest=App.memoSchedule.resolve(ref);const current=(spec.kind==='checkin'&&App.memoFinance?.plans(spec.day).find(x=>x.it.id===spec.id)?.r.list)||latest?.ref.list||latest?.task.assignment?.list||latest?.task.memoCategoryDays?.[spec.day]||'extra';if(chosenList!==current){const updated=App.memoOrganize.change(ref,chosenList);Object.assign(ref,updated);Object.assign(spec,updated);if(spec.kind==='task')spec.list=chosenList;}}
-    if(spec.kind!=='three'&&App.memoOrganize&&sourceTask&&!sourceTask.done&&!sourceTask.doneAt&&!sourceTask.days?.[spec.day]&&(spec.kind!=='checkin'||habitPlan)){
-      const field=document.createElement('fieldset');field.className='category-choices';field.innerHTML='<legend>任务分类</legend>'+[['required','必做'],['ideal','理想'],['extra','长期拓展']].map(([k,v])=>'<button type="button" class="btn" data-category-choice="'+k+'" aria-pressed="'+(k===chosenList)+'">'+v+'</button>').join('');m.querySelector('.action-task-title').after(field);field.onclick=e=>{const b=e.target.closest('[data-category-choice]');if(!b)return;chosenList=b.dataset.categoryChoice;pendingEdits=true;if(chosenList==='required'&&!m.querySelector('[data-reward=base]')){const label=document.createElement('label');label.innerHTML='<input type="checkbox" data-reward="base" checked> 满足条件时领取必做整组奖励<input type="number" min="0" data-reward-points="base" value="'+Number(settings.baseRewardPoints||0)+'">';m.querySelector('.action-passage').append(label);}field.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));const points=chosenList==='required'&&['task','queue'].includes(spec.kind)?0:sourceTask.points??(chosenList==='ideal'?settings.idealPoints:settings.extPoints)??0;m.querySelector('#memo-action-info').textContent='本次任务积分 +'+points+'；分类在保存后生效';};
-      const save=document.createElement('button');save.className='btn';save.textContent='保存修改';save.onclick=async()=>{save.disabled=true;try{if(await transaction(()=>{saveEstimate();applyCategory();})){App.ui.closeModal();refresh();}}catch(e){m.querySelector('#memo-action-error').textContent=e.message;save.textContent=unsettled?'重试保存':'重新保存';}finally{save.disabled=false;}};m.querySelector('.modal-actions').prepend(save);
+    const originalList = habitPlan?.r?.list || spec.list || sourceTask?.assignment?.list || sourceTask?.memoCategoryDays?.[spec.day] || 'extra';
+    const roundCapable = ['task','queue','three'].includes(spec.kind);
+    const displayedDay = App.memoWorkspace?.viewDay?.() || day;
+    const categoryDay = spec.kind === 'three'
+      ? (App.memoThree.round(displayedDay)?.index === App.memoThree.nativeTarget(sourceTask) ? displayedDay : sourceTask?.roundSelectedDay || day)
+      : spec.day || sourceTask?.assignment?.day || displayedDay;
+    let chosenList = originalList;
+    function applyCategory(){
+      if (!App.memoOrganize || chosenList === originalList) return ref;
+      if (spec.kind==='checkin' && chosenList==='three') App.memoThree.ensureRound(categoryDay);
+      return App.memoOrganize.change(ref, chosenList, categoryDay);
+    }
+    if(App.memoOrganize&&sourceTask&&!sourceTask.done&&!sourceTask.doneAt&&!sourceTask.days?.[spec.day]&&(spec.kind!=='checkin'||habitPlan)){
+      const field = document.createElement('fieldset');
+      field.className = 'category-choices';
+      const choices = [['required','必做'],['ideal','理想'],...(roundCapable || spec.kind==='checkin' ? [['three','三日']] : []),['extra','长期拓展']];
+      field.innerHTML = '<legend>任务分类</legend>'+choices.map(([key,title]) =>
+        '<button type="button" class="btn" data-category-choice="'+key+'" aria-pressed="'+(key===chosenList)+'">'+title+'</button>').join('');
+      const hint = document.createElement('p');
+      hint.className = 'hint';
+      hint.hidden = true;
+      field.append(hint);
+      remark.after(field);
+      field.onclick = event => {
+        const button = event.target.closest('[data-category-choice]');
+        if (!button) return;
+        chosenList = button.dataset.categoryChoice;
+        pendingEdits = true;
+        const round = chosenList === 'three' ? App.memoThree.plannedRound(categoryDay) : null;
+        hint.hidden = chosenList !== 'three';
+        hint.textContent = round && !round.closedAt ? '所属轮次 '+round.start+' — '+round.end : '请通过调整安排选择开放轮次';
+        if(chosenList==='required'&&!m.querySelector('[data-reward=base]')){
+          const label=document.createElement('label');
+          label.innerHTML='<input type="checkbox" data-reward="base" checked> 满足条件时领取必做整组奖励<input type="number" min="0" data-reward-points="base" value="'+Number(settings.baseRewardPoints||0)+'">';
+          m.querySelector('.action-passage').append(label);
+        }
+        field.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===button)));
+        const points=chosenList==='required'&&roundCapable?0:sourceTask.points??(chosenList==='ideal'?settings.idealPoints:settings.extPoints)??0;
+        m.querySelector('#memo-action-info').textContent='本次任务积分 +'+points+'；分类在保存后生效';
+      };
+      const save=document.createElement('button');save.className='btn';save.textContent='保存修改';
+      save.onclick=async()=>{save.disabled=true;try{if(await transaction(()=>{saveEstimate();applyCategory();})){App.ui.closeModal();refresh();}}catch(e){m.querySelector('#memo-action-error').textContent=e.message;save.textContent=unsettled?'重试保存':'重新保存';}finally{save.disabled=false;}};
+      m.querySelector('.modal-actions').prepend(save);
     }
     let previewPoints = 0;
     if (spec.kind === 'queue') { const it = S().data().queue.find(x => x.id === spec.id); previewPoints = it?.assignment?.list === 'required' ? 0 : Number(it?.points ?? settings.queuePoints ?? 5); }
@@ -490,15 +540,20 @@
       saveEstimate();
       const submittedAt=new Date().toISOString(), currentDay=M().userDay(submittedAt);
       if(currentDay!==day)throw Error('已跨过用户日，请关闭后重新打开任务');
-      spec.remark=remark.value;spec.redoOf=prior?.id;
-      spec.noteInput={version:1,mode:textarea.value===''?'empty':customInput?'custom':'auto',body:textarea.value};
-      applyCategory();
-      const currentName=App.memoSchedule.find(ref)?.text;if(currentName)spec.title=currentName;
-      const finalText=textarea.value===initialText?stamp(submittedAt,currentDay)+'【'+label+'】'+spec.title+suffix+'\n'+(remark.value.trim()?'本次备注：'+remark.value.trim()+'\n':'')+timingSnapshot(spec,Date.parse(submittedAt)).text:textarea.value;
-      if(reviewChoice)spec.review=reviewChoice();
-      queueAdvance=App.memoWorkspace?.captureQueueAdvance?.(ref)||null;
+      const updatedRef = applyCategory();
+      const updatedSpec = {...spec,...updatedRef};
+      updatedSpec.remark=remark.value;updatedSpec.redoOf=prior?.id;
+      updatedSpec.noteInput={version:1,mode:textarea.value===''?'empty':customInput?'custom':'auto',body:textarea.value};
+      const currentName=App.memoSchedule.find(updatedRef)?.text;
+      if(currentName)updatedSpec.title=currentName;
+      const finalSuffix = updatedSpec.kind !== 'three' && updatedSpec.day && updatedSpec.day !== currentDay
+        ? (updatedSpec.day > currentDay ? '（任务日期 ' : '（补记 ') + updatedSpec.day + '）' : '';
+      const finalText=textarea.value===initialText?stamp(submittedAt,currentDay)+'【'+label+'】'+updatedSpec.title+finalSuffix+'\n'+(remark.value.trim()?'本次备注：'+remark.value.trim()+'\n':'')+timingSnapshot(updatedSpec,Date.parse(submittedAt)).text:textarea.value;
+      if(reviewChoice)updatedSpec.review=reviewChoice();
+      queueAdvance=App.memoWorkspace?.captureQueueAdvance?.(updatedRef)||null;
       const checkRequired=chosenList==='required'&&!eligible(currentDay,'base');
-      const event=completeCore(spec,finalText,submittedAt,[...m.querySelectorAll('[data-reward]:checked')].map(x=>({kind:x.dataset.reward,points:m.querySelector('[data-reward-points="'+x.dataset.reward+'"]').value})));
+      const rewards = [...m.querySelectorAll('[data-reward]:checked')].map(x=>({kind:x.dataset.reward,points:m.querySelector('[data-reward-points="'+x.dataset.reward+'"]').value}));
+      const event=completeCore(updatedSpec,finalText,submittedAt,rewards);
       celebrate=checkRequired&&event.sourceDay===currentDay&&eligible(currentDay,'base');
       completionDrafts.delete(draftId);
       return event;
@@ -526,7 +581,17 @@
     };
     detail.addEventListener('toggle',()=>{if(detail.open)pre.textContent=timingSnapshot(spec,Date.now()).executionText;});
     m._timerTick();
+    function focusRemark(){
+      if (!remark.isConnected || (m.contains(document.activeElement) && document.activeElement !== remark && document.activeElement !== m)) return;
+      remark.focus({preventScroll:true});
+      const body = remark.closest('.modal-body');
+      if (!body) return;
+      const field = remark.getBoundingClientRect(), visible = body.getBoundingClientRect();
+      const bottom = Math.min(visible.bottom, window.visualViewport?.height ?? window.innerHeight);
+      if (field.top < visible.top || field.bottom > bottom) body.scrollTop += field.top - visible.top - 8;
+    }
     remark.focus({preventScroll:true});
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(focusRemark));
   }
   function cancelEvent(event) {
     if (committing || unsettled) return;

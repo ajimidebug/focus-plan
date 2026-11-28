@@ -15,6 +15,15 @@ const server=http.createServer((req,res)=>{
   await page.goto('http://127.0.0.1:'+server.address().port+'/#/tasks');await page.waitForFunction(()=>window.App?.app?.ready);
   assert.equal(await page.locator('.framework-overview .cal-col').count(),3);
   assert.equal(await page.locator('.framework-overview [data-overview-list=extra]').count(),0);
+  const switcher=page.getByRole('group',{name:'第三栏'});
+  await switcher.getByRole('button',{name:'拓展',exact:true}).click();
+  assert.equal(await page.locator('.framework-overview [data-overview-list=extra]').count(),1);
+  assert.equal(await page.locator('.three-day-column').count(),0);
+  await switcher.getByRole('button',{name:'三日',exact:true}).click();
+  await page.locator('.three-round-header .cal-col-head').click();
+  assert(await page.locator('.mw-task-editor #mw-title').isVisible());
+  await page.locator('.modal [data-act=cancel]').click();
+  await page.locator('.modal').waitFor({state:'detached'});
   await page.getByRole('button',{name:'添加轮次任务',exact:true}).click();
   assert(await page.locator('.mw-task-editor #mw-title').isVisible(),'three-day creation uses the shared editor');
   await page.locator('#mw-title').fill('三天内复盘数学错题');await page.locator('#mw-note-edit').fill('保留自定义备注');await page.locator('#mw-points').fill('7');
@@ -26,7 +35,21 @@ const server=http.createServer((req,res)=>{
   assert.equal(await page.evaluate(()=>App.memoThree.state().tasks.length),1,'shared editing preserves task identity');
   assert(await page.evaluate(()=>{const ideal=document.querySelector('[data-overview-list=ideal] .cal-col-head'),three=document.querySelector('[data-overview-list=three] .cal-col-head');return getComputedStyle(ideal).padding===getComputedStyle(three).padding&&getComputedStyle(three).backgroundColor!=='rgba(0, 0, 0, 0)';}),'shared header styling');
   await page.locator('.three-round-position').click();assert.equal(await page.locator('.modal').count(),0,'day indicator remains noninteractive');
+  await page.evaluate(()=>{
+   const task=App.memoThree.state().tasks[0];task.note=('长蓝字备注，用来检查输入框可见。\n').repeat(80);
+  });
   await page.getByRole('button',{name:'打开任务：三天内复盘数学错题，7分',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#ma-remark')===document.activeElement);
+  assert(await page.locator('#ma-remark').evaluate(el=>{
+   const body=el.closest('.modal-body').getBoundingClientRect(),field=el.getBoundingClientRect();
+   return field.top>=body.top-1 && field.bottom<=body.bottom+1;
+  }));
+  assert.equal(await page.locator('.completion-task-note').getAttribute('open'),null);
+  await page.locator('.completion-task-note summary').click();
+  assert.match(await page.locator('.completion-task-note .task-note-preview').innerText(),/长蓝字备注/);
+  await page.locator('.completion-task-note summary').click();
+  await page.evaluate(()=>{App.memoThree.state().tasks[0].note='保留自定义备注';});
+
   await page.locator('.task-action-modal .ma-enqueue').click();await page.locator('.modal [data-act=cancel]').click();await page.locator('.modal').waitFor({state:'detached'});
   await page.evaluate(async()=>{
    const A=App,d=A.store.data(),day=A.memoCore.userDay();A.store.getDay(day).tasks.ideal.push({id:'order-b',text:'其他任务B'},{id:'order-c',text:'其他任务C'});
@@ -75,6 +98,32 @@ const server=http.createServer((req,res)=>{
   await page.getByRole('button',{name:'更多',exact:true}).click();await page.getByRole('button',{name:'长期拓展',exact:true}).click();
   assert(await page.locator('#mw-details:not([hidden]) #mw-column-extra').isVisible());
   await page.locator('.more-sheet').waitFor({state:'hidden'});
+  await page.evaluate(()=>{
+   const day=App.memoCore.userDay();
+   App.store.getDay(day).tasks.ideal.push({id:'round-trip-ui',text:'跨栏验证',note:'保留原任务备注',points:3});
+   App.memoWorkspace.setDay(day);
+  });
+  await page.getByRole('button',{name:/打开任务：跨栏验证/}).click();
+  await page.getByRole('group',{name:'任务分类'}).getByRole('button',{name:'三日',exact:true}).click();
+  await page.getByRole('button',{name:'保存修改',exact:true}).click();
+  const roundTask=page.locator('.three-day-column').getByRole('button',{name:/打开任务：跨栏验证/});
+  await roundTask.click();
+  await page.locator('#ma-remark').fill('改期保留草稿');
+  await page.getByRole('button',{name:'调整安排',exact:true}).click();
+  await page.locator('.mw-assign-choices [data-list=required]').click();
+  assert.equal(await page.locator('#ma-remark').inputValue(),'改期保留草稿');
+  await page.getByRole('button',{name:/^确认完成/}).click();
+  await page.locator('.modal').waitFor({state:'detached'});
+  assert(await page.evaluate(()=>{
+   const day=App.memoCore.userDay(),t=App.store.getDay(day).tasks.required.find(t=>t.id==='round-trip-ui');
+   return t?.done&&t?.note==='保留原任务备注'&&!App.memoThree.find(t.id);
+  }));
+  const required=page.locator('.framework-overview [data-overview-list=required]');
+  await required.locator('.mw-completed summary').click();
+  await required.getByRole('button',{name:/打开任务：跨栏验证/}).click();
+  await page.getByRole('button',{name:'确认取消',exact:true}).click();
+  await page.locator('.modal').waitFor({state:'detached'});
+  assert.equal(await required.getByRole('button',{name:/打开任务：跨栏验证/}).count(),1);
   await page.evaluate(()=>App.app.switchView('timeline'));
   assert.equal(await page.locator('#schedule-range').inputValue(),'24');
   const controls=await page.evaluate(()=>({chart:document.querySelector('.schedule-chart').getBoundingClientRect().bottom,controls:document.querySelector('.schedule-display-controls').getBoundingClientRect().top}));

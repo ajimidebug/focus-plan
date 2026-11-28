@@ -114,3 +114,45 @@ test('early end pauses actual time and failed round saves retry without duplicat
  const count=b.T.rounds().length;b.options.idbFails=false;await b.A.commit(()=>{throw Error('must not replay');});
  assert.equal(b.T.rounds().length,count);assert.equal(b.S.validate(b.S.data()),true);
 });
+
+test('moving between a daily list and a round preserves one task and its execution', async () => {
+ const b=await harness(),{P,A,M,T}=b,day=M.userDay(),d=b.S.data();
+ const ref={kind:'task',id:'round-trip',day,list:'ideal'};
+ b.S.getDay(day).tasks.ideal.push({id:ref.id,text:'移入再移出',note:'蓝字',points:4,estimatedMinutes:25,memoGanttEnd:'2026-11-20'});
+ const now=Date.parse(b.at());
+ const session=P.startRef(ref,now-60000);
+ const moved=b.ctx.App.memoFlow.moveCore(ref,'2026-11-20','three');
+ assert.equal(P.canonical(ref).kind,'three');
+ assert.equal(T.nativeTarget(P.find(moved)),1);
+ assert.deepEqual([...T.projection('2026-11-20').rows.map(r=>r.id)],['round-trip']);
+ assert.equal(b.S.getDay(day).tasks.ideal.length,0);
+ assert.equal(session.status,'ended');
+ assert.equal(P.elapsed(session,now),60000);
+ assert.equal(P.find(moved).note,'蓝字');
+ const back=b.ctx.App.memoFlow.moveCore(moved,day,'required');
+ assert.equal(P.canonical(ref).list,'required');
+ assert.equal(P.canonical(moved).list,'required');
+ assert.equal(P.find(back).memoGanttEnd,'2026-11-20');
+ assert.equal(P.execution(back,now).actualMs,60000);
+ assert.equal(T.state().tasks.length,0);
+ const event=A.completeCore({...back,title:'移入再移出'},'备注',b.at());
+ A.undoCore(event.id,'撤销',b.at());
+ assert.equal(P.find(ref).done,false);
+ assert.equal(P.execution(ref,now).actualMs,60000);
+ assert.equal(b.S.validate(JSON.parse(JSON.stringify(d))),true);
+});
+
+test('a deleted or finished session with an open chunk contributes no invented time', async () => {
+ const b=await harness(),{P,A,M}=b,day=M.userDay(),ref=b.add('ended-open'),now=Date.parse(b.at());
+ const session=P.startRef(ref,now-120000);
+ P.pauseCore(session,now-60000);
+ P.startRef(ref,now-30000);
+ A.deleteCore(ref,'删除后核对',b.at());
+ session.chunks.at(-1).end=null;
+ assert.equal(session.status,'ended');
+ assert.equal(P.elapsed(session,now+60000),60000);
+ assert.equal(P.dayExecutionMs(day,now+60000),60000);
+ assert.equal(P.executionIndex(now+60000)[day].actualMs,60000);
+ assert.equal(P.visibleRecords(day,now+60000).sessions[0].id,session.id);
+ assert.equal(session.chunks.at(-1).end,null);
+});
